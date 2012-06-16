@@ -127,8 +127,9 @@ NORET_TYPE void panic(const char * fmt, ...)
 		 */
 		printk(KERN_EMERG "Rebooting in %d seconds..", panic_timeout);
 		
+#ifdef CONFIG_SUSPEND_WATCHDOG
 		enable_watchdog();
-
+#endif
 		for (i = 0; i < panic_timeout; i++) {
 			touch_nmi_watchdog();
 			panic_blink_one_second();
