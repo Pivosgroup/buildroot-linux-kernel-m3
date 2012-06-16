@@ -94,7 +94,7 @@ void debug_file_write(const char __user *buf, size_t count)
 #endif
 
 #define DEFAULT_VIDEO_BUFFER_SIZE       (1024*1024*3)
-#define DEFAULT_AUDIO_BUFFER_SIZE       (1024*384)
+#define DEFAULT_AUDIO_BUFFER_SIZE       (1024*384*2)
 #define DEFAULT_SUBTITLE_BUFFER_SIZE     (1024*128)
 #if 0
 static ulong vbuf_start;

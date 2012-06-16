@@ -129,11 +129,13 @@ struct pid_entry {
 		NULL, &proc_single_file_operations,	\
 		{ .proc_show = show } )
 
+#ifdef CONFIG_ANDROID
 /* ANDROID is for special files in /proc. */
 #define ANDROID(NAME, MODE, OTYPE)			\
 	NOD(NAME, (S_IFREG|(MODE)),			\
 		&proc_##OTYPE##_inode_operations,	\
 		&proc_##OTYPE##_operations, {})
+#endif
 
 /*
  * Count the number of hardlinks for the pid_entry table, excluding the .
@@ -1064,6 +1066,7 @@ static ssize_t oom_adjust_write(struct file *file, const char __user *buf,
 	return count;
 }
 
+#ifdef CONFIG_ANDROID
 static int oom_adjust_permission(struct inode *inode, int mask)
 {
 	uid_t uid;
@@ -1090,6 +1093,7 @@ static int oom_adjust_permission(struct inode *inode, int mask)
 static const struct inode_operations proc_oom_adjust_inode_operations = {
 	.permission	= oom_adjust_permission,
 };
+#endif
 
 static const struct file_operations proc_oom_adjust_operations = {
 	.read		= oom_adjust_read,
@@ -2662,7 +2666,11 @@ static const struct pid_entry tgid_base_stuff[] = {
 	REG("cgroup",  S_IRUGO, proc_cgroup_operations),
 #endif
 	INF("oom_score",  S_IRUGO, proc_oom_score),
+#ifdef CONFIG_ANDROID
 	ANDROID("oom_adj",S_IRUGO|S_IWUSR, oom_adjust),
+#else
+	REG("oom_adj",    S_IRUGO|S_IWUSR, proc_oom_adjust_operations),
+#endif
 #ifdef CONFIG_AUDITSYSCALL
 	REG("loginuid",   S_IWUSR|S_IRUGO, proc_loginuid_operations),
 	REG("sessionid",  S_IRUGO, proc_sessionid_operations),

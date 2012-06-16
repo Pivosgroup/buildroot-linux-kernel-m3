@@ -632,8 +632,9 @@ int snd_pcm_status(struct snd_pcm_substream *substream,
  _tstamp_end:
 	status->appl_ptr = runtime->control->appl_ptr;
     /* update the extra size, this ex_size will be extract from android side */
+#ifdef CONFIG_ANDROID
     status->ex_size = runtime->control->ex_size;
-
+#endif
 	status->hw_ptr = runtime->status->hw_ptr;
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		status->avail = snd_pcm_playback_avail(runtime);
