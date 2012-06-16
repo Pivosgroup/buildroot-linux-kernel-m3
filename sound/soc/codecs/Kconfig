@@ -22,6 +22,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_AK4642 if I2C
 	select SND_SOC_AK4671 if I2C
 	select SND_SOC_CS4270 if I2C
+	select SND_SOC_CS42L52 if I2C
 	select SND_SOC_MAX9877 if I2C
 	select SND_SOC_DA7210 if I2C
 	select SND_SOC_PCM3008
@@ -67,6 +68,8 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_WM9705 if SND_SOC_AC97_BUS
 	select SND_SOC_WM9712 if SND_SOC_AC97_BUS
 	select SND_SOC_WM9713 if SND_SOC_AC97_BUS
+	select SND_SOC_RT5621 if I2C
+	select SND_SOC_CS4334
         help
           Normally ASoC codec drivers are only built if a machine driver which
           uses them is also built since they are only usable with a machine
@@ -128,6 +131,9 @@ config SND_SOC_DA7210
 config SND_SOC_CS4270_VD33_ERRATA
 	bool
 	depends on SND_SOC_CS4270
+
+config SND_SOC_CS42L52
+	tristate
 
 config SND_SOC_CX20442
 	tristate
@@ -269,3 +275,9 @@ config SND_SOC_TPA6130A2
 
 config SND_SOC_WM2000
 	tristate
+	
+config SND_SOC_RT5621
+	tristate
+
+config SND_SOC_CS4334
+       tristate

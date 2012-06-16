@@ -27,8 +27,8 @@
 #include <linux/i2c.h>
 #include <linux/i2c/tsc2007.h>
 
-#define TS_POLL_DELAY			1 /* ms delay between samples */
-#define TS_POLL_PERIOD			1 /* ms delay between samples */
+#define TS_POLL_DELAY			40 /* ms delay between samples */
+#define TS_POLL_PERIOD			10 /* ms delay between samples */
 
 #define TSC2007_MEASURE_TEMP0		(0x0 << 4)
 #define TSC2007_MEASURE_AUX		(0x2 << 4)
@@ -50,7 +50,7 @@
 #define TSC2007_12BIT			(0x0 << 1)
 #define TSC2007_8BIT			(0x1 << 1)
 
-#define	MAX_12BIT			((1 << 12) - 1)
+#define MAX_12BIT			((1 << 12) - 1)
 
 #define ADC_ON_12BIT	(TSC2007_12BIT | TSC2007_ADC_ON_IRQ_DIS0)
 
@@ -81,28 +81,38 @@ struct tsc2007 {
 
 	int			(*get_pendown_state)(void);
 	void			(*clear_penirq)(void);
+	struct ts_event  tc_cache;
+	int poll_delay;
+	int poll_period;
+	int (*convert)(int x, int y);
 };
+
+#define tsc2007_cache_out(ts, tc) do { \
+    tc = ts->tc_cache; \
+} while(0)
+
+#define tsc2007_cache_in(ts, tc) do { \
+    ts->tc_cache = tc; \
+} while(0)
+
+#define tsc2007_clear_cache(ts) do { \
+    memset(&ts->tc_cache, 0 , sizeof(struct ts_event)); \
+} while(0)
 
 static inline int tsc2007_xfer(struct tsc2007 *tsc, u8 cmd)
 {
-	s32 data;
-	u16 val;
-
-	data = i2c_smbus_read_word_data(tsc->client, cmd);
-	if (data < 0) {
-		dev_err(&tsc->client->dev, "i2c io error: %d\n", data);
-		return data;
+	int ret;
+	u8 buf[2];
+	
+	buf[0] = cmd;
+	ret = i2c_master_send(tsc->client, buf, 1);
+	if (ret >= 0 ) {
+		ret = i2c_master_recv(tsc->client, buf, 2);
+		if (ret >= 0) {
+		    ret = (buf[0] << 4) | (buf[1] >> 4);
+		}
 	}
-
-	/* The protocol and raw data format from i2c interface:
-	 * S Addr Wr [A] Comm [A] S Addr Rd [A] [DataLow] A [DataHigh] NA P
-	 * Where DataLow has [D11-D4], DataHigh has [D3-D0 << 4 | Dummy 4bit].
-	 */
-	val = swab16(data) >> 4;
-
-	dev_dbg(&tsc->client->dev, "data: 0x%x, val: 0x%x\n", data, val);
-
-	return val;
+	return ret;
 }
 
 static void tsc2007_read_values(struct tsc2007 *tsc, struct ts_event *tc)
@@ -123,6 +133,7 @@ static void tsc2007_read_values(struct tsc2007 *tsc, struct ts_event *tc)
 
 static u32 tsc2007_calculate_pressure(struct tsc2007 *tsc, struct ts_event *tc)
 {
+        return 200;
 	u32 rt = 0;
 
 	/* range filtering */
@@ -145,7 +156,7 @@ static void tsc2007_send_up_event(struct tsc2007 *tsc)
 {
 	struct input_dev *input = tsc->input;
 
-	dev_dbg(&tsc->client->dev, "UP\n");
+	//dev_info(&tsc->client->dev, "UP\n");
 
 	input_report_key(input, BTN_TOUCH, 0);
 	input_report_abs(input, ABS_PRESSURE, 0);
@@ -178,11 +189,15 @@ static void tsc2007_work(struct work_struct *work)
 			goto out;
 		}
 
-		dev_dbg(&ts->client->dev, "pen is still down\n");
+		//dev_info(&ts->client->dev, "pen is still down\n");
 	}
-
-	tsc2007_read_values(ts, &tc);
-
+	tsc2007_cache_out(ts, tc);
+	tsc2007_read_values(ts, &ts->tc_cache);
+	if ((tc.x== 0) && (tc.y == 0)) {
+		schedule_delayed_work(&ts->work,
+				msecs_to_jiffies(ts->poll_period));
+		return;
+	}
 	rt = tsc2007_calculate_pressure(ts, &tc);
 	if (rt > MAX_12BIT) {
 		/*
@@ -190,7 +205,7 @@ static void tsc2007_work(struct work_struct *work)
 		 * beyond the maximum. Don't report it to user space,
 		 * repeat at least once more the measurement.
 		 */
-		dev_dbg(&ts->client->dev, "ignored pressure %d\n", rt);
+		//dev_info(&ts->client->dev, "ignored pressure %d\n", rt);
 		goto out;
 
 	}
@@ -199,20 +214,24 @@ static void tsc2007_work(struct work_struct *work)
 		struct input_dev *input = ts->input;
 
 		if (!ts->pendown) {
-			dev_dbg(&ts->client->dev, "DOWN\n");
+			//dev_info(&ts->client->dev, "DOWN\n");
 
 			input_report_key(input, BTN_TOUCH, 1);
 			ts->pendown = true;
 		}
-
+            	//dev_info(&ts->client->dev, "point(%4d,%4d)\n", tc.x, tc.y);
+            	if (ts->convert) {
+            	    int xy = ts->convert(tc.x, tc.y);
+            	    tc.x = xy >> 16;
+            	    tc.y = xy & 0xffff;
+            	}
 		input_report_abs(input, ABS_X, tc.x);
 		input_report_abs(input, ABS_Y, tc.y);
 		input_report_abs(input, ABS_PRESSURE, rt);
 
 		input_sync(input);
 
-		dev_dbg(&ts->client->dev, "point(%4d,%4d), pressure (%4u)\n",
-			tc.x, tc.y, rt);
+		//dev_info(&ts->client->dev, "point(%4d,%4d), pressure (%4u)\n",tc.x, tc.y, rt);
 
 	} else if (!ts->get_pendown_state && ts->pendown) {
 		/*
@@ -227,9 +246,11 @@ static void tsc2007_work(struct work_struct *work)
  out:
 	if (ts->pendown)
 		schedule_delayed_work(&ts->work,
-				      msecs_to_jiffies(TS_POLL_PERIOD));
-	else
+				      msecs_to_jiffies(ts->poll_period));
+	else {
 		enable_irq(ts->irq);
+		tsc2007_clear_cache(ts);
+	}
 }
 
 static irqreturn_t tsc2007_irq(int irq, void *handle)
@@ -239,7 +260,7 @@ static irqreturn_t tsc2007_irq(int irq, void *handle)
 	if (!ts->get_pendown_state || likely(ts->get_pendown_state())) {
 		disable_irq_nosync(ts->irq);
 		schedule_delayed_work(&ts->work,
-				      msecs_to_jiffies(TS_POLL_DELAY));
+				      msecs_to_jiffies(ts->poll_delay));
 	}
 
 	if (ts->clear_penirq)
@@ -275,7 +296,7 @@ static int __devinit tsc2007_probe(struct i2c_client *client,
 	}
 
 	if (!i2c_check_functionality(client->adapter,
-				     I2C_FUNC_SMBUS_READ_WORD_DATA))
+				     I2C_FUNC_I2C))
 		return -EIO;
 
 	ts = kzalloc(sizeof(struct tsc2007), GFP_KERNEL);
@@ -294,6 +315,10 @@ static int __devinit tsc2007_probe(struct i2c_client *client,
 	ts->x_plate_ohms      = pdata->x_plate_ohms;
 	ts->get_pendown_state = pdata->get_pendown_state;
 	ts->clear_penirq      = pdata->clear_penirq;
+	ts->poll_delay = pdata->poll_delay ? pdata->poll_delay : TS_POLL_DELAY;
+	ts->poll_period = pdata->poll_period ? pdata->poll_period : TS_POLL_PERIOD;
+	ts->convert = pdata->convert;
+	tsc2007_clear_cache(ts);
 
 	snprintf(ts->phys, sizeof(ts->phys),
 		 "%s/input0", dev_name(&client->dev));
@@ -304,32 +329,37 @@ static int __devinit tsc2007_probe(struct i2c_client *client,
 
 	input_dev->evbit[0] = BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
 	input_dev->keybit[BIT_WORD(BTN_TOUCH)] = BIT_MASK(BTN_TOUCH);
-
-	input_set_abs_params(input_dev, ABS_X, 0, MAX_12BIT, 0, 0);
-	input_set_abs_params(input_dev, ABS_Y, 0, MAX_12BIT, 0, 0);
+	
+	int max = pdata->abs_xmax ? pdata->abs_xmax : MAX_12BIT;
+	input_set_abs_params(input_dev, ABS_X, pdata->abs_xmin, max, 0, 0);
+	max = pdata->abs_ymax ? pdata->abs_ymax : MAX_12BIT;
+	input_set_abs_params(input_dev, ABS_Y, pdata->abs_ymin, max, 0, 0);
 	input_set_abs_params(input_dev, ABS_PRESSURE, 0, MAX_12BIT, 0, 0);
 
 	if (pdata->init_platform_hw)
 		pdata->init_platform_hw();
 
-	err = request_irq(ts->irq, tsc2007_irq, 0,
+	err = request_irq(ts->irq, tsc2007_irq, IRQF_TRIGGER_FALLING,
 			client->dev.driver->name, ts);
 	if (err < 0) {
 		dev_err(&client->dev, "irq %d busy?\n", ts->irq);
+		printk("request gpio irq failed\n");
 		goto err_free_mem;
 	}
 
 	/* Prepare for touch readings - power down ADC and enable PENIRQ */
 	err = tsc2007_xfer(ts, PWRDOWN);
-	if (err < 0)
+	if (err < 0) {
+		printk("i2c power down command failed\n");
 		goto err_free_irq;
-
+	}
 	err = input_register_device(input_dev);
 	if (err)
 		goto err_free_irq;
 
 	i2c_set_clientdata(client, ts);
 
+	printk("tsc2007 probe ok\n");
 	return 0;
 
  err_free_irq:

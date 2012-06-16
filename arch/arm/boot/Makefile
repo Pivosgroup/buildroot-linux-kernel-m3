@@ -11,7 +11,8 @@
 # Copyright (C) 1995-2002 Russell King
 #
 
-MKIMAGE         := $(srctree)/scripts/mkuboot.sh
+#MKIMAGE         ?= $(CONFIG_SHELL) $(srctree)/scripts/mkuboot.sh
+MKIMAGE          ?= $(srctree)/arch/arm/boot/mkimage
 
 ifneq ($(MACHINE),)
 include $(srctree)/$(MACHINE)/Makefile.boot
@@ -27,7 +28,7 @@ INITRD_PHYS := $(initrd_phys-y)
 
 export ZRELADDR INITRD_PHYS PARAMS_PHYS
 
-targets := Image zImage xipImage bootpImage uImage
+targets := Image zImage xipImage bootpImage uImage uzImage ugImage
 
 ifeq ($(CONFIG_XIP_KERNEL),y)
 
@@ -59,27 +60,78 @@ $(obj)/zImage:	$(obj)/compressed/vmlinux FORCE
 
 endif
 
-quiet_cmd_uimage = UIMAGE  $@
-      cmd_uimage = $(CONFIG_SHELL) $(MKIMAGE) -A arm -O linux -T kernel \
-		   -C none -a $(LOADADDR) -e $(STARTADDR) \
+#quiet_cmd_uimage = UIMAGE  $@
+#      cmd_uimage = $(CONFIG_SHELL) $(MKIMAGE) -A arm -O linux -T kernel \
+#		   -C none -a $(LOADADDR) -e $(STARTADDR) \
+#		   -n 'Linux-$(KERNELRELEASE)' -d $< $@
+#
+
+quiet_cmd_uImage = UIMAGE  $@
+      cmd_uImage = $(MKIMAGE) -A arm -O linux -T kernel \
+		   -C lzma -a $(LOADADDR) -e $(STARTADDR) \
 		   -n 'Linux-$(KERNELRELEASE)' -d $< $@
+
+
+quiet_cmd_uzImage = UZIMAGE  $@
+      cmd_uzImage = $(MKIMAGE) -A arm -O linux -T kernel \
+		   -C none -a 0x84000000 -e 0x84000000 \
+		   -n 'Linux-$(KERNELRELEASE)' -d $< $@
+
+
+quiet_cmd_ugImage = ugIMAGE  $@
+      cmd_ugImage = $(MKIMAGE) -A arm -O linux -T kernel \
+		   -C gzip -a $(LOADADDR) -e $(STARTADDR) \
+		   -n 'Linux-$(KERNELRELEASE)' -d $< $@
+
 
 ifeq ($(CONFIG_ZBOOT_ROM),y)
 $(obj)/uImage: LOADADDR=$(CONFIG_ZBOOT_ROM_TEXT)
+$(obj)/ugImage: LOADADDR=$(CONFIG_ZBOOT_ROM_TEXT)
 else
 $(obj)/uImage: LOADADDR=$(ZRELADDR)
+$(obj)/ugImage: LOADADDR=$(ZRELADDR)
 endif
 
 ifeq ($(CONFIG_THUMB2_KERNEL),y)
 # Set bit 0 to 1 so that "mov pc, rx" switches to Thumb-2 mode
 $(obj)/uImage: STARTADDR=$(shell echo $(LOADADDR) | sed -e "s/.$$/1/")
+$(obj)/ugImage: STARTADDR=$(shell echo $(LOADADDR) | sed -e "s/.$$/1/")
 else
 $(obj)/uImage: STARTADDR=$(LOADADDR)
+$(obj)/ugImage: STARTADDR=$(LOADADDR)
 endif
 
-$(obj)/uImage:	$(obj)/zImage FORCE
-	$(call if_changed,uimage)
+$(obj)/ccImage: vmlinux FORCE
+	$(call if_changed,objcopy)
+	@echo '  Kernel: $@ is ready'
+
+$(obj)/ccImageg: vmlinux FORCE
+	$(call if_changed,objcopy)
+	@echo '  Kernel: $@ is ready'
+
+$(obj)/ccImageg.gz:$(obj)/ccImageg FORCE
+	@-rm -rf $(obj)/ccImageg.gz 
+	@gzip $(obj)/ccImageg
 	@echo '  Image $@ is ready'
+
+$(obj)/ccImage.lzma:$(obj)/ccImage FORCE
+	@-rm -rf $(obj)/ccImage.lzma 
+	@lzma -z -S .lzma $(obj)/ccImage
+	@echo '  Image $@ is ready'
+
+$(obj)/uImage:	$(obj)/ccImage.lzma FORCE
+	$(call if_changed,uImage)
+	@echo '  Image $@ is ready'
+
+
+$(obj)/uzImage:	$(obj)/zImage FORCE
+	$(call if_changed,uzImage)
+	@echo '  Image $@ is ready'
+
+$(obj)/ugImage:	$(obj)/ccImageg.gz FORCE
+	$(call if_changed,ugImage)
+	@echo '  Image $@ is ready'
+
 
 $(obj)/bootp/bootp: $(obj)/zImage initrd FORCE
 	$(Q)$(MAKE) $(build)=$(obj)/bootp $@

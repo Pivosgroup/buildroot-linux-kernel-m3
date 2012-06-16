@@ -1,0 +1,22 @@
+#
+# Smart card driver configuration
+#
+
+menu "AMLOGIC DVB driver"
+
+config AM_DVB
+	tristate "AMLOGIC DVB driver"
+	default n
+	depends on DVB_CORE
+	help
+		Select to enable AMLogic DVB driver.
+
+config AM_GX1001
+	tristate "GX1001 demod driver"
+	default n
+	depends on AM_DVB
+	help
+		Select to enable GX1001 demod driver.
+
+endmenu
+

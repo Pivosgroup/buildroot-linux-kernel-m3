@@ -23,7 +23,8 @@ SECTIONS
     *(.data)
   }
 
-  . = TEXT_START;
+  /*. = TEXT_START; */
+  . = 0x84000000;
   _text = .;
 
   .text : {

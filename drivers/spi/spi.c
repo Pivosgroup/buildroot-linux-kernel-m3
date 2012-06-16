@@ -768,7 +768,9 @@ int spi_sync(struct spi_device *spi, struct spi_message *message)
 	message->context = &done;
 	status = spi_async(spi, message);
 	if (status == 0) {
+#ifndef CONFIG_AMLOGIC_SPI_NOR
 		wait_for_completion(&done);
+#endif
 		status = message->status;
 	}
 	message->context = NULL;

@@ -45,6 +45,7 @@ obj-$(CONFIG_USB_SERIAL_OPTICON)		+= opticon.o
 obj-$(CONFIG_USB_SERIAL_OPTION)			+= option.o
 obj-$(CONFIG_USB_SERIAL_OTI6858)		+= oti6858.o
 obj-$(CONFIG_USB_SERIAL_PL2303)			+= pl2303.o
+obj-$(CONFIG_USB_SERIAL_PL2303_AML)		+= pl2303_intr.o
 obj-$(CONFIG_USB_SERIAL_QCAUX)			+= qcaux.o
 obj-$(CONFIG_USB_SERIAL_QUALCOMM)		+= qcserial.o
 obj-$(CONFIG_USB_SERIAL_SAFE)			+= safe_serial.o

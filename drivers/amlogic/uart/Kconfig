@@ -1,0 +1,74 @@
+
+choice
+        prompt "Amlogic UART Support"
+        default AM_UART_WITH_S_CORE
+
+config AM_UART_WITH_S_CORE
+        bool "with serial core"
+        depends on AMLOGIC_SERIES
+        select SERIAL_CORE
+        select SERIAL_CORE_CONSOLE
+        help
+           hardware uart
+
+config AM_UART_WITHOUT_S_CORE
+        bool "without serial core"
+        depends on AMLOGIC_SERIES
+        select SERIAL_CORE
+        select SERIAL_CORE_CONSOLE
+        help
+           hardware uart
+
+endchoice
+
+choice
+        prompt "---SET ttyS0 for CONSOLE PORT"
+        default AM_UART0_SET_PORT_A
+
+config AM_UART0_SET_PORT_AO
+        bool "uart port AO"
+        depends on ARCH_MESON3
+        select SERIAL_CORE
+        select SERIAL_CORE_CONSOLE
+        help
+           hardware uart
+
+config AM_UART0_SET_PORT_A
+        bool "uart port A"
+        depends on AMLOGIC_SERIES
+        select SERIAL_CORE
+        select SERIAL_CORE_CONSOLE
+        help
+           hardware uart
+
+config AM_UART0_SET_PORT_B
+        bool "uart port B"
+        depends on AMLOGIC_SERIES
+        select SERIAL_CORE
+        select SERIAL_CORE_CONSOLE
+        help
+           hardware uart
+
+config AM_UART0_SET_PORT_C
+        bool "uart port C"
+        depends on ARCH_MESON3
+        select SERIAL_CORE
+        select SERIAL_CORE_CONSOLE
+        help
+           hardware uart
+
+endchoice
+
+menu  "---SET ttyS1 support"
+     depends on AM_UART_WITHOUT_S_CORE
+ 
+config UART_USE_FIQ
+        bool "UART1 use FIQ for high speed"     
+        depends on AMLOGIC_SERIES
+        select SERIAL_CORE
+        select SERIAL_CORE_CONSOLE
+        default n
+        help
+           hardware uart
+
+endmenu

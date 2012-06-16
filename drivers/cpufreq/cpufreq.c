@@ -1536,9 +1536,12 @@ int __cpufreq_driver_target(struct cpufreq_policy *policy,
 
 	dprintk("target for CPU %u: %u kHz, relation %u\n", policy->cpu,
 		target_freq, relation);
-	if (cpu_online(policy->cpu) && cpufreq_driver->target)
+	if (cpu_online(policy->cpu) && cpufreq_driver->target){
 		retval = cpufreq_driver->target(policy, target_freq, relation);
-
+		if (retval<0){
+			policy->cur = cpufreq_driver->get(policy->cpu);
+		}
+	}
 	return retval;
 }
 EXPORT_SYMBOL_GPL(__cpufreq_driver_target);

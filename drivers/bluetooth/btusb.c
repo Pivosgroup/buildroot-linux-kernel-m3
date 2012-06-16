@@ -55,6 +55,8 @@ static struct usb_driver btusb_driver;
 #define BTUSB_BROKEN_ISOC	0x20
 #define BTUSB_WRONG_SCO_MTU	0x40
 
+#define HCI_MAX_ISOC_FRAMES	3
+
 static struct usb_device_id btusb_table[] = {
 	/* Generic Bluetooth USB device */
 	{ USB_DEVICE_INFO(0xe0, 0x01, 0x01) },
@@ -408,22 +410,23 @@ static void btusb_isoc_complete(struct urb *urb)
 
 static void inline __fill_isoc_descriptor(struct urb *urb, int len, int mtu)
 {
-	int i, offset = 0;
+	int i, offset = 0;	
+	int fix_offset = 32;  // should be regular
 
 	BT_DBG("len %d mtu %d", len, mtu);
 
-	for (i = 0; i < BTUSB_MAX_ISOC_FRAMES && len >= mtu;
-					i++, offset += mtu, len -= mtu) {
+	for (i=0; i < HCI_MAX_ISOC_FRAMES && len >= mtu; i++, offset += fix_offset, len -= fix_offset) {
 		urb->iso_frame_desc[i].offset = offset;
 		urb->iso_frame_desc[i].length = mtu;
+		BT_DBG("desc %d offset %d len %d", i, offset, mtu);
 	}
-
-	if (len && i < BTUSB_MAX_ISOC_FRAMES) {
+	if (len>0 && i < HCI_MAX_ISOC_FRAMES) {
 		urb->iso_frame_desc[i].offset = offset;
 		urb->iso_frame_desc[i].length = len;
+		BT_DBG("desc %d offset %d len %d", i, offset, len);
 		i++;
 	}
-
+	
 	urb->number_of_packets = i;
 }
 
@@ -445,7 +448,7 @@ static int btusb_submit_isoc_urb(struct hci_dev *hdev, gfp_t mem_flags)
 		return -ENOMEM;
 
 	size = le16_to_cpu(data->isoc_rx_ep->wMaxPacketSize) *
-						BTUSB_MAX_ISOC_FRAMES;
+						20;
 
 	buf = kmalloc(size, mem_flags);
 	if (!buf) {
@@ -622,6 +625,10 @@ static int btusb_flush(struct hci_dev *hdev)
 	return 0;
 }
 
+#define SCO_BUF_SIZE		96
+#define HCI_USB_OFFSET		32
+char hci_usb_tx_buf[SCO_BUF_SIZE];
+
 static int btusb_send_frame(struct sk_buff *skb)
 {
 	struct hci_dev *hdev = (struct hci_dev *) skb->dev;
@@ -630,6 +637,8 @@ static int btusb_send_frame(struct sk_buff *skb)
 	struct urb *urb;
 	unsigned int pipe;
 	int err;
+	void *hci_usb_tx_buf_t=hci_usb_tx_buf;
+	char i=0;
 
 	BT_DBG("%s", hdev->name);
 
@@ -679,7 +688,7 @@ static int btusb_send_frame(struct sk_buff *skb)
 		hdev->stat.acl_tx++;
 		break;
 
-	case HCI_SCODATA_PKT:
+	case HCI_SCODATA_PKT:		
 		if (!data->isoc_tx_ep || hdev->conn_hash.sco_num < 1)
 			return -ENODEV;
 
@@ -695,12 +704,17 @@ static int btusb_send_frame(struct sk_buff *skb)
 		urb->context  = skb;
 		urb->complete = btusb_isoc_tx_complete;
 		urb->interval = data->isoc_tx_ep->bInterval;
-
+	
 		urb->transfer_flags  = URB_ISO_ASAP;
-		urb->transfer_buffer = skb->data;
-		urb->transfer_buffer_length = skb->len;
+		
+		for (i=0; i < HCI_MAX_ISOC_FRAMES; i++) {
+			memcpy((hci_usb_tx_buf_t + HCI_USB_OFFSET*i), &(skb->data[17*i]), 17);
+		}
 
-		__fill_isoc_descriptor(urb, skb->len,
+		urb->transfer_buffer = hci_usb_tx_buf_t;
+		urb->transfer_buffer_length = SCO_BUF_SIZE;
+		
+		__fill_isoc_descriptor(urb, SCO_BUF_SIZE,
 				le16_to_cpu(data->isoc_tx_ep->wMaxPacketSize));
 
 		hdev->stat.sco_tx++;

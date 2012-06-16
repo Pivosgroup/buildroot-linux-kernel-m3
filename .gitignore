@@ -52,9 +52,20 @@ modules.builtin
 #
 # Generated include files
 #
+include/asm
+include/asm-*/asm-offsets.h
 include/config
+include/generated/asm-offsets.h
+include/generated/autoconf.h
+include/generated/bounds.h
+include/generated/compile.h
+include/generated/mach-types.h
+include/generated/utsrelease.h
+include/linux/autoconf.h
+include/linux/compile.h
 include/linux/version.h
-include/generated
+include/linux/utsrelease.h
+include/linux/bounds.h
 
 # stgit generated dirs
 patches-*

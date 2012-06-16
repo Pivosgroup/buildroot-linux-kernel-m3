@@ -1322,7 +1322,7 @@ static int nand_do_read_ops(struct mtd_info *mtd, loff_t from,
 		/* For subsequent reads align to page boundary. */
 		col = 0;
 		/* Increment page address */
-		realpage++;
+		realpage += (mtd->writesize >> chip->page_shift);
 
 		page = realpage & chip->pagemask;
 		/* Check, if we cross a chip boundary */
@@ -1541,6 +1541,7 @@ static int nand_do_read_oob(struct mtd_info *mtd, loff_t from,
 {
 	int page, realpage, chipnr, sndcmd = 1;
 	struct nand_chip *chip = mtd->priv;
+	struct mtd_ecc_stats stats;
 	int blkcheck = (1 << (chip->phys_erase_shift - chip->page_shift)) - 1;
 	int readlen = ops->ooblen;
 	int len;
@@ -1569,6 +1570,8 @@ static int nand_do_read_oob(struct mtd_info *mtd, loff_t from,
 		return -EINVAL;
 	}
 
+	stats = mtd->ecc_stats;
+
 	chipnr = (int)(from >> chip->chip_shift);
 	chip->select_chip(mtd, chipnr);
 
@@ -1577,7 +1580,10 @@ static int nand_do_read_oob(struct mtd_info *mtd, loff_t from,
 	page = realpage & chip->pagemask;
 
 	while(1) {
-		sndcmd = chip->ecc.read_oob(mtd, chip, page, sndcmd);
+		if (!sndcmd)
+			sndcmd = chip->ecc.read_oob(mtd, chip, page, sndcmd);
+		else
+			sndcmd = chip->ecc.read_oob(mtd, chip, page, readlen);
 
 		len = min(len, readlen);
 		buf = nand_transfer_oob(chip, buf, ops, len);
@@ -1600,7 +1606,7 @@ static int nand_do_read_oob(struct mtd_info *mtd, loff_t from,
 			break;
 
 		/* Increment page address */
-		realpage++;
+		realpage += (mtd->writesize >> chip->page_shift);
 
 		page = realpage & chip->pagemask;
 		/* Check, if we cross a chip boundary */
@@ -1618,7 +1624,11 @@ static int nand_do_read_oob(struct mtd_info *mtd, loff_t from,
 	}
 
 	ops->oobretlen = ops->ooblen;
-	return 0;
+
+	if (mtd->ecc_stats.failed - stats.failed)
+		return -EBADMSG;
+
+	return  mtd->ecc_stats.corrected - stats.corrected ? -EUCLEAN : 0;
 }
 
 /**
@@ -1977,8 +1987,10 @@ static int nand_do_write_ops(struct mtd_info *mtd, loff_t to,
 		chip->pagebuf = -1;
 
 	/* If we're not given explicit OOB data, let it be 0xFF */
-	if (likely(!oob))
-		memset(chip->oob_poi, 0xff, mtd->oobsize);
+	if (likely(!oob)) {
+		memset(chip->oob_poi, 0xa5, mtd->oobsize);			//a5 not ff for all ff data very dangerous
+		chip->oob_poi[chip->badblockpos] = 0xFF;
+	}
 
 	while(1) {
 		int bytes = mtd->writesize;
@@ -2009,7 +2021,7 @@ static int nand_do_write_ops(struct mtd_info *mtd, loff_t to,
 
 		column = 0;
 		buf += bytes;
-		realpage++;
+		realpage += (mtd->writesize >> chip->page_shift);
 
 		page = realpage & chip->pagemask;
 		/* Check, if we cross a chip boundary */
@@ -2692,7 +2704,7 @@ static struct nand_flash_dev *nand_get_flash_type(struct mtd_info *mtd,
 	/* Calculate the address shift from the page size */
 	chip->page_shift = ffs(mtd->writesize) - 1;
 	/* Convert chipsize to number of pages per chip -1. */
-	chip->pagemask = (chip->chipsize >> chip->page_shift) - 1;
+		chip->pagemask = (chip->chipsize >> chip->page_shift) - 1;
 
 	chip->bbt_erase_shift = chip->phys_erase_shift =
 		ffs(mtd->erasesize) - 1;
@@ -2706,7 +2718,7 @@ static struct nand_flash_dev *nand_get_flash_type(struct mtd_info *mtd,
 		NAND_LARGE_BADBLOCK_POS : NAND_SMALL_BADBLOCK_POS;
 
 	/* Get chip options, preserve non chip based options */
-	chip->options &= ~NAND_CHIPOPTIONS_MSK;
+	//chip->options &= ~NAND_CHIPOPTIONS_MSK;
 	chip->options |= type->options & NAND_CHIPOPTIONS_MSK;
 
 	/*
@@ -2724,7 +2736,7 @@ static struct nand_flash_dev *nand_get_flash_type(struct mtd_info *mtd,
 	if (chip->options & NAND_4PAGE_ARRAY)
 		chip->erase_cmd = multi_erase_cmd;
 	else
-		chip->erase_cmd = single_erase_cmd;
+			chip->erase_cmd = single_erase_cmd;
 
 	/* Do not replace user supplied command function ! */
 	if (mtd->writesize > 512 && chip->cmdfunc == nand_command)
@@ -2778,8 +2790,8 @@ int nand_scan_ident(struct mtd_info *mtd, int maxchips)
 		/* Read manufacturer and device IDs */
 		if (nand_maf_id != chip->read_byte(mtd) ||
 		    type->id != chip->read_byte(mtd))
-			break;
-	}
+    			break;
+		   }
 	if (i > 1)
 		printk(KERN_INFO "%d NAND chips detected\n", i);
 

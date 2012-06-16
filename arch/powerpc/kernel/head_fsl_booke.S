@@ -639,13 +639,6 @@ interrupt_base:
 	rlwinm	r12,r12,0,16,1
 	mtspr	SPRN_MAS1,r12
 
-	/* Make up the required permissions for kernel code */
-#ifdef CONFIG_PTE_64BIT
-	li	r13,_PAGE_PRESENT | _PAGE_BAP_SX
-	oris	r13,r13,_PAGE_ACCESSED@h
-#else
-	li	r13,_PAGE_PRESENT | _PAGE_ACCESSED | _PAGE_EXEC
-#endif
 	b	4f
 
 	/* Get the PGD for the current thread */
@@ -653,15 +646,15 @@ interrupt_base:
 	mfspr	r11,SPRN_SPRG_THREAD
 	lwz	r11,PGDIR(r11)
 
-	/* Make up the required permissions for user code */
+4:
+	/* Make up the required permissions */
 #ifdef CONFIG_PTE_64BIT
-	li	r13,_PAGE_PRESENT | _PAGE_BAP_UX
+	li	r13,_PAGE_PRESENT | _PAGE_EXEC
 	oris	r13,r13,_PAGE_ACCESSED@h
 #else
 	li	r13,_PAGE_PRESENT | _PAGE_ACCESSED | _PAGE_EXEC
 #endif
 
-4:
 	FIND_PTE
 	andc.	r13,r13,r11		/* Check permission */
 

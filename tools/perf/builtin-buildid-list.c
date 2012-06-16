@@ -16,7 +16,7 @@
 #include "util/symbol.h"
 
 static char const *input_name = "perf.data";
-static bool force;
+static int force;
 static bool with_hits;
 
 static const char * const buildid_list_usage[] = {
@@ -29,7 +29,7 @@ static const struct option options[] = {
 	OPT_STRING('i', "input", &input_name, "file",
 		    "input file name"),
 	OPT_BOOLEAN('f', "force", &force, "don't complain, do it"),
-	OPT_INCR('v', "verbose", &verbose,
+	OPT_BOOLEAN('v', "verbose", &verbose,
 		    "be more verbose"),
 	OPT_END()
 };

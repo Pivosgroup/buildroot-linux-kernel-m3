@@ -756,7 +756,7 @@ static int process_eb(struct ubi_device *ubi, struct ubi_scan_info *si,
 		bitflips = 1;
 	}
 
-	si->is_empty = 0;
+	//si->is_empty = 0;	//changed by Elvis
 
 	if (!ec_corr) {
 		int image_seq;

@@ -1,0 +1,52 @@
+#
+# AMLOGIC tvin devices configuration
+#
+
+menu "Amlogic TVIN Support"
+
+config TVIN_MPEG
+	bool "Amlogic TVIN MPEGIN device"
+	default n
+	help
+		MPEG device driver.
+
+config TVIN_HDMI
+	bool "Amlogic TVIN HDMIRX device"
+	default n
+	help
+		HDMI device driver.
+
+config TVIN_BT656IN
+	bool "Amlogic TVIN BT656IN device"
+	default n
+	help
+		BT656IN device driver.
+
+config TVIN_DVIN
+	bool "Amlogic TVIN DVIN device"
+	default n
+	help
+		DVIN device driver.
+
+config TVIN_AFE
+	bool "Amlogic TVIN TVAFE device"
+	default n
+	depends on ARCH_MESON2
+	help
+		AFE device driver.
+
+config TVIN_VIUIN
+	bool "Amlogic TVIN VIUIN device"
+	default n
+	help
+		VIUIN device driver.
+
+config TVIN_VDIN
+	bool "Amlogic TVIN VDIN device"
+	default n
+	help
+		VDIN devices driver.
+
+source "drivers/amlogic/tvin/tuners/Kconfig"
+
+endmenu

@@ -1,0 +1,53 @@
+#
+# AMLOGIC CAMERA DEVICE configuration
+#
+
+menu "Amlogic CAMERA Support"
+
+#config CAMERA_OV2655
+#	tristate "CAMERA OV2655 Driver"
+#	default n
+#	help
+#		.MICRON 0.3M Bayer Sensor with AutoFocus
+		
+#config CAMERA_OV2665
+#	tristate "CAMERA OV2665 Driver"
+#	default n
+#	help
+#		.MICRON 2M Bayer Sensor with AutoFocus
+
+
+config AMLOGIC_CAMERA_ENABLE
+	tristate "AMLOGIC CAMERA Driver ENABLE"
+	default n
+	help
+		MICRON 5M Bayer Sensor with AutoFocus
+		
+config AMLOGIC_SECOND_CAMERA_ENABLE
+	depends on AMLOGIC_CAMERA_ENABLE
+	bool "AMLOGIC SECOND CAMERA Driver ENABLE"
+	default n
+	help
+		AMLOGIC SECOND CAMERA Driver ENABLE		
+				
+config CAMERA_OV5640
+	tristate "CAMERA OV5640 Driver"
+	default n
+	depends on AMLOGIC_CAMERA_ENABLE
+	help
+		CAMERA_OV5640 support
+		
+config CAMERA_GC0308
+	tristate "CAMERA GC0308 Driver"
+	default n
+	depends on AMLOGIC_CAMERA_ENABLE
+	help
+		GalaxyCore GC0308
+		
+config CAMERA_GT2005
+	tristate "CAMERA GT2005 Driver"
+	default n
+	depends on AMLOGIC_CAMERA_ENABLE
+	help
+		GalaxyCore GT2005		
+endmenu

@@ -19,7 +19,12 @@
 
 #include "power.h"
 
+//#define DEVICE_SUPPORT_SUSPEND_NO_IRQ
+
 const char *const pm_states[PM_SUSPEND_MAX] = {
+#ifdef CONFIG_EARLYSUSPEND
+	[PM_SUSPEND_ON]		= "on",
+#endif
 	[PM_SUSPEND_STANDBY]	= "standby",
 	[PM_SUSPEND_MEM]	= "mem",
 };
@@ -132,13 +137,13 @@ static int suspend_enter(suspend_state_t state)
 		if (error)
 			return error;
 	}
-
+#ifdef DEVICE_SUPPORT_SUSPEND_NO_IRQ
 	error = dpm_suspend_noirq(PMSG_SUSPEND);
 	if (error) {
 		printk(KERN_ERR "PM: Some devices failed to power down\n");
 		goto Platfrom_finish;
 	}
-
+#endif
 	if (suspend_ops->prepare_late) {
 		error = suspend_ops->prepare_late();
 		if (error)
@@ -173,8 +178,9 @@ static int suspend_enter(suspend_state_t state)
 		suspend_ops->wake();
 
  Power_up_devices:
+#ifdef DEVICE_SUPPORT_SUSPEND_NO_IRQ
 	dpm_resume_noirq(PMSG_RESUME);
-
+#endif
  Platfrom_finish:
 	if (suspend_ops->finish)
 		suspend_ops->finish();
@@ -200,6 +206,7 @@ int suspend_devices_and_enter(suspend_state_t state)
 		if (error)
 			goto Close;
 	}
+
 	suspend_console();
 	saved_mask = clear_gfp_allowed_mask(GFP_IOFS);
 	suspend_test_start();
@@ -209,9 +216,10 @@ int suspend_devices_and_enter(suspend_state_t state)
 		goto Recover_platform;
 	}
 	suspend_test_finish("suspend devices");
-	if (suspend_test(TEST_DEVICES))
+	if (suspend_test(TEST_DEVICES)) {
+		printk(KERN_ERR "PM: suspend test failed\n");
 		goto Recover_platform;
-
+	}
 	suspend_enter(state);
 
  Resume_devices:
@@ -220,6 +228,7 @@ int suspend_devices_and_enter(suspend_state_t state)
 	suspend_test_finish("resume devices");
 	set_gfp_allowed_mask(saved_mask);
 	resume_console();
+
  Close:
 	if (suspend_ops->end)
 		suspend_ops->end();
@@ -271,11 +280,14 @@ int enter_state(suspend_state_t state)
 
 	pr_debug("PM: Preparing system for %s sleep\n", pm_states[state]);
 	error = suspend_prepare();
-	if (error)
+	if (error){
+		printk(KERN_ERR "PM: suspend prepare failed ... ");
 		goto Unlock;
-
-	if (suspend_test(TEST_FREEZER))
+	}
+	if (suspend_test(TEST_FREEZER)){
+		printk(KERN_ERR "PM: suspend test failed ... ");
 		goto Finish;
+	}
 
 	pr_debug("PM: Entering %s sleep\n", pm_states[state]);
 	error = suspend_devices_and_enter(state);
@@ -283,8 +295,20 @@ int enter_state(suspend_state_t state)
  Finish:
 	pr_debug("PM: Finishing wakeup.\n");
 	suspend_finish();
+
  Unlock:
 	mutex_unlock(&pm_mutex);
+#ifdef CONFIG_SUSPEND_WATCHDOG
+{
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	extern void reset_watchdog(void);
+	reset_watchdog();
+#else
+	extern void disable_watchdog(void);
+	disable_watchdog();
+#endif
+}
+#endif   	
 	return error;
 }
 

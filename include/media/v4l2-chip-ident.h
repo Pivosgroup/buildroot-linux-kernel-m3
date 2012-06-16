@@ -296,6 +296,24 @@ enum {
 
 	/* Sharp RJ54N1CB0C, 0xCB0C = 51980 */
 	V4L2_IDENT_RJ54N1CB0C = 51980,
+	
+	/* GT2005, 0x5138= 20792  */
+	V4L2_IDENT_GT2005 =  20,
+
+	/* GC0308, 0x5138= 20792  */
+	V4L2_IDENT_GC0308 =  21,
+
+	/* OV5642,   */
+	V4L2_IDENT_OV5642 =  22,
+	
+	/* SP0838,   */
+	V4L2_IDENT_SP0838 =  23,	
+
+	/* OV7675,   */
+	V4L2_IDENT_OV7675 =  24,
+
+	/* OV2655,   */
+	V4L2_IDENT_OV2655 =  25,
 };
 
 #endif

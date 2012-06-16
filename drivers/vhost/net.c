@@ -637,7 +637,7 @@ const static struct file_operations vhost_net_fops = {
 };
 
 static struct miscdevice vhost_net_misc = {
-	MISC_DYNAMIC_MINOR,
+	VHOST_NET_MINOR,
 	"vhost-net",
 	&vhost_net_fops,
 };

@@ -184,6 +184,10 @@ static void hci_init_req(struct hci_dev *hdev, unsigned long opt)
 	struct sk_buff *skb;
 	__le16 param;
 	__u8 flt_type;
+#ifdef CONFIG_BCM4329_BT
+    unsigned char buf[10] = {0x01, 0x0a, 0x0a, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00};
+    u16 opcode = (u16)((0x27 & 0x03ff)|(0x3f << 10));
+#endif
 
 	BT_DBG("%s %ld", hdev->name, opt);
 
@@ -251,6 +255,10 @@ static void hci_init_req(struct hci_dev *hdev, unsigned long opt)
 	/* Connection accept timeout ~20 secs */
 	param = cpu_to_le16(0x7d00);
 	hci_send_cmd(hdev, HCI_OP_WRITE_CA_TIMEOUT, 2, &param);
+#ifdef CONFIG_BCM4329_BT
+    /* sleep mode Setting */
+    hci_send_cmd(hdev, opcode, 10, buf);
+#endif
 }
 
 static void hci_scan_req(struct hci_dev *hdev, unsigned long opt)
@@ -464,6 +472,81 @@ done:
 	return err;
 }
 
+#if defined(CONFIG_ARCH_MESON) || defined(CONFIG_ARCH_MESON3)
+static int hci_state_change(struct hci_dev *hdev)
+{
+    struct hci_dev_stats *new_stat = &hdev->stat;
+    struct hci_dev_stats *old_stat = &hdev->old_stat;
+
+    if/*(new_stat->err_rx != old_stat->err_rx){
+        old_stat->err_rx = new_stat->err_rx;
+        printk("err_rx\n");
+        return 1;
+    }else if(new_stat->err_tx != old_stat->err_tx){
+        old_stat->err_tx = new_stat->err_tx;
+        printk("err_tx\n");
+        return 1;
+    }else if(new_stat->cmd_tx != old_stat->cmd_tx){
+        old_stat->cmd_tx = new_stat->cmd_tx;
+        printk("cmd_tx\n");
+        return 1;
+    }else if(new_stat->evt_rx != old_stat->evt_rx){
+        old_stat->evt_rx = new_stat->evt_rx;
+        printk("evt_rx\n");
+        return 1;
+    }else if*/(new_stat->acl_tx != old_stat->acl_tx){
+        //old_stat->acl_tx = new_stat->acl_tx;
+        printk(KERN_DEBUG "acl_tx\n");
+        //return 1;
+        goto diff;
+    }else if(new_stat->acl_rx != old_stat->acl_rx){
+        //old_stat->acl_rx = new_stat->acl_rx;
+        printk(KERN_DEBUG "acl_rx\n");
+        //return 1;
+        goto diff;
+    }else if(new_stat->sco_tx != old_stat->sco_tx){
+        //old_stat->sco_tx = new_stat->sco_tx;
+        printk(KERN_DEBUG "sco_tx\n");
+        //return 1;
+        goto diff;
+    }else if(new_stat->sco_rx != old_stat->sco_rx){
+        //old_stat->sco_rx = new_stat->sco_rx;
+        printk(KERN_DEBUG "sco_rx\n");
+        //return 1;
+        goto diff;
+    }/*else if(new_stat->byte_rx != old_stat->byte_rx){
+        old_stat->byte_rx = new_stat->byte_rx;
+        printk("byte_rx\n");
+        return 1;
+    }else if(new_stat->sco_rx != old_stat->sco_rx){
+        old_stat->byte_tx = new_stat->byte_tx;
+        printk("byte_tx\n");
+        return 1;
+    }*/
+
+    return 0;
+diff:
+    old_stat->acl_tx = new_stat->acl_tx;
+    old_stat->acl_rx = new_stat->acl_rx;
+    old_stat->sco_tx = new_stat->sco_tx;
+    old_stat->sco_rx = new_stat->sco_rx;
+    return 1;
+}
+
+static void hdev_timer_handle(unsigned long arg)
+{
+    struct hci_dev *hdev = (struct hci_dev *)(arg);
+    if(hci_state_change(hdev)){
+        printk(KERN_DEBUG "date transfer occure in 6s\n");
+        hci_notify(hdev, HCI_DEV_RUN);
+    }
+    else{
+        printk(KERN_DEBUG "no date transfer occure in 6s\n");
+        hci_notify(hdev, HCI_DEV_IDLE);
+    }
+    mod_timer(&hdev->timer, jiffies + msecs_to_jiffies(HCI_IDLE_TIMEOUT));
+}
+#endif
 /* ---- HCI ioctl helpers ---- */
 
 int hci_dev_open(__u16 dev)
@@ -903,7 +986,17 @@ int hci_register_dev(struct hci_dev *hdev)
 	hdev->idle_timeout = 0;
 	hdev->sniff_max_interval = 800;
 	hdev->sniff_min_interval = 80;
-
+#ifdef CONFIG_BCM4329_BT
+    hdev->inquiry_state = 0;
+#endif
+#if defined(CONFIG_ARCH_MESON) || defined(CONFIG_ARCH_MESON3)
+    printk("init timer\n");
+    init_timer(&hdev->timer);
+    hdev->timer.function = &hdev_timer_handle;
+    hdev->timer.data = (unsigned long)hdev;
+    hdev->timer.expires = jiffies + msecs_to_jiffies(HCI_IDLE_TIMEOUT);
+    add_timer(&hdev->timer);
+#endif
 	tasklet_init(&hdev->cmd_task, hci_cmd_task,(unsigned long) hdev);
 	tasklet_init(&hdev->rx_task, hci_rx_task, (unsigned long) hdev);
 	tasklet_init(&hdev->tx_task, hci_tx_task, (unsigned long) hdev);
@@ -957,6 +1050,10 @@ int hci_unregister_dev(struct hci_dev *hdev)
 	write_unlock_bh(&hci_dev_list_lock);
 
 	hci_dev_do_close(hdev);
+#if defined(CONFIG_ARCH_MESON) || defined(CONFIG_ARCH_MESON3)
+    printk("del timer\n");
+    del_timer(&hdev->timer);
+#endif
 
 	for (i = 0; i < 3; i++)
 		kfree_skb(hdev->reassembly[i]);
@@ -1269,7 +1366,7 @@ int hci_send_acl(struct hci_conn *conn, struct sk_buff *skb, __u16 flags)
 
 	skb->dev = (void *) hdev;
 	bt_cb(skb)->pkt_type = HCI_ACLDATA_PKT;
-	hci_add_acl_hdr(skb, conn->handle, flags | ACL_START);
+	hci_add_acl_hdr(skb, conn->handle, flags);
 
 	if (!(list = skb_shinfo(skb)->frag_list)) {
 		/* Non fragmented */
@@ -1286,12 +1383,14 @@ int hci_send_acl(struct hci_conn *conn, struct sk_buff *skb, __u16 flags)
 		spin_lock_bh(&conn->data_q.lock);
 
 		__skb_queue_tail(&conn->data_q, skb);
+		flags &= ~ACL_PB_MASK;
+		flags |= ACL_CONT;
 		do {
 			skb = list; list = list->next;
 
 			skb->dev = (void *) hdev;
 			bt_cb(skb)->pkt_type = HCI_ACLDATA_PKT;
-			hci_add_acl_hdr(skb, conn->handle, flags | ACL_CONT);
+			hci_add_acl_hdr(skb, conn->handle, flags);
 
 			BT_DBG("%s frag %p len %d", hdev->name, skb, skb->len);
 

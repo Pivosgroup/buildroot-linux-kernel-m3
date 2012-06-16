@@ -1,0 +1,93 @@
+config VIDEO_AMLOGIC_CAPTURE_PROBE
+	bool "Force check wether camera devices exist"
+	depends on VIDEO_AMLOGIC_CAPTURE
+	default n
+	---help---
+	  Probe wether the camera devices exist by trying to read its 
+	  i2c port. It may cost some time, say Y here if you want it.
+config VIDEO_AMLOGIC_FLASHLIGHT
+	tristate "Amlogic Platform Flashlight Driver"
+	depends on VIDEO_AMLOGIC_CAPTURE
+	default n
+	---help---
+	  Amlogic flashlight driver.
+	  Say Y here if you want this driver.
+config VIDEO_AMLOGIC_CAPTURE_GT2005
+	tristate "Amlogic Platform Capture Driver for GT2005"
+	depends on VIDEO_AMLOGIC_CAPTURE
+	select VIDEOBUF_VMALLOC
+	select TVIN_BT656IN
+	select TVIN_VDIN
+	default n
+	---help---
+	  Amlogic capture driver.
+	  Say Y here if you want this driver.
+
+config VIDEO_AMLOGIC_CAPTURE_GC0308
+	tristate "Amlogic Platform Capture Driver for GC0308"
+	depends on VIDEO_AMLOGIC_CAPTURE
+	select VIDEOBUF_VMALLOC
+	select TVIN_BT656IN
+	select TVIN_VDIN
+	default n
+	---help---
+	  Amlogic capture driver.
+	  Say Y here if you want this driver.
+	  
+config VIDEO_AMLOGIC_CAPTURE_OV5642
+	tristate "Amlogic Platform Capture Driver for OV5642"
+	depends on VIDEO_AMLOGIC_CAPTURE
+	select VIDEOBUF_VMALLOC
+	select TVIN_BT656IN
+	select TVIN_VDIN
+	default n
+	---help---
+	  Amlogic capture driver.
+	  Say Y here if you want this driver.	  
+
+config VIDEO_AMLOGIC_CAPTURE_OV5640
+	tristate "Amlogic Platform Capture Driver for OV5640"
+	depends on VIDEO_AMLOGIC_CAPTURE
+	select VIDEOBUF_VMALLOC
+	select TVIN_BT656IN
+	select TVIN_VDIN
+	default n
+	---help---
+	  Amlogic capture driver.
+	  Say Y here if you want this driver.	  
+
+config VIDEO_AMLOGIC_CAPTURE_OV7675
+	tristate "Amlogic Platform Capture Driver for OV7675"
+	depends on VIDEO_AMLOGIC_CAPTURE
+	select VIDEOBUF_VMALLOC
+	select TVIN_BT656IN
+	select TVIN_VDIN
+	default n
+	---help---
+	  Amlogic capture driver.
+	  Say Y here if you want this driver.
+	  
+config VIDEO_AMLOGIC_CAPTURE_OV2655
+	tristate "Amlogic Platform Capture Driver for OV2655"
+	depends on VIDEO_AMLOGIC_CAPTURE
+	select VIDEOBUF_VMALLOC
+	select TVIN_BT656IN
+	select TVIN_VDIN
+	default n
+	---help---
+	  Amlogic capture driver.
+	  Say Y here if you want this driver.
+	  
+config VIDEO_AMLOGIC_CAPTURE_SP0838
+	tristate "Amlogic Platform Capture Driver for SP0838"
+	depends on VIDEO_AMLOGIC_CAPTURE
+	select VIDEOBUF_VMALLOC
+	select TVIN_BT656IN
+	select TVIN_VDIN
+	default n
+	---help---
+	  Amlogic capture driver.
+	  Say Y here if you want this driver.	 	  
+	  
+config AMLOGIC_VIDEOIN_MANAGER
+	tristate

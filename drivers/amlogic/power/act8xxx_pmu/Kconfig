@@ -1,0 +1,21 @@
+config PMU_ACT8xxx
+	bool "PMU ACT8942/ACT8862 Driver"
+	help
+	  This is the pmu act8942/act8862 driver.
+
+	  If unsure, say N.
+
+config PMU_ACT8942
+	bool "PMU ACT8942(with charging management)"
+	select POWER_SUPPLY
+	depends on PMU_ACT8xxx
+	default optional
+	help
+	  pmu act8942(with charging management).
+
+config PMU_ACT8862
+	bool "PMU ACT8862(without charging management)"
+	depends on PMU_ACT8xxx
+	default optional
+	help
+	  pmu act8862(without charging management).

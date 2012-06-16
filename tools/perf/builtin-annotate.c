@@ -29,11 +29,11 @@
 
 static char		const *input_name = "perf.data";
 
-static bool		force;
+static int		force;
 
-static bool		full_paths;
+static int		full_paths;
 
-static bool		print_line;
+static int		print_line;
 
 struct sym_hist {
 	u64		sum;
@@ -584,7 +584,7 @@ static const struct option options[] = {
 	OPT_STRING('s', "symbol", &sym_hist_filter, "symbol",
 		    "symbol to annotate"),
 	OPT_BOOLEAN('f', "force", &force, "don't complain, do it"),
-	OPT_INCR('v', "verbose", &verbose,
+	OPT_BOOLEAN('v', "verbose", &verbose,
 		    "be more verbose (show symbol address, etc)"),
 	OPT_BOOLEAN('D', "dump-raw-trace", &dump_trace,
 		    "dump raw trace in ASCII"),

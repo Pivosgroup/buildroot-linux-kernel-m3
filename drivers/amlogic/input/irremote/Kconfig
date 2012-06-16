@@ -1,0 +1,26 @@
+#
+# Input core configuration
+#
+
+
+
+config KEYPADS_AM
+	tristate "Amlogic ir remote control support"
+	default n
+	help
+	  Say Y here if you want to use the amlogic remote control.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called .
+
+config VIRTUAL_REMOTE
+	tristate "Amlogic virtual ir remote support (only for QA test)"
+	default n
+	help
+	  Say Y here if you want to use the virtual remote keypad.
+	  It can fill a series of key events into input device for QA
+	  test UI code.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called .
+

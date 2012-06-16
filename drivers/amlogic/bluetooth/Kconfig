@@ -1,0 +1,35 @@
+
+menu "Amlogic BT Device Support"
+
+config BT_DEVICE
+	bool "BT Device support"
+	depends on BT && RFKILL
+	select BACKLIGHT_CLASS_DEVICE
+	default n
+	help
+	  Say Y here if you want to use the BT device.
+
+config BCM4329_BT
+    bool "BCM4329 bt support"
+    depends on BT_DEVICE
+    help
+      Say y here if you want to use BCM4329 BT.
+
+menuconfig SDIO_MARVELL_NH387_BT
+	bool "Marvell nh387 bt support"
+	depends on SD_MMC && SDIO_MARVELL_NH387_WIFI
+	select BT_HCIBTSDIO
+	select WEXT_SPY
+	default n
+		---help---
+	  This module adds support for bt adapters based on
+	  Marvell nh387 chipset.
+if SDIO_MARVELL_NH387_BT		  
+config MRVLNH387_PXA3XX_DMA_ALIGN
+	depends on SDIO_MARVELL_NH387_BT
+	bool "PXA3XX DMA alignment"
+	default y
+		---help---
+	  PXA3XX DMA alignment.
+endif	  
+endmenu

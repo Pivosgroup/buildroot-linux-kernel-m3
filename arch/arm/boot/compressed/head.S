@@ -21,7 +21,7 @@
 
 #if defined(CONFIG_DEBUG_ICEDCC)
 
-#ifdef CONFIG_CPU_V6
+#ifdef defined(CONFIG_CPU_V6) || defined(CONFIG_CPU_V7)
 		.macro	loadsp, rb, tmp
 		.endm
 		.macro	writeb, ch, rb
@@ -346,8 +346,10 @@ params:		ldr	r0, =params_phys
  *  r4, r5, r6, r7, r8
  */
 		.align	5
-cache_on:	mov	r3, #8			@ cache_on function
-		b	call_cache_fn
+cache_on:
+		b __armv7_mmu_cache_on
+		;mov	r3, #8			@ cache_on function
+		;b	call_cache_fn
 
 /*
  * Initialize the highest priority protection region, PR7
@@ -627,6 +629,8 @@ proc_types:
 @		b	__arm6_mmu_cache_off
 @		b	__armv3_mmu_cache_flush
 
+#if !defined(CONFIG_CPU_V7)
+		/* This collides with some V7 IDs, preventing correct detection */
 		.word	0x00000000		@ old ARM ID
 		.word	0x0000f000
 		mov	pc, lr
@@ -635,6 +639,7 @@ proc_types:
  THUMB(		nop				)
 		mov	pc, lr
  THUMB(		nop				)
+#endif
 
 		.word	0x41007000		@ ARM7/710
 		.word	0xfff8fe00

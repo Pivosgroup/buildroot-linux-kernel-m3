@@ -66,7 +66,7 @@ __setup("fpe=", fpe_setup);
 
 extern void paging_init(struct machine_desc *desc);
 extern void reboot_setup(char *str);
-
+static __initdata struct machine_desc *init_mach_mdesc=NULL;
 unsigned int processor_id;
 EXPORT_SYMBOL(processor_id);
 unsigned int __machine_arch_type;
@@ -388,7 +388,6 @@ static struct machine_desc * __init setup_machine(unsigned int nr)
 static int __init arm_add_memory(unsigned long start, unsigned long size)
 {
 	struct membank *bank = &meminfo.bank[meminfo.nr_banks];
-
 	if (meminfo.nr_banks >= NR_BANKS) {
 		printk(KERN_CRIT "NR_BANKS too low, "
 			"ignoring memory at %#lx\n", start);
@@ -439,8 +438,42 @@ static int __init early_mem(char *p)
 	size  = memparse(p, &endp);
 	if (*endp == '@')
 		start = memparse(endp + 1, NULL);
-
-	arm_add_memory(start, size);
+#if defined(CONFIG_AMLOGIC_SERIES)
+	{
+		unsigned long bankstart;
+		bankstart = start;
+		/*64M-170M(approx.) is reserved for VIDEO MEMORY*/
+		if(	init_mach_mdesc &&
+			init_mach_mdesc->video_start>start &&
+			init_mach_mdesc->video_end>init_mach_mdesc->video_start)
+		{
+			unsigned long vstart, vend, vsize;
+			vstart=init_mach_mdesc->video_start;
+			vend=init_mach_mdesc->video_end;
+			vsize = size > (vstart - start) ? (vstart - start) : size;
+			/* 0M-64M */
+			arm_add_memory(bankstart, vstart - bankstart);
+			bankstart = PAGE_ALIGN(vend);
+		}
+#ifdef CONFIG_AML_SUSPEND
+		if (bankstart < start + size) {
+			/* 511M-512M is reserved for suspend firmware. */
+			unsigned long firmwarestart, firmwaresize, firmwareend;
+			firmwarestart = PHYS_OFFSET + CONFIG_AML_SUSPEND_FIRMWARE_BASE;
+			firmwaresize = SZ_1M;
+			firmwareend = firmwarestart + firmwaresize;
+			/* 170M-511M */
+			arm_add_memory(bankstart, firmwarestart - bankstart);
+			bankstart = PAGE_ALIGN(firmwareend);
+		}
+#endif
+		/* 170-end or 512-end (ifdef CONFIG_AML_SUSPEND) */
+		if (bankstart < start + size)
+			arm_add_memory(bankstart, start + size - bankstart);
+	}
+#else
+		arm_add_memory(start, size);
+#endif
 
 	return 0;
 }
@@ -495,7 +528,9 @@ request_standard_resources(struct meminfo *mi, struct machine_desc *mdesc)
 	if (mdesc->video_start) {
 		video_ram.start = mdesc->video_start;
 		video_ram.end   = mdesc->video_end;
+		#ifndef CONFIG_AMLOGIC_SERIES
 		request_resource(&iomem_resource, &video_ram);
+		#endif
 	}
 
 	/*
@@ -671,6 +706,7 @@ void __init setup_arch(char **cmdline_p)
 
 	setup_processor();
 	mdesc = setup_machine(machine_arch_type);
+	init_mach_mdesc=mdesc;
 	machine_name = mdesc->name;
 
 	if (mdesc->soft_reboot)

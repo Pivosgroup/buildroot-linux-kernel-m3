@@ -21,9 +21,9 @@
 
 #include <asm/types.h>
 
-static int block_size = 0;
-module_param(block_size, int, 0);
-MODULE_PARM_DESC(block_size, "Block size to use by RFD, defaults to erase unit size");
+static int rfd_ftl_block_size = 0;
+module_param(rfd_ftl_block_size, int, 0);
+MODULE_PARM_DESC(rfd_ftl_block_size, "Block size to use by RFD, defaults to erase unit size");
 
 #define PREFIX "rfd_ftl: "
 
@@ -32,7 +32,7 @@ MODULE_PARM_DESC(block_size, "Block size to use by RFD, defaults to erase unit s
 #define RFD_FTL_MAJOR		256
 #endif
 
-/* Maximum number of partitions in an FTL region */
+/* Maximum number of rfd_ftl_partitions in an FTL region */
 #define PART_BITS		4
 
 /* An erase unit should start with this value */
@@ -66,7 +66,7 @@ struct block {
 	u_long offset;
 };
 
-struct partition {
+struct rfd_ftl_partition {
 	struct mtd_blktrans_dev mbd;
 
 	u_int block_size;		/* size of erase unit */
@@ -88,7 +88,7 @@ struct partition {
 
 static int rfd_ftl_writesect(struct mtd_blktrans_dev *dev, u_long sector, char *buf);
 
-static int build_block_map(struct partition *part, int block_no)
+static int build_block_map(struct rfd_ftl_partition *part, int block_no)
 {
 	struct block *block = &part->blocks[block_no];
 	int i;
@@ -146,7 +146,7 @@ static int build_block_map(struct partition *part, int block_no)
 	return 0;
 }
 
-static int scan_header(struct partition *part)
+static int scan_header(struct rfd_ftl_partition *part)
 {
 	int sectors_per_block;
 	int i, rc = -ENOMEM;
@@ -239,7 +239,7 @@ err:
 
 static int rfd_ftl_readsect(struct mtd_blktrans_dev *dev, u_long sector, char *buf)
 {
-	struct partition *part = (struct partition*)dev;
+	struct rfd_ftl_partition *part = (struct rfd_ftl_partition*)dev;
 	u_long addr;
 	size_t retlen;
 	int rc;
@@ -267,12 +267,12 @@ static int rfd_ftl_readsect(struct mtd_blktrans_dev *dev, u_long sector, char *b
 
 static void erase_callback(struct erase_info *erase)
 {
-	struct partition *part;
+	struct rfd_ftl_partition *part;
 	u16 magic;
 	int i, rc;
 	size_t retlen;
 
-	part = (struct partition*)erase->priv;
+	part = (struct rfd_ftl_partition*)erase->priv;
 
 	i = (u32)erase->addr / part->block_size;
 	if (i >= part->total_blocks || part->blocks[i].offset != erase->addr ||
@@ -323,7 +323,7 @@ static void erase_callback(struct erase_info *erase)
 	kfree(erase);
 }
 
-static int erase_block(struct partition *part, int block)
+static int erase_block(struct rfd_ftl_partition *part, int block)
 {
 	struct erase_info *erase;
 	int rc = -ENOMEM;
@@ -354,7 +354,7 @@ err:
 	return rc;
 }
 
-static int move_block_contents(struct partition *part, int block_no, u_long *old_sector)
+static int move_block_contents(struct rfd_ftl_partition *part, int block_no, u_long *old_sector)
 {
 	void *sector_data;
 	u16 *map;
@@ -443,7 +443,7 @@ err3:
 	return rc;
 }
 
-static int reclaim_block(struct partition *part, u_long *old_sector)
+static int reclaim_block(struct rfd_ftl_partition *part, u_long *old_sector)
 {
 	int block, best_block, score, old_sector_block;
 	int rc;
@@ -516,7 +516,7 @@ static int reclaim_block(struct partition *part, u_long *old_sector)
  * because if we fill that one up first it'll have the most chance of having
  * the least live sectors at reclaim.
  */
-static int find_free_block(struct partition *part)
+static int find_free_block(struct rfd_ftl_partition *part)
 {
 	int block, stop;
 
@@ -540,7 +540,7 @@ static int find_free_block(struct partition *part)
 	return -1;
 }
 
-static int find_writable_block(struct partition *part, u_long *old_sector)
+static int find_writable_block(struct rfd_ftl_partition *part, u_long *old_sector)
 {
 	int rc, block;
 	size_t retlen;
@@ -581,7 +581,7 @@ err:
 	return rc;
 }
 
-static int mark_sector_deleted(struct partition *part, u_long old_addr)
+static int mark_sector_deleted(struct rfd_ftl_partition *part, u_long old_addr)
 {
 	int block, offset, rc;
 	u_long addr;
@@ -619,7 +619,7 @@ err:
 	return rc;
 }
 
-static int find_free_sector(const struct partition *part, const struct block *block)
+static int find_free_sector(const struct rfd_ftl_partition *part, const struct block *block)
 {
 	int i, stop;
 
@@ -640,7 +640,7 @@ static int find_free_sector(const struct partition *part, const struct block *bl
 
 static int do_writesect(struct mtd_blktrans_dev *dev, u_long sector, char *buf, ulong *old_addr)
 {
-	struct partition *part = (struct partition*)dev;
+	struct rfd_ftl_partition *part = (struct rfd_ftl_partition*)dev;
 	struct block *block;
 	u_long addr;
 	int i;
@@ -708,7 +708,7 @@ err:
 
 static int rfd_ftl_writesect(struct mtd_blktrans_dev *dev, u_long sector, char *buf)
 {
-	struct partition *part = (struct partition*)dev;
+	struct rfd_ftl_partition *part = (struct rfd_ftl_partition*)dev;
 	u_long old_addr;
 	int i;
 	int rc = 0;
@@ -749,7 +749,7 @@ err:
 
 static int rfd_ftl_getgeo(struct mtd_blktrans_dev *dev, struct hd_geometry *geo)
 {
-	struct partition *part = (struct partition*)dev;
+	struct rfd_ftl_partition *part = (struct rfd_ftl_partition*)dev;
 
 	geo->heads = 1;
 	geo->sectors = SECTORS_PER_TRACK;
@@ -760,19 +760,19 @@ static int rfd_ftl_getgeo(struct mtd_blktrans_dev *dev, struct hd_geometry *geo)
 
 static void rfd_ftl_add_mtd(struct mtd_blktrans_ops *tr, struct mtd_info *mtd)
 {
-	struct partition *part;
+	struct rfd_ftl_partition *part;
 
 	if (mtd->type != MTD_NORFLASH || mtd->size > UINT_MAX)
 		return;
 
-	part = kzalloc(sizeof(struct partition), GFP_KERNEL);
+	part = kzalloc(sizeof(struct rfd_ftl_partition), GFP_KERNEL);
 	if (!part)
 		return;
 
 	part->mbd.mtd = mtd;
 
-	if (block_size)
-		part->block_size = block_size;
+	if (rfd_ftl_block_size)
+		part->block_size = rfd_ftl_block_size;
 	else {
 		if (!mtd->erasesize) {
 			printk(KERN_WARNING PREFIX "please provide block_size");
@@ -805,7 +805,7 @@ out:
 
 static void rfd_ftl_remove_dev(struct mtd_blktrans_dev *dev)
 {
-	struct partition *part = (struct partition*)dev;
+	struct rfd_ftl_partition *part = (struct rfd_ftl_partition*)dev;
 	int i;
 
 	for (i=0; i<part->total_blocks; i++) {

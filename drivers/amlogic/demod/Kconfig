@@ -1,0 +1,35 @@
+menu "AMLOGIC DEMOD Support"
+
+menuconfig AM_DEMOD
+	tristate "Amlogic demod driver"
+	default n
+	depends on AM_DVB
+	help
+		m1 internal Demod DVB-T/C suport
+
+if AM_DEMOD
+
+config AM_DEMOD_DEBUG
+	bool "Amlogic Demod Debug Interface"
+	default n
+	depends on AM_DEMOD
+	help
+		m1 internal Demod debug interface
+
+config AM_AMDEMOD_DVBC
+	bool "AML DVBC demod driver"
+	default n
+	depends on AM_DEMOD
+	help
+		m1 internal Demod DVB-C Driver
+
+config AM_AMDEMOD_DVBT
+	bool "AML DVBT demod driver"
+	default n
+	depends on AM_DEMOD
+	help
+		m1 internal Demod DVB-T Driver
+
+endif	# AM_DEMOD
+		
+endmenu

@@ -26,6 +26,15 @@ fw-shipped- += acenic/tg1.bin
 else
 acenic-objs := acenic/tg1.bin acenic/tg2.bin
 endif
+
+fw-shipped-$(CONFIG_SAMSUNG_WIFI_4329) += bcm4329/fw_bcm4329.bin bcm4329/nvram.txt
+fw-shipped-$(CONFIG_SDIO_DHD_CDC_WIFI_4319) += broadcm_4319/sdio-g-cdc-full11n-reclaim-roml-wme.bin broadcm_4319/nvram_4319_201008.txt
+fw-shipped-$(CONFIG_SDIO_DHD_CDC_WIFI_4329) += broadcm_4329/sdio-g-cdc-full11n-reclaim-roml-wme-idsup.bin broadcm_4329/nvram.txt
+fw-shipped-$(CONFIG_SDIO_ATHEROS_6302_WIFI) += atheros_6302/otp.bin.z77 atheros_6302/athwlan.bin.z77 atheros_6302/data.patch.bin atheros_6302/bdata.SD31.bin
+fw-shipped-$(CONFIG_SDIO_ATHEROS_6102_WIFI) += atheros_6102/calData_ar6102_15dBm.bin atheros_6102/athwlan.bin.z77 atheros_6102/data.patch.hw2_0.bin
+fw-shipped-$(CONFIG_SDIO_MARVELL_NH387_WIFI) += mrvl/sd8787_uapsta.bin mrvl/sd8787_uapsta_w1.bin
+fw-shipped-$(CONFIG_RALINK_3070_USB_WIFI) += ralink/3070/RT2870STA.dat
+fw-shipped-$(CONFIG_SDIO_NRX600) += nano_nrx600/x_mac.axf
 fw-shipped-$(CONFIG_3C359) += 3com/3C359.bin
 fw-shipped-$(CONFIG_ACENIC) += $(acenic-objs)
 fw-shipped-$(CONFIG_ADAPTEC_STARFIRE) += adaptec/starfire_rx.bin \
@@ -243,8 +252,7 @@ obj-$(CONFIG_FIRMWARE_IN_KERNEL) += $(patsubst %,%.gen.o, $(fw-shipped-y))
 
 # Remove .S files and binaries created from ihex
 # (during 'make clean' .config isn't included so they're all in $(fw-shipped-))
-targets := $(fw-shipped-) $(patsubst $(obj)/%,%, \
-				$(shell find $(obj) -name \*.gen.S 2>/dev/null))
+targets := $(shell find $(obj) -name \*.gen.S 2>/dev/null))
 
 # Without this, built-in.o won't be created when it's empty, and the
 # final vmlinux link will fail.

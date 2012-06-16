@@ -33,7 +33,30 @@
 #define	LINUX_REBOOT_CMD_RESTART2	0xA1B2C3D4
 #define	LINUX_REBOOT_CMD_SW_SUSPEND	0xD000FCE2
 #define	LINUX_REBOOT_CMD_KEXEC		0x45584543
-
+#define LINUX_REBOOT_CMD_AML_SUSPEND    0xDFCE0321
+/*
+ * Commands accepted by the arm_machine_restart() system call.
+ *
+ * AMLOGIC_NORMAL_BOOT     			Restart system normally.
+ * AMLOGIC_FACTORY_RESET_REBOOT      Restart system into recovery factory reset.
+ * AMLOGIC_UPDATE_REBOOT			Restart system into recovery update.
+ * AMLOGIC_CHARGING_REBOOT     		Restart system into charging.
+ * AMLOGIC_CRASH_REBOOT   			Restart system with system crach.
+ * AMLOGIC_FACTORY_TEST_REBOOT    	Restart system into factory test.
+ * AMLOGIC_SYSTEM_SWITCH_REBOOT  	Restart system for switch other OS.
+ * AMLOGIC_SAFE_REBOOT       			Restart system into safe mode.
+ * AMLOGIC_LOCK_REBOOT  			Restart system into lock mode.
+ * elvis.yu---elvis.yu@amlogic.com
+ */
+#define	AMLOGIC_NORMAL_BOOT					0x0
+#define	AMLOGIC_FACTORY_RESET_REBOOT		0x01010101
+#define	AMLOGIC_UPDATE_REBOOT				0x02020202
+#define	AMLOGIC_CHARGING_REBOOT				0x03030303
+#define	AMLOGIC_CRASH_REBOOT				0x04040404
+#define	AMLOGIC_FACTORY_TEST_REBOOT		0x05050505
+#define	AMLOGIC_SYSTEM_SWITCH_REBOOT		0x06060606
+#define	AMLOGIC_SAFE_REBOOT					0x07070707
+#define	AMLOGIC_LOCK_REBOOT					0x08080808
 
 #ifdef __KERNEL__
 

@@ -1,0 +1,11 @@
+
+menu "Amlogic intenal modem  Support"
+
+config AMLOGIC_MODEM
+	bool "Amlogic intenal modem  support"
+	select IN_3G_SUPPLY
+	default n
+	help
+	  Say Y here if you want to use the amlogic intenal modem management.
+	  
+endmenu

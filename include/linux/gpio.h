@@ -3,7 +3,8 @@
 
 /* see Documentation/gpio.txt */
 
-#ifdef CONFIG_GENERIC_GPIO
+//#ifdef CONFIG_GENERIC_GPIO
+#if 1
 #include <asm/gpio.h>
 
 #else

@@ -1,0 +1,11 @@
+# AML AUDIO control drivers
+
+menu "Amlogic Audio Interface"
+
+config	AMAUDIO
+	tristate "Amlogic Audio Interface"
+    default y
+	help
+		"AMLogic Audio Interface"
+	
+endmenu	

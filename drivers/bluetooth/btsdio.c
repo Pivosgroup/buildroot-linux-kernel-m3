@@ -31,8 +31,10 @@
 #include <linux/errno.h>
 #include <linux/skbuff.h>
 
-#include <linux/mmc/sdio_ids.h>
-#include <linux/mmc/sdio_func.h>
+//#include <linux/mmc/sdio_ids.h>
+//#include <linux/mmc/sdio_func.h>
+#include <linux/cardreader/sdio.h>
+#include 	<linux/cardreader/sdio_ids.h>
 
 #include <net/bluetooth/bluetooth.h>
 #include <net/bluetooth/hci_core.h>

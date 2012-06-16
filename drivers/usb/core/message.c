@@ -259,6 +259,9 @@ static void sg_clean(struct usb_sg_request *io)
 		kfree(io->urbs);
 		io->urbs = NULL;
 	}
+	if (io->dev->dev.dma_mask != NULL)
+		usb_buffer_unmap_sg(io->dev, usb_pipein(io->pipe),
+				    io->sg, io->nents);
 	io->dev = NULL;
 }
 
@@ -361,6 +364,7 @@ int usb_sg_init(struct usb_sg_request *io, struct usb_device *dev,
 {
 	int i;
 	int urb_flags;
+	int dma;
 	int use_sg;
 
 	if (!io || !dev || !sg
@@ -374,9 +378,21 @@ int usb_sg_init(struct usb_sg_request *io, struct usb_device *dev,
 	io->pipe = pipe;
 	io->sg = sg;
 	io->nents = nents;
-	io->entries = nents;
+
+	/* not all host controllers use DMA (like the mainstream pci ones);
+	 * they can use PIO (sl811) or be software over another transport.
+	 */
+	dma = (dev->dev.dma_mask != NULL);
+	if (dma)
+		io->entries = usb_buffer_map_sg(dev, usb_pipein(pipe),
+						sg, nents);
+	else
+		io->entries = nents;
 
 	/* initialize all the urbs we'll use */
+	if (io->entries <= 0)
+		return io->entries;
+
 	if (dev->bus->sg_tablesize > 0) {
 		io->urbs = kmalloc(sizeof *io->urbs, mem_flags);
 		use_sg = true;
@@ -388,6 +404,8 @@ int usb_sg_init(struct usb_sg_request *io, struct usb_device *dev,
 		goto nomem;
 
 	urb_flags = 0;
+	if (dma)
+		urb_flags |= URB_NO_TRANSFER_DMA_MAP;
 	if (usb_pipein(pipe))
 		urb_flags |= URB_SHORT_NOT_OK;
 
@@ -405,13 +423,12 @@ int usb_sg_init(struct usb_sg_request *io, struct usb_device *dev,
 
 		io->urbs[0]->complete = sg_complete;
 		io->urbs[0]->context = io;
-
 		/* A length of zero means transfer the whole sg list */
 		io->urbs[0]->transfer_buffer_length = length;
 		if (length == 0) {
 			for_each_sg(sg, sg, io->entries, i) {
 				io->urbs[0]->transfer_buffer_length +=
-					sg->length;
+					sg_dma_len(sg);
 			}
 		}
 		io->urbs[0]->sg = io;
@@ -437,16 +454,26 @@ int usb_sg_init(struct usb_sg_request *io, struct usb_device *dev,
 			io->urbs[i]->context = io;
 
 			/*
-			 * Some systems can't use DMA; they use PIO instead.
-			 * For their sakes, transfer_buffer is set whenever
-			 * possible.
+			 * Some systems need to revert to PIO when DMA is temporarily
+			 * unavailable.  For their sakes, both transfer_buffer and
+			 * transfer_dma are set when possible.
+			 *
+			 * Note that if IOMMU coalescing occurred, we cannot
+			 * trust sg_page anymore, so check if S/G list shrunk.
 			 */
-			if (!PageHighMem(sg_page(sg)))
+			if (io->nents == io->entries && !PageHighMem(sg_page(sg)))
 				io->urbs[i]->transfer_buffer = sg_virt(sg);
 			else
 				io->urbs[i]->transfer_buffer = NULL;
 
-			len = sg->length;
+			if (dma) {
+				io->urbs[i]->transfer_dma = sg_dma_address(sg);
+				len = sg_dma_len(sg);
+			} else {
+				/* hc may use _only_ transfer_buffer */
+				len = sg->length;
+			}
+
 			if (length) {
 				len = min_t(unsigned, len, length);
 				length -= len;
@@ -454,8 +481,6 @@ int usb_sg_init(struct usb_sg_request *io, struct usb_device *dev,
 					io->entries = i + 1;
 			}
 			io->urbs[i]->transfer_buffer_length = len;
-
-			io->urbs[i]->sg = (struct usb_sg_request *) sg;
 		}
 		io->urbs[--i]->transfer_flags &= ~URB_NO_INTERRUPT;
 	}
@@ -1074,6 +1099,7 @@ void usb_disable_endpoint(struct usb_device *dev, unsigned int epaddr,
 {
 	unsigned int epnum = epaddr & USB_ENDPOINT_NUMBER_MASK;
 	struct usb_host_endpoint *ep;
+	struct usb_host_endpoint **pep = NULL;
 
 	if (!dev)
 		return;
@@ -1081,11 +1107,11 @@ void usb_disable_endpoint(struct usb_device *dev, unsigned int epaddr,
 	if (usb_endpoint_out(epaddr)) {
 		ep = dev->ep_out[epnum];
 		if (reset_hardware)
-			dev->ep_out[epnum] = NULL;
+			pep = &dev->ep_out[epnum];
 	} else {
 		ep = dev->ep_in[epnum];
 		if (reset_hardware)
-			dev->ep_in[epnum] = NULL;
+			pep = &dev->ep_out[epnum];
 	}
 	if (ep) {
 		ep->enabled = 0;
@@ -1093,6 +1119,10 @@ void usb_disable_endpoint(struct usb_device *dev, unsigned int epaddr,
 		if (reset_hardware)
 			usb_hcd_disable_endpoint(dev, ep);
 	}
+
+	if(reset_hardware && pep)
+		*pep = NULL;
+
 }
 
 /**
@@ -1827,6 +1857,85 @@ free_interfaces:
 	if (cp->string == NULL &&
 			!(dev->quirks & USB_QUIRK_CONFIG_INTF_STRINGS))
 		cp->string = usb_cache_string(dev, cp->desc.iConfiguration);
+
+#ifdef CONFIG_USB_HOST_ELECT_TEST
+		/* Here we implement the HS Electrical Test support. The
+		 * tester uses a vendor ID of 0x1A0A to indicate we should
+		 * run a special test sequence. The product ID tells us
+		 * which sequence to run. We invoke the test sequence by
+		 * sending a non-standard SetFeature command to our root
+		 * hub port. Our dwc_otg_hcd_hub_control() routine will
+		 * recognize the command and perform the desired test
+		 * sequence.
+		 */
+		if (dev->descriptor.idVendor == 0x1A0A) {
+			/* HSOTG Electrical Test */
+			dev_warn(&dev->dev, "VID from HSOTG Electrical Test Fixture\n");
+
+			if (dev->bus && dev->bus->root_hub) {
+				struct usb_device *hdev = dev->bus->root_hub;
+				dev_warn(&dev->dev, "Got PID 0x%x\n", dev->descriptor.idProduct);
+
+				switch (dev->descriptor.idProduct) {
+				case 0x0101:	/* TEST_SE0_NAK */
+					dev_warn(&dev->dev, "TEST_SE0_NAK\n");
+					usb_control_msg(hdev, usb_sndctrlpipe(hdev, 0),
+							USB_REQ_SET_FEATURE, USB_RT_PORT,
+							USB_PORT_FEAT_TEST, 0x300, NULL, 0, HZ);
+					break;
+
+				case 0x0102:	/* TEST_J */
+					dev_warn(&dev->dev, "TEST_J\n");
+					usb_control_msg(hdev, usb_sndctrlpipe(hdev, 0),
+							USB_REQ_SET_FEATURE, USB_RT_PORT,
+							USB_PORT_FEAT_TEST, 0x100, NULL, 0, HZ);
+					break;
+
+				case 0x0103:	/* TEST_K */
+					dev_warn(&dev->dev, "TEST_K\n");
+					usb_control_msg(hdev, usb_sndctrlpipe(hdev, 0),
+							USB_REQ_SET_FEATURE, USB_RT_PORT,
+							USB_PORT_FEAT_TEST, 0x200, NULL, 0, HZ);
+					break;
+
+				case 0x0104:	/* TEST_PACKET */
+					dev_warn(&dev->dev, "TEST_PACKET\n");
+					usb_control_msg(hdev, usb_sndctrlpipe(hdev, 0),
+							USB_REQ_SET_FEATURE, USB_RT_PORT,
+							USB_PORT_FEAT_TEST, 0x400, NULL, 0, HZ);
+					break;
+
+				case 0x0105:	/* TEST_FORCE_ENABLE */
+					dev_warn(&dev->dev, "TEST_FORCE_ENABLE\n");
+					usb_control_msg(hdev, usb_sndctrlpipe(hdev, 0),
+							USB_REQ_SET_FEATURE, USB_RT_PORT,
+							USB_PORT_FEAT_TEST, 0x500, NULL, 0, HZ);
+					break;
+
+				case 0x0106:	/* HS_HOST_PORT_SUSPEND_RESUME */
+					dev_warn(&dev->dev, "HS_HOST_PORT_SUSPEND_RESUME\n");
+					usb_control_msg(hdev, usb_sndctrlpipe(hdev, 0),
+							USB_REQ_SET_FEATURE, USB_RT_PORT,
+							USB_PORT_FEAT_TEST, 0x600, NULL, 0, 40 * HZ);
+					break;
+
+				case 0x0107:	/* SINGLE_STEP_GET_DEVICE_DESCRIPTOR setup */
+					dev_warn(&dev->dev, "SINGLE_STEP_GET_DEVICE_DESCRIPTOR setup\n");
+					usb_control_msg(hdev, usb_sndctrlpipe(hdev, 0),
+							USB_REQ_SET_FEATURE, USB_RT_PORT,
+							USB_PORT_FEAT_TEST, 0x700, NULL, 0, 40 * HZ);
+					break;
+
+				case 0x0108:	/* SINGLE_STEP_GET_DEVICE_DESCRIPTOR execute */
+					dev_warn(&dev->dev, "SINGLE_STEP_GET_DEVICE_DESCRIPTOR execute\n");
+					usb_control_msg(hdev, usb_sndctrlpipe(hdev, 0),
+							USB_REQ_SET_FEATURE, USB_RT_PORT,
+							USB_PORT_FEAT_TEST, 0x800, NULL, 0, 40 * HZ);
+				}
+				return 0;
+			}
+		}
+#endif /* CONFIG_USB_HOST_ELECT_TEST */
 
 	/* Now that all the interfaces are set up, register them
 	 * to trigger binding of drivers to interfaces.  probe()

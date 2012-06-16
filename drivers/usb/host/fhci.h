@@ -20,7 +20,6 @@
 
 #include <linux/kernel.h>
 #include <linux/types.h>
-#include <linux/bug.h>
 #include <linux/spinlock.h>
 #include <linux/interrupt.h>
 #include <linux/kfifo.h>
@@ -516,13 +515,9 @@ static inline int cq_put(struct kfifo *kfifo, void *p)
 
 static inline void *cq_get(struct kfifo *kfifo)
 {
-	unsigned int sz;
-	void *p;
+	void *p = NULL;
 
-	sz = kfifo_out(kfifo, (void *)&p, sizeof(p));
-	if (sz != sizeof(p))
-		return NULL;
-
+	kfifo_out(kfifo, (void *)&p, sizeof(p));
 	return p;
 }
 

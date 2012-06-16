@@ -1,0 +1,182 @@
+how to use i2c_transfer
+
+hdmi R/W interface£º
+
+
+static int hdmi_i2c_read_reg(unsigned char *buff, unsigned char id, 
+												unsigned reg, unsigned len)
+{
+	int ret;
+	unsigned char regbuf[1];		/*8 bytes reg addr, regbuf 1 byte*/
+	struct i2c_msg msg;
+
+	regbuf[0] = reg & 0xff;
+	
+	/*write reg address*/
+	msg.addr = id>>1;			/*7 bytes chip addr*/
+	msg.flags = 0;				/*write reg, flag 0*/
+	/* 
+	 *	#define I2C_M_TEN		0x0010	/* this is a ten bit chip address */
+	 *	#define I2C_M_RD		0x0001	/* read data, from slave to master */
+	 *	#define I2C_M_NOSTART		0x4000	/* if I2C_FUNC_PROTOCOL_MANGLING */
+	 *	#define I2C_M_REV_DIR_ADDR	0x2000	/* if I2C_FUNC_PROTOCOL_MANGLING */
+	 *	#define I2C_M_IGNORE_NAK	0x1000	/* if I2C_FUNC_PROTOCOL_MANGLING */
+	 *	#define I2C_M_NO_RD_ACK		0x0800	/* if I2C_FUNC_PROTOCOL_MANGLING */
+	 *	#define I2C_M_RECV_LEN		0x0400	/* length will be first received byte */ 
+	 */
+	msg.buf = regbuf;			/*reg addr buf, both 8 bits and 16 bits are ok*/
+	msg.len = 1;					/*8bits reg addr msg.len=1; 16bits reg addr msg.len=2;*/
+	
+	ret = i2c_transfer(hdmi_i2c_adapter, &msg, 1);		/* the last parameter is the number of msg, we just have 1*/
+
+	/*i2c_transfer return value is errno, not the bytes transfered successfully*/
+	if(ret<0){
+		HDMI_ERR(" %s: writereg error, errno is %d \n", __FUNCTION__, ret);
+		return ret;
+	}
+	
+	/*read value*/
+	msg.addr = id>>1;
+	msg.flags = I2C_M_RD;		/*read reg value, flag I2C_M_RD*/
+	msg.buf = buff;					/*take the original buffer*/
+	msg.len = len;					/*read buffer len*/
+	
+	ret = i2c_transfer(hdmi_i2c_adapter, &msg, 1);	/*another 1 msg*/
+
+	if(ret<0){
+		HDMI_ERR(" %s: readreg error, errno is %d \n", __FUNCTION__, ret);
+		return ret;
+	}
+	else
+		return len;
+	
+}
+
+static int hdmi_i2c_write_reg(unsigned char *buff, unsigned char id, 
+												unsigned reg, unsigned len)
+{
+	int ret = 0;
+	unsigned char regbuf[1];			/*8 bytes reg addr, regbuf 1 byte*/
+	struct i2c_msg msg[2];				/*construct 2 msgs, 1 for reg addr, 1 for reg value, send together*/
+
+	regbuf[0] = reg & 0xff;
+
+	/*write reg address*/
+	msg[0].addr = id>>1;					
+	msg[0].flags = 0;
+	msg[0].buf = regbuf;
+	msg[0].len = 1;
+
+	/*write value*/
+	msg[1].addr = id>>1;
+	msg[1].flags = I2C_M_NOSTART;	/*i2c_transfer will emit a stop flag, so we should send 2 msg together,
+																 * and the second msg's flag=I2C_M_NOSTART, to get the right timing*/
+	msg[1].buf = buff;
+	msg[1].len = len;
+
+	ret = i2c_transfer(hdmi_i2c_adapter, &msg, 2);
+
+	if(ret<0){
+		HDMI_ERR(" %s: readreg error, errno is %d \n", __FUNCTION__, ret);
+		return ret;
+	}
+	else
+		return len;
+}
+
+eeprom R/W interface£º
+
+int eeprom_i2c_read_reg(unsigned char *buff, unsigned char id, 
+												unsigned reg, unsigned len)
+{
+	int ret;
+	struct i2c_msg msg;
+
+	/*write reg address*/
+	msg.addr = id>>1;
+	msg.flags = 0;
+	msg.buf = buff;
+	msg.len = 1;
+	
+	ret = i2c_transfer(hdmi_i2c_adapter, &msg, 1);
+
+	if (ret != 1)
+		HDMI_ERR(" %s: writereg error, errno is %d \n", __FUNCTION__, ret);
+
+	/*read value*/
+	msg.addr = id>>1;
+	msg.flags = I2C_M_RD;
+	msg.buf = buff;
+	msg.len = len;
+	
+	ret = i2c_transfer(hdmi_i2c_adapter, &msg, 1);
+
+	if (ret != len)
+		HDMI_ERR(" %s: readreg error, read %d byte(s), errno is %d \n", __FUNCTION__, ret);
+
+	return ret;
+
+
+}
+
+int eerpom_i2c_write_reg(unsigned char *buff, unsigned char id, 
+												unsigned reg, unsigned len)
+{
+	int ret = 0;
+	unsigned char regbuf[1];
+	struct i2c_msg msg[2];
+
+	regbuf[0] = reg & 0xff;
+
+	/*write reg address*/
+	msg[0].addr = id>>1;
+	msg[0].flags = 0;
+	msg[0].buf = regbuf;
+	msg[0].len = 1;
+
+	/*write value*/
+	msg[1].addr = id>>1;
+	msg[1].flags = I2C_M_NOSTART;
+	msg[1].buf = buff;
+	msg[1].len = len;
+
+	ret = i2c_transfer(hdmi_i2c_adapter, &msg, 2);
+
+	if(ret<0){
+		HDMI_ERR(" %s: readreg error, errno is %d \n", __FUNCTION__, ret);
+		return ret;
+	}
+	else
+		return len;
+}
+
+tsc2003 R interface £º
+
+static int tsc2003_read(struct i2c_client *client, u8 command)
+{
+       int size = 2;
+       int status;
+
+       command &= ~MODE_8BIT;
+       u8 value[2];
+
+			 /*call i2c_master_send / i2c_master_recv are ok. 
+			  * need not to construct a normal msg by yourself 
+			  */
+       status = i2c_master_send(client, &command, 1);	
+       if (status < 0)
+               return status;
+
+       if (command & MODE_8BIT)
+               size = 1;
+
+       status = i2c_master_recv(client, value, size);
+       if (status < 0)
+               return status;
+
+       if (command & MODE_8BIT)
+               return value[0];
+
+       return (value[0] << 4) | (value[1] >> 4);
+}
+

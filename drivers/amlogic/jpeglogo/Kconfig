@@ -1,0 +1,27 @@
+#
+# JPEGLOGO device configuration
+#
+
+menu "AMLOGIC HW jpeg logo driver"
+
+config JPEGLOGO
+    bool "AMLOGIC HW jpeg logo driver"
+    default n
+	help
+	  Select to enable JPEG logo driver.
+
+config JPEGLOGO_ADDR
+    hex "JPEG logo data address"
+    depends on JPEGLOGO
+    default 0x85800000
+	help
+	  JPEG logo data address.
+
+config JPEGLOGO_SIZE
+    int "JPEG logo data size"
+    depends on JPEGLOGO
+    default 102400
+	help
+	  JPEG logo data size.
+
+endmenu

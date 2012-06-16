@@ -17,6 +17,12 @@ jiffies = jiffies_64;
 jiffies = jiffies_64 + 4;
 #endif
 
+PHDRS {
+	text PT_LOAD FLAGS(5);		/* R_E */
+	data PT_LOAD FLAGS(7);		/* RWE */
+	note PT_NOTE FLAGS(0);		/* ___ */
+}
+
 SECTIONS
 {
 #ifdef CONFIG_XIP_KERNEL
@@ -52,7 +58,7 @@ SECTIONS
 		__init_begin = _stext;
 		INIT_DATA
 #endif
-	}
+	} : text
 
 	PERCPU(PAGE_SIZE)
 
@@ -103,6 +109,8 @@ SECTIONS
 	}
 
 	RO_DATA(PAGE_SIZE)
+	
+	NOTES :text :note
 
 	_etext = .;			/* End of text and rodata section */
 
@@ -120,7 +128,7 @@ SECTIONS
 		__start_unwind_tab = .;
 		*(.ARM.extab*)
 		__stop_unwind_tab = .;
-	}
+	} :text
 #endif
 
 #ifdef CONFIG_XIP_KERNEL
@@ -169,7 +177,7 @@ SECTIONS
 		CONSTRUCTORS
 
 		_edata = .;
-	}
+	} :data
 	_edata_loc = __data_loc + SIZEOF(.data);
 
 #ifdef CONFIG_HAVE_TCM

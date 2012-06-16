@@ -1,0 +1,12 @@
+#
+# CMEM device configuration
+#
+
+menu "AMLOGIC Physical memory allocator"
+
+config CMEM
+    tristate "CMEM Physical memory allocator"
+    default m
+	help
+	  Select to enable CMEM physical memory allocator driver.
+endmenu

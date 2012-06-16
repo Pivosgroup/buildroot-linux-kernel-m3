@@ -1,0 +1,13 @@
+#
+# audio dsp  log configuration
+#
+menu "Amlogic audio dsp log"
+
+config  AML_AUDIO_DSP_LOG
+	tristate  "audio dsp log support "
+	default y
+	help  
+		audio dsp log support ;
+		
+
+endmenu	

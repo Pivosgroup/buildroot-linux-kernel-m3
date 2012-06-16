@@ -35,108 +35,6 @@
 
 #include "wm8900.h"
 
-/* WM8900 register space */
-#define WM8900_REG_RESET	0x0
-#define WM8900_REG_ID		0x0
-#define WM8900_REG_POWER1	0x1
-#define WM8900_REG_POWER2	0x2
-#define WM8900_REG_POWER3	0x3
-#define WM8900_REG_AUDIO1	0x4
-#define WM8900_REG_AUDIO2	0x5
-#define WM8900_REG_CLOCKING1    0x6
-#define WM8900_REG_CLOCKING2    0x7
-#define WM8900_REG_AUDIO3       0x8
-#define WM8900_REG_AUDIO4       0x9
-#define WM8900_REG_DACCTRL      0xa
-#define WM8900_REG_LDAC_DV      0xb
-#define WM8900_REG_RDAC_DV      0xc
-#define WM8900_REG_SIDETONE     0xd
-#define WM8900_REG_ADCCTRL      0xe
-#define WM8900_REG_LADC_DV	0xf
-#define WM8900_REG_RADC_DV      0x10
-#define WM8900_REG_GPIO         0x12
-#define WM8900_REG_INCTL	0x15
-#define WM8900_REG_LINVOL	0x16
-#define WM8900_REG_RINVOL	0x17
-#define WM8900_REG_INBOOSTMIX1  0x18
-#define WM8900_REG_INBOOSTMIX2  0x19
-#define WM8900_REG_ADCPATH	0x1a
-#define WM8900_REG_AUXBOOST	0x1b
-#define WM8900_REG_ADDCTL       0x1e
-#define WM8900_REG_FLLCTL1      0x24
-#define WM8900_REG_FLLCTL2      0x25
-#define WM8900_REG_FLLCTL3      0x26
-#define WM8900_REG_FLLCTL4      0x27
-#define WM8900_REG_FLLCTL5      0x28
-#define WM8900_REG_FLLCTL6      0x29
-#define WM8900_REG_LOUTMIXCTL1  0x2c
-#define WM8900_REG_ROUTMIXCTL1  0x2d
-#define WM8900_REG_BYPASS1	0x2e
-#define WM8900_REG_BYPASS2	0x2f
-#define WM8900_REG_AUXOUT_CTL   0x30
-#define WM8900_REG_LOUT1CTL     0x33
-#define WM8900_REG_ROUT1CTL     0x34
-#define WM8900_REG_LOUT2CTL	0x35
-#define WM8900_REG_ROUT2CTL	0x36
-#define WM8900_REG_HPCTL1	0x3a
-#define WM8900_REG_OUTBIASCTL   0x73
-
-#define WM8900_MAXREG		0x80
-
-#define WM8900_REG_ADDCTL_OUT1_DIS    0x80
-#define WM8900_REG_ADDCTL_OUT2_DIS    0x40
-#define WM8900_REG_ADDCTL_VMID_DIS    0x20
-#define WM8900_REG_ADDCTL_BIAS_SRC    0x10
-#define WM8900_REG_ADDCTL_VMID_SOFTST 0x04
-#define WM8900_REG_ADDCTL_TEMP_SD     0x02
-
-#define WM8900_REG_GPIO_TEMP_ENA   0x2
-
-#define WM8900_REG_POWER1_STARTUP_BIAS_ENA 0x0100
-#define WM8900_REG_POWER1_BIAS_ENA         0x0008
-#define WM8900_REG_POWER1_VMID_BUF_ENA     0x0004
-#define WM8900_REG_POWER1_FLL_ENA          0x0040
-
-#define WM8900_REG_POWER2_SYSCLK_ENA  0x8000
-#define WM8900_REG_POWER2_ADCL_ENA    0x0002
-#define WM8900_REG_POWER2_ADCR_ENA    0x0001
-
-#define WM8900_REG_POWER3_DACL_ENA    0x0002
-#define WM8900_REG_POWER3_DACR_ENA    0x0001
-
-#define WM8900_REG_AUDIO1_AIF_FMT_MASK 0x0018
-#define WM8900_REG_AUDIO1_LRCLK_INV    0x0080
-#define WM8900_REG_AUDIO1_BCLK_INV     0x0100
-
-#define WM8900_REG_CLOCKING1_BCLK_DIR   0x1
-#define WM8900_REG_CLOCKING1_MCLK_SRC   0x100
-#define WM8900_REG_CLOCKING1_BCLK_MASK  (~0x01e)
-#define WM8900_REG_CLOCKING1_OPCLK_MASK (~0x7000)
-
-#define WM8900_REG_CLOCKING2_ADC_CLKDIV 0xe0
-#define WM8900_REG_CLOCKING2_DAC_CLKDIV 0x1c
-
-#define WM8900_REG_DACCTRL_MUTE          0x004
-#define WM8900_REG_DACCTRL_DAC_SB_FILT   0x100
-#define WM8900_REG_DACCTRL_AIF_LRCLKRATE 0x400
-
-#define WM8900_REG_AUDIO3_ADCLRC_DIR    0x0800
-
-#define WM8900_REG_AUDIO4_DACLRC_DIR    0x0800
-
-#define WM8900_REG_FLLCTL1_OSC_ENA    0x100
-
-#define WM8900_REG_FLLCTL6_FLL_SLOW_LOCK_REF 0x100
-
-#define WM8900_REG_HPCTL1_HP_IPSTAGE_ENA 0x80
-#define WM8900_REG_HPCTL1_HP_OPSTAGE_ENA 0x40
-#define WM8900_REG_HPCTL1_HP_CLAMP_IP    0x20
-#define WM8900_REG_HPCTL1_HP_CLAMP_OP    0x10
-#define WM8900_REG_HPCTL1_HP_SHORT       0x08
-#define WM8900_REG_HPCTL1_HP_SHORT2      0x04
-
-#define WM8900_LRC_MASK 0xfc00
-
 struct snd_soc_codec_device soc_codec_dev_wm8900;
 
 struct wm8900_priv {
@@ -188,7 +86,7 @@ static int wm8900_volatile_register(unsigned int reg)
 {
 	switch (reg) {
 	case WM8900_REG_ID:
-	case WM8900_REG_POWER1:
+//	case WM8900_REG_POWER1:
 		return 1;
 	default:
 		return 0;
@@ -283,6 +181,30 @@ static const DECLARE_TLV_DB_SCALE(adc_svol_tlv, -3600, 300, 0);
 
 static const DECLARE_TLV_DB_SCALE(adc_tlv, -7200, 75, 1);
 
+static const char *inmix_boost_txt[]={
+  "+0 dB", "+13 dB", "+20 dB", "+29 dB"
+};
+static const struct soc_enum inmix_boost_func = 
+SOC_ENUM_DOUBLE(WM8900_REG_ADCPATH, 0, 4, 4, inmix_boost_txt);
+
+static const char *gpio_pin_func_txt[] = {
+	"Jack detect input",
+	"Reserved",
+	"Temperature ok",
+	"Debounced jack detect output",
+	"SYSCLK output",
+	"FLL lock",
+	"Logic 0",
+	"Logic 1"
+};
+static const struct soc_enum gpio_pin_func = 
+SOC_ENUM_SINGLE(WM8900_REG_GPIO, 4, 8, gpio_pin_func_txt);
+static const char* adclrc_pin_func_text[]={
+	"ADCLRC frame clock for ADC",
+	"GPIO pin"
+};
+static const struct soc_enum adclrc_pin_func = 
+SOC_ENUM_SINGLE(WM8900_REG_AUDIO2, 6, 2, adclrc_pin_func_text);
 static const char *mic_bias_level_txt[] = { "0.9*AVDD", "0.65*AVDD" };
 
 static const struct soc_enum mic_bias_level =
@@ -334,6 +256,11 @@ static const struct soc_enum dacr_sidetone =
 SOC_ENUM_SINGLE(WM8900_REG_SIDETONE, 0, 3, sidetone_txt);
 
 static const struct snd_kcontrol_new wm8900_snd_controls[] = {
+SOC_ENUM("GPIO pin function select", gpio_pin_func),
+SOC_SINGLE("CSB PD ENA", WM8900_REG_GPIO, 13, 1, 0),
+SOC_SINGLE("AIF TRI", WM8900_REG_CLOCKING2, 12, 1, 0),
+SOC_SINGLE("Enable VMID Buf", WM8900_REG_POWER1, 2, 1, 0),
+SOC_ENUM("ADCLRC/GPIO function select", adclrc_pin_func),
 SOC_ENUM("Mic Bias Level", mic_bias_level),
 
 SOC_SINGLE_TLV("Left Input PGA Volume", WM8900_REG_LINVOL, 0, 31, 0,
@@ -425,6 +352,7 @@ SOC_DOUBLE_R("LINEOUT2 ZC Switch",
 SOC_SINGLE("LINEOUT2 LP -12dB", WM8900_REG_LOUTMIXCTL1,
 	   0, 1, 1),
 
+SOC_ENUM("IN MIXIN Boost", inmix_boost_func),
 };
 
 static const struct snd_kcontrol_new wm8900_dapm_loutput2_control =
@@ -1004,8 +932,8 @@ static int wm8900_digital_mute(struct snd_soc_dai *codec_dai, int mute)
 		      SNDRV_PCM_RATE_44100 | SNDRV_PCM_RATE_48000)
 
 #define WM8900_PCM_FORMATS \
-	(SNDRV_PCM_FORMAT_S16_LE | SNDRV_PCM_FORMAT_S20_3LE | \
-	 SNDRV_PCM_FORMAT_S24_LE)
+	(SNDRV_PCM_FMTBIT_S16_LE | \
+	SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S32_LE)
 
 static struct snd_soc_dai_ops wm8900_dai_ops = {
 	.hw_params	= wm8900_hw_params,
@@ -1164,7 +1092,7 @@ static int wm8900_resume(struct platform_device *pdev)
 			GFP_KERNEL);
 
 	wm8900_reset(codec);
-	wm8900_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
+//	wm8900_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
 
 	/* Restart the FLL? */
 	if (wm8900->fll_out) {
@@ -1187,7 +1115,9 @@ static int wm8900_resume(struct platform_device *pdev)
 		kfree(cache);
 	} else
 		dev_err(&pdev->dev, "Unable to allocate register cache\n");
-
+	// avoid standby status overwrited by the backup setting 	
+	wm8900_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
+	
 	return 0;
 }
 
@@ -1232,14 +1162,20 @@ static __devinit int wm8900_i2c_probe(struct i2c_client *i2c,
 	reg = snd_soc_read(codec, WM8900_REG_ID);
 	if (reg != 0x8900) {
 		dev_err(&i2c->dev, "Device is not a WM8900 - ID %x\n", reg);
+		//if fail, try to set addr to 0x1b and retry
+		i2c->addr = 0x1b;
+	    reg = snd_soc_read(codec, WM8900_REG_ID);
+    	if (reg != 0x8900) {
+    		dev_err(&i2c->dev, "Device is not a WM8900 - ID %x\n", reg);   	    	
 		ret = -ENODEV;
 		goto err;
+    	}
 	}
 
 	/* Read back from the chip */
-	reg = snd_soc_read(codec, WM8900_REG_POWER1);
-	reg = (reg >> 12) & 0xf;
-	dev_info(&i2c->dev, "WM8900 revision %d\n", reg);
+//	reg = snd_soc_read(codec, WM8900_REG_POWER1);
+//	reg = (reg >> 12) & 0xf;
+//	dev_info(&i2c->dev, "WM8900 revision %d\n", reg);
 
 	wm8900_reset(codec);
 
@@ -1272,6 +1208,7 @@ static __devinit int wm8900_i2c_probe(struct i2c_client *i2c,
 	snd_soc_write(codec, WM8900_REG_OUTBIASCTL, 0x81);
 
 	wm8900_dai.dev = &i2c->dev;
+	wm8900_dai.ac97_pdata = i2c->dev.platform_data;
 
 	wm8900_codec = codec;
 

@@ -774,6 +774,9 @@ int hidinput_connect(struct hid_device *hid, unsigned int force)
 				hidinput = NULL;
 			}
 		}
+	/*modified for Keyboard with many usages as js*/
+	if(test_bit(EV_REP,hidinput->input->evbit))	
+		clear_bit(EV_ABS,hidinput->input->evbit);
 
 	if (hidinput && input_register_device(hidinput->input))
 		goto out_cleanup;

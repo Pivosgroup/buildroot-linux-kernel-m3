@@ -95,10 +95,7 @@ static void nmi_cpu_save_registers(struct op_msrs *msrs)
 static void nmi_cpu_start(void *dummy)
 {
 	struct op_msrs const *msrs = &__get_cpu_var(cpu_msrs);
-	if (!msrs->controls)
-		WARN_ON_ONCE(1);
-	else
-		model->start(msrs);
+	model->start(msrs);
 }
 
 static int nmi_start(void)
@@ -110,10 +107,7 @@ static int nmi_start(void)
 static void nmi_cpu_stop(void *dummy)
 {
 	struct op_msrs const *msrs = &__get_cpu_var(cpu_msrs);
-	if (!msrs->controls)
-		WARN_ON_ONCE(1);
-	else
-		model->stop(msrs);
+	model->stop(msrs);
 }
 
 static void nmi_stop(void)

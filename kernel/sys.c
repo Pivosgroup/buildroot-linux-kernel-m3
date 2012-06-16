@@ -355,6 +355,26 @@ void kernel_power_off(void)
 }
 EXPORT_SYMBOL_GPL(kernel_power_off);
 
+#ifdef CONFIG_AML_SUSPEND
+/**
+ * m3 power down a9 domain
+ */
+int (*pm_power_suspend)(void) = NULL;
+int kernel_power_suspend(void)
+{
+	if(pm_power_suspend){
+		kernel_shutdown_prepare(SYSTEM_POWER_OFF);
+	  if (pm_power_off_prepare)
+		   pm_power_off_prepare();
+	   sysdev_shutdown();
+	   printk(KERN_EMERG "Power suspend.\n");
+	   pm_power_suspend();
+	  }
+	 return 0;
+}
+EXPORT_SYMBOL_GPL(kernel_power_suspend);
+#endif /*CONFIG_AML_SUSPEND*/
+ 
 static DEFINE_MUTEX(reboot_mutex);
 
 /*
@@ -435,6 +455,11 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
 		break;
 #endif
 
+#ifdef CONFIG_AML_SUSPEND
+	case LINUX_REBOOT_CMD_AML_SUSPEND:
+		ret = kernel_power_suspend();
+		break;
+#endif /*CONFIG_AML_SUSPEND*/
 	default:
 		ret = -EINVAL;
 		break;

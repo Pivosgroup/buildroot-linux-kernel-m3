@@ -686,6 +686,8 @@ int scsi_dispatch_cmd(struct scsi_cmnd *cmd)
 		goto out;
 	}
 
+#if 0
+	/* Removed for Skyworth Disk, Victor Wan,2011.1.14  */
 	/* 
 	 * If SCSI-2 or lower, store the LUN value in cmnd.
 	 */
@@ -694,7 +696,7 @@ int scsi_dispatch_cmd(struct scsi_cmnd *cmd)
 		cmd->cmnd[1] = (cmd->cmnd[1] & 0x1f) |
 			       (cmd->device->lun << 5 & 0xe0);
 	}
-
+#endif
 	/*
 	 * We will wait MIN_RESET_DELAY clock ticks after the last reset so
 	 * we can avoid the drive not being ready.

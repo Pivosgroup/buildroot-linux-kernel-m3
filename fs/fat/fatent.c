@@ -452,6 +452,16 @@ static void fat_collect_bhs(struct buffer_head **bhs, int *nr_bhs,
 	}
 }
 
+static void fat_update_info_to_dev(struct super_block *sb, struct fat_entry *fatent, unsigned int cmd)
+{
+	struct msdos_sb_info *sbi = MSDOS_SB(sb);
+	struct fat_sectors  fat_sectors_info;
+
+	fat_sectors_info.start = get_start_sect(sb->s_bdev) + fat_clus_to_blknr(sbi, fatent->entry);
+	fat_sectors_info.sectors = sbi->sec_per_clus;
+	blkdev_ioctl(sb->s_bdev->bd_contains, FMODE_NDELAY, cmd, (unsigned)&fat_sectors_info); 
+}
+
 int fat_alloc_clusters(struct inode *inode, int *cluster, int nr_cluster)
 {
 	struct super_block *sb = inode->i_sb;
@@ -499,6 +509,7 @@ int fat_alloc_clusters(struct inode *inode, int *cluster, int nr_cluster)
 				if (sbi->free_clusters != -1)
 					sbi->free_clusters--;
 				sb->s_dirt = 1;
+				fat_update_info_to_dev(sb, &fatent, BLKGETSECTS);
 
 				cluster[idx_clus] = entry;
 				idx_clus++;
@@ -582,6 +593,7 @@ int fat_free_clusters(struct inode *inode, int cluster)
 				first_cl = cluster;
 			}
 		}
+		fat_update_info_to_dev(sb, &fatent, BLKFREESECTS);
 
 		ops->ent_put(&fatent, FAT_ENT_FREE);
 		if (sbi->free_clusters != -1) {
@@ -670,8 +682,10 @@ int fat_count_free_clusters(struct super_block *sb)
 			goto out;
 
 		do {
-			if (ops->ent_get(&fatent) == FAT_ENT_FREE)
+			if (ops->ent_get(&fatent) == FAT_ENT_FREE) {
 				free++;
+				fat_update_info_to_dev(sb, &fatent, BLKFREESECTS);
+			}
 		} while (fat_ent_next(sbi, &fatent));
 	}
 	sbi->free_clusters = free;

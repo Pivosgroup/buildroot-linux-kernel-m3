@@ -1,0 +1,2 @@
+PLATFORM=amlogic
+CONFIG=release

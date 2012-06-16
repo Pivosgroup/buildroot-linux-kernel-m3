@@ -1420,7 +1420,6 @@ static int __attach_device(struct device *dev,
 			   struct protection_domain *domain)
 {
 	struct iommu_dev_data *dev_data, *alias_data;
-	int ret;
 
 	dev_data   = get_dev_data(dev);
 	alias_data = get_dev_data(dev_data->alias);
@@ -1432,14 +1431,13 @@ static int __attach_device(struct device *dev,
 	spin_lock(&domain->lock);
 
 	/* Some sanity checks */
-	ret = -EBUSY;
 	if (alias_data->domain != NULL &&
 	    alias_data->domain != domain)
-		goto out_unlock;
+		return -EBUSY;
 
 	if (dev_data->domain != NULL &&
 	    dev_data->domain != domain)
-		goto out_unlock;
+		return -EBUSY;
 
 	/* Do real assignment */
 	if (dev_data->alias != dev) {
@@ -1455,14 +1453,10 @@ static int __attach_device(struct device *dev,
 
 	atomic_inc(&dev_data->bind);
 
-	ret = 0;
-
-out_unlock:
-
 	/* ready */
 	spin_unlock(&domain->lock);
 
-	return ret;
+	return 0;
 }
 
 /*
@@ -2263,6 +2257,10 @@ int __init amd_iommu_init_dma_ops(void)
 
 	iommu_detected = 1;
 	swiotlb = 0;
+#ifdef CONFIG_GART_IOMMU
+	gart_iommu_aperture_disabled = 1;
+	gart_iommu_aperture = 0;
+#endif
 
 	/* Make the driver finally visible to the drivers */
 	dma_ops = &amd_iommu_dma_ops;

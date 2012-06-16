@@ -58,6 +58,7 @@
 #include <linux/vmalloc.h> /* TODO: replace with more sophisticated array */
 #include <linux/eventfd.h>
 #include <linux/poll.h>
+#include <linux/capability.h>
 
 #include <asm/atomic.h>
 
@@ -1721,6 +1722,15 @@ int cgroup_attach_task(struct cgroup *cgrp, struct task_struct *tsk)
 				failed_ss = ss;
 				goto out;
 			}
+		} else if (!capable(CAP_SYS_ADMIN)) {
+			const struct cred *cred = current_cred(), *tcred;
+
+			/* No can_attach() - check perms generically */
+			tcred = __task_cred(tsk);
+			if (cred->euid != tcred->uid &&
+			    cred->euid != tcred->suid) {
+				return -EACCES;
+			}
 		}
 	}
 
@@ -1795,7 +1805,6 @@ out:
 static int attach_task_by_pid(struct cgroup *cgrp, u64 pid)
 {
 	struct task_struct *tsk;
-	const struct cred *cred = current_cred(), *tcred;
 	int ret;
 
 	if (pid) {
@@ -1804,14 +1813,6 @@ static int attach_task_by_pid(struct cgroup *cgrp, u64 pid)
 		if (!tsk || tsk->flags & PF_EXITING) {
 			rcu_read_unlock();
 			return -ESRCH;
-		}
-
-		tcred = __task_cred(tsk);
-		if (cred->euid &&
-		    cred->euid != tcred->uid &&
-		    cred->euid != tcred->suid) {
-			rcu_read_unlock();
-			return -EACCES;
 		}
 		get_task_struct(tsk);
 		rcu_read_unlock();
@@ -4599,7 +4600,7 @@ static int alloc_css_id(struct cgroup_subsys *ss, struct cgroup *parent,
 	parent_css = parent->subsys[subsys_id];
 	child_css = child->subsys[subsys_id];
 	parent_id = parent_css->id;
-	depth = parent_id->depth + 1;
+	depth = parent_id->depth;
 
 	child_id = get_new_cssid(ss, depth);
 	if (IS_ERR(child_id))

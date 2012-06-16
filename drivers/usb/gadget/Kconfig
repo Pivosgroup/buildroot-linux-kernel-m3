@@ -252,6 +252,22 @@ config USB_PXA25X_SMALL
 	default y if USB_ETH
 	default y if USB_G_SERIAL
 
+config USB_GADGET_DWC_OTG
+	boolean "Amlogic DWC OTG controller"
+	depends on USB_DWC_OTG_HCD
+	help
+	  The Amlogic DWC OTG is the HS/FS USB controller.
+
+		Say "y" to link the driver statically, or "m" to build a
+	   dynamically linked module called "dwc_otg_pcd" and force all
+	   gadget drivers to also be dynamically linked.
+	  	
+config USB_DWC_OTG
+	tristate
+	depends on USB_GADGET_DWC_OTG
+	default USB_GADGET
+	select USB_GADGET_SELECTED	
+
 config USB_GADGET_R8A66597
 	boolean "Renesas R8A66597 USB Peripheral Controller"
 	select USB_GADGET_DUALSPEED
@@ -544,7 +560,7 @@ config USB_DUMMY_HCD
 endchoice
 
 config USB_GADGET_DUALSPEED
-	bool
+	bool "USB_GADGET_DUALSPEED"
 	depends on USB_GADGET
 	default n
 	help
@@ -798,6 +814,14 @@ config USB_G_PRINTER
 	  For more information, see Documentation/usb/gadget_printer.txt
 	  which includes sample code for accessing the device file.
 
+config USB_G_ANDROID
+	boolean "Android Gadget"
+	depends on SWITCH
+	help
+	  The Android gadget driver supports multiple USB functions.
+	  The functions can be configured via a board file and may be
+	  enabled and disabled dynamically.
+
 config USB_CDC_COMPOSITE
 	tristate "CDC Composite Device (Ethernet and ACM)"
 	depends on NET
@@ -871,4 +895,24 @@ config USB_G_MULTI_CDC
 
 endchoice
 
+config USB_G_ANDROID_FSG_NLUNS
+	int "Android gadget number of luns"
+	depends on USB_G_ANDROID
+	range 1 8
+	default 2
+	help
+	  The number of luns for the mass storage function of the Android gadget.
+
+config USB_G_ANDROID_VENDOR
+	string "Android USB Vendor name"
+	depends on USB_G_ANDROID
+	default "Android"
+
+config USB_G_ANDROID_PRODUCT
+	string "Android USB Product name"
+	depends on USB_G_ANDROID
+	default "Android"
+
 endif # USB_GADGET
+
+

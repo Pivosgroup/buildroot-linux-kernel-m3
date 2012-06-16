@@ -57,7 +57,7 @@
 
 static int			fd[MAX_NR_CPUS][MAX_COUNTERS];
 
-static bool			system_wide			=  false;
+static int			system_wide			=      0;
 
 static int			default_interval		=      0;
 
@@ -65,18 +65,18 @@ static int			count_filter			=      5;
 static int			print_entries;
 
 static int			target_pid			=     -1;
-static bool			inherit				=  false;
+static int			inherit				=      0;
 static int			profile_cpu			=     -1;
 static int			nr_cpus				=      0;
 static unsigned int		realtime_prio			=      0;
-static bool			group				=  false;
+static int			group				=      0;
 static unsigned int		page_size;
 static unsigned int		mmap_pages			=     16;
 static int			freq				=   1000; /* 1 KHz */
 
 static int			delay_secs			=      2;
-static bool			zero                            =  false;
-static bool			dump_symtab                     =  false;
+static int			zero                            =      0;
+static int			dump_symtab                     =      0;
 
 static bool			hide_kernel_symbols		=  false;
 static bool			hide_user_symbols		=  false;
@@ -169,7 +169,7 @@ static void sig_winch_handler(int sig __used)
 	update_print_entries(&winsize);
 }
 
-static int parse_source(struct sym_entry *syme)
+static void parse_source(struct sym_entry *syme)
 {
 	struct symbol *sym;
 	struct sym_entry_source *source;
@@ -180,21 +180,12 @@ static int parse_source(struct sym_entry *syme)
 	u64 len;
 
 	if (!syme)
-		return -1;
-
-	sym = sym_entry__symbol(syme);
-	map = syme->map;
-
-	/*
-	 * We can't annotate with just /proc/kallsyms
-	 */
-	if (map->dso->origin == DSO__ORIG_KERNEL)
-		return -1;
+		return;
 
 	if (syme->src == NULL) {
 		syme->src = zalloc(sizeof(*source));
 		if (syme->src == NULL)
-			return -1;
+			return;
 		pthread_mutex_init(&syme->src->lock, NULL);
 	}
 
@@ -204,6 +195,9 @@ static int parse_source(struct sym_entry *syme)
 		pthread_mutex_lock(&source->lock);
 		goto out_assign;
 	}
+
+	sym = sym_entry__symbol(syme);
+	map = syme->map;
 	path = map->dso->long_name;
 
 	len = sym->end - sym->start;
@@ -215,7 +209,7 @@ static int parse_source(struct sym_entry *syme)
 
 	file = popen(command, "r");
 	if (!file)
-		return -1;
+		return;
 
 	pthread_mutex_lock(&source->lock);
 	source->lines_tail = &source->lines;
@@ -251,7 +245,6 @@ static int parse_source(struct sym_entry *syme)
 out_assign:
 	sym_filter_entry = syme;
 	pthread_mutex_unlock(&source->lock);
-	return 0;
 }
 
 static void __zero_source_counters(struct sym_entry *syme)
@@ -846,7 +839,7 @@ static void handle_keypress(int c)
 			display_weighted = ~display_weighted;
 			break;
 		case 'z':
-			zero = !zero;
+			zero = ~zero;
 			break;
 		default:
 			break;
@@ -997,17 +990,7 @@ static void event__process_sample(const event_t *self,
 	if (sym_filter_entry_sched) {
 		sym_filter_entry = sym_filter_entry_sched;
 		sym_filter_entry_sched = NULL;
-		if (parse_source(sym_filter_entry) < 0) {
-			struct symbol *sym = sym_entry__symbol(sym_filter_entry);
-
-			pr_err("Can't annotate %s", sym->name);
-			if (sym_filter_entry->map->dso->origin == DSO__ORIG_KERNEL) {
-				pr_err(": No vmlinux file was found in the path:\n");
-				vmlinux_path__fprintf(stderr);
-			} else
-				pr_err(".\n");
-			exit(1);
-		}
+		parse_source(sym_filter_entry);
 	}
 
 	syme = symbol__priv(al.sym);
@@ -1313,7 +1296,7 @@ static const struct option options[] = {
 		    "display this many functions"),
 	OPT_BOOLEAN('U', "hide_user_symbols", &hide_user_symbols,
 		    "hide user symbols"),
-	OPT_INCR('v', "verbose", &verbose,
+	OPT_BOOLEAN('v', "verbose", &verbose,
 		    "be more verbose (show counter open errors, etc)"),
 	OPT_END()
 };

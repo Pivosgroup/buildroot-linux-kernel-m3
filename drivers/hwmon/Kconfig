@@ -1087,6 +1087,11 @@ config SENSORS_MC13783_ADC
         help
           Support for the A/D converter on MC13783 PMIC.
 
+config MXC_MMA7660
+	tristate "MMA7660 device driver"
+	depends on I2C
+	default n
+
 if ACPI
 
 comment "ACPI drivers"

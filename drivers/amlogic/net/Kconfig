@@ -1,0 +1,23 @@
+#
+# DCA server configuration
+#
+menu "Amlogic Net Device Support"
+
+config AM_ETHERNET
+	tristate "Amloigc Ethetnet support"
+	depends on  NET
+	
+config AM_ETHERNET_DEBUG_LEVEL
+	int "Amloigc Ethetnet debug level support"
+	default 1
+	depends on  NET && AM_ETHERNET
+	help
+		debug level:
+		// >0 for basic init and remove debug;
+		// >1 further setting debug;
+		// >2 for tx
+		// >3 for rx
+
+
+endmenu
+

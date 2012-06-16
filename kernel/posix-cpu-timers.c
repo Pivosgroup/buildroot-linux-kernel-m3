@@ -331,6 +331,7 @@ int posix_cpu_clock_get(const clockid_t which_clock, struct timespec *tp)
 	int error = -EINVAL;
 	union cpu_time_count rtn;
 
+        //printk("posix_cpu_clock_get() pid=%d\n", pid);
 	if (pid == 0) {
 		/*
 		 * Special case constant value for our own clocks.
@@ -375,9 +376,12 @@ int posix_cpu_clock_get(const clockid_t which_clock, struct timespec *tp)
 		rcu_read_unlock();
 	}
 
-	if (error)
+	if (error) {
+                //printk("posix_cpu_clock_get(%d) error %d\n", pid, error);
 		return error;
+        }
 	sample_to_timespec(which_clock, rtn, tp);
+        //printk("posix_cpu_clock_get(%d) (%lu %lu)\n", pid, tp->tv_sec, tp->tv_nsec);
 	return 0;
 }
 
@@ -1660,6 +1664,7 @@ static int process_cpu_clock_getres(const clockid_t which_clock,
 static int process_cpu_clock_get(const clockid_t which_clock,
 				 struct timespec *tp)
 {
+        //printk("process_cpu_clock_get()\n");
 	return posix_cpu_clock_get(PROCESS_CLOCK, tp);
 }
 static int process_cpu_timer_create(struct k_itimer *timer)
@@ -1680,11 +1685,13 @@ static long process_cpu_nsleep_restart(struct restart_block *restart_block)
 static int thread_cpu_clock_getres(const clockid_t which_clock,
 				   struct timespec *tp)
 {
+        //printk("thread_cpu_clock_getres(%d)\n", which_clock);
 	return posix_cpu_clock_getres(THREAD_CLOCK, tp);
 }
 static int thread_cpu_clock_get(const clockid_t which_clock,
 				struct timespec *tp)
 {
+        //printk("thread_cpu_clock_get(%d)\n", which_clock);
 	return posix_cpu_clock_get(THREAD_CLOCK, tp);
 }
 static int thread_cpu_timer_create(struct k_itimer *timer)
@@ -1722,6 +1729,7 @@ static __init int init_posix_cpu_timers(void)
 	};
 	struct timespec ts;
 
+        //printk("init_posix_cpu_timers() ************** \n");
 	register_posix_clock(CLOCK_PROCESS_CPUTIME_ID, &process);
 	register_posix_clock(CLOCK_THREAD_CPUTIME_ID, &thread);
 

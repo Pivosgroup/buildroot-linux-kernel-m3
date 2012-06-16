@@ -56,4 +56,10 @@
 #define I2C_HW_SAA7146		0x060000 /* SAA7146 video decoder bus */
 #define I2C_HW_SAA7134		0x090000 /* SAA7134 video decoder bus */
 
+/* --- Amlogic I2C adapters --- */
+#define I2C_DRIVERID_AML	0x3b0001
+#define I2C_HW_B_PIO		0x3b0002
+#define I2C_SW_B_GPIO		0x3b0003
+#define I2C_DRIVERID_AML_SLOW		0x3b0004
+
 #endif /* LINUX_I2C_ID_H */

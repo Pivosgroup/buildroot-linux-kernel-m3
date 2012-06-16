@@ -1,0 +1,83 @@
+#
+# Miscellaneous I2C chip drivers configuration
+#
+# *** DEPRECATED! Do not add new entries! See Makefile ***
+#
+
+menu "Miscellaneous I2C Chip support"
+
+config SENSORS_MXC622X
+	tristate "MEMSIC Accelerometer Sensor MXC622X Driver Support"
+	depends on I2C
+	help
+	  If you say yes here you get support for the MEMSIC accelerometer sensor
+
+config SENSORS_MMA8452
+	tristate "MEMSIC Accelerometer Sensor MMA8452 Driver Support"
+	depends on I2C
+	help
+	  If you say yes here you get support for the MEMSIC accelerometer sensor
+
+config SENSORS_MMC31XX
+	tristate "MEMSIC Magnetic Sensor MMC31XX Driver Support"
+	depends on I2C
+	help
+	  If you say yes here you get support for the MEMSIC magnateic sensor
+
+config SENSORS_MMC328X
+	tristate "MEMSIC Magnetic Sensor MMC328X Driver Support"
+	depends on I2C
+	help
+	  If you say yes here you get support for the MEMSIC magnateic sensor
+
+config ECOMPASS
+	tristate "MEMSIC eCompass Driver Support"
+	depends on I2C
+	help
+	  If you say yes here you get support for the MEMSIC eCompass
+
+config INPUT_LSM303_ACCEL
+	tristate "LSM303DLH 3-axis accelerometer driver"
+	depends on I2C
+	help
+	  Say Y here if you want to support the built-in LSM303DLH 3-axis accelerometer.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called lsm303dlh_acc.
+
+config INPUT_LSM303_MAGNE
+	tristate "LSM303DLH 3-axis magnetometer driver"
+	depends on I2C
+	help
+	  Say Y here if you want to support the built-in LSM303DLH 3-axis magnetometer.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called lsm303dlh_mag.
+
+config INPUT_LSM303DLM_ACCEL
+	tristate "LSM303DLM 3-axis accelerometer driver"
+	depends on I2C
+	help
+	  Say Y here if you want to support the built-in LSM303DLM 3-axis accelerometer.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called lsm303dlm_acc.
+
+config INPUT_LSM303DLM_MAGNE
+	tristate "LSM303DLM 3-axis magnetometer driver"
+	depends on I2C
+	help
+	  Say Y here if you want to support the built-in LSM303DLM 3-axis magnetometer.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called lsm303dlm_mag.
+
+config INPUT_L3G4200D
+	tristate "L3G4200D 3-axis gyroscope driver"
+	depends on I2C
+	help
+	  Say Y here if you want to support the built-in L3G4200D 3-axis gyroscope.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called L3G4200D gyroscope.
+endmenu

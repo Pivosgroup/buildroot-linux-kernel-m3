@@ -1,0 +1,24 @@
+#
+# Amlogic display driver configuration
+#
+menu "Amlogic Display Driver"
+
+source "drivers/amlogic/display/vout/Kconfig"
+source "drivers/amlogic/display/vout2/Kconfig"
+
+source "drivers/amlogic/display/osd/Kconfig"
+source "drivers/amlogic/display/backlight/Kconfig"
+config  AM_GE2D
+	tristate  "ge2d module"
+	default y
+	help 
+		ge2d graphic  engine support
+
+config  AM_LOGO
+	bool  "setup logo"
+	default n
+	depends on FB_AM && AM_GE2D
+	help 
+		setup logo support osd parameter offered by Uboot 
+
+endmenu	

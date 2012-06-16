@@ -1,0 +1,20 @@
+#
+# VFD configuration
+#
+
+config VFD_ENABLE
+	tristate "VFD support"
+	default n
+	help
+	  Say Y here if you want to use the amlogic VFD control.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called .
+
+config VFD_SM1628
+	depends on VFD_ENABLE
+	bool "SM1628 MCU support"
+	default n
+	help
+	  Use SM1628 MCU as controller
+

@@ -421,7 +421,7 @@ static int hci_sock_sendmsg(struct kiocb *iocb, struct socket *sock,
 		goto done;
 	}
 
-	if (!(skb = bt_skb_send_alloc(sk, len, msg->msg_flags & MSG_DONTWAIT, &err)))
+/*	if (!(skb = bt_skb_send_alloc(sk, len, msg->msg_flags & MSG_DONTWAIT, &err)))
 		goto done;
 
 	if (memcpy_fromiovec(skb_put(skb, len), msg->msg_iov, len)) {
@@ -430,7 +430,17 @@ static int hci_sock_sendmsg(struct kiocb *iocb, struct socket *sock,
 	}
 
 	bt_cb(skb)->pkt_type = *((unsigned char *) skb->data);
-	skb_pull(skb, 1);
+	skb_pull(skb, 1);*/
+	if (!(skb = bt_skb_send_alloc(sk, len-1, msg->msg_flags & MSG_DONTWAIT, &err)))
+		goto done;
+
+	memcpy_fromiovec(&(bt_cb(skb)->pkt_type), msg->msg_iov, 1);
+	
+	if (memcpy_fromiovec(skb_put(skb, len-1), msg->msg_iov+1, len-1)) {
+		err = -EFAULT;
+		goto drop;
+	}
+
 	skb->dev = (void *) hdev;
 
 	if (bt_cb(skb)->pkt_type == HCI_COMMAND_PKT) {

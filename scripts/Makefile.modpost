@@ -115,10 +115,17 @@ $(modules:.ko=.mod.o): %.mod.o: %.mod.c FORCE
 
 targets += $(modules:.ko=.mod.o)
 
+ifdef MOD_INS_DIR
+cross_install_modules=echo "  INSTALL $@ $(MOD_INS_DIR)";install -m 555 $@ $(MOD_INS_DIR)
+else
+cross_install_modules=echo "  Not Installed"
+endif
+
 # Step 6), final link of the modules
 quiet_cmd_ld_ko_o = LD [M]  $@
       cmd_ld_ko_o = $(LD) -r $(LDFLAGS) $(LDFLAGS_MODULE) -o $@		\
-			  $(filter-out FORCE,$^)
+			  $(filter-out FORCE,$^);\
+			  $(cross_install_modules)
 
 $(modules): %.ko :%.o %.mod.o FORCE
 	$(call if_changed,ld_ko_o)

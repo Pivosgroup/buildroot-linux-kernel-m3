@@ -26,19 +26,13 @@
 
 static LIST_HEAD(blktrans_majors);
 
-struct mtd_blkcore_priv {
-	struct task_struct *thread;
-	struct request_queue *rq;
-	spinlock_t queue_lock;
-};
-
 static int do_blktrans_request(struct mtd_blktrans_ops *tr,
 			       struct mtd_blktrans_dev *dev,
 			       struct request *req)
 {
 	unsigned long block, nsect;
 	char *buf;
-
+ 
 	block = blk_rq_pos(req) << 9 >> tr->blkshift;
 	nsect = blk_rq_cur_bytes(req) >> tr->blkshift;
 
@@ -90,7 +84,9 @@ static int mtd_blktrans_thread(void *arg)
 		struct mtd_blktrans_dev *dev;
 		int res;
 
-		if (!req && !(req = blk_fetch_request(rq))) {
+		if (!blk_queue_plugged(rq))
+			req = blk_fetch_request(rq);
+		if (!req) {
 			set_current_state(TASK_INTERRUPTIBLE);
 			spin_unlock_irq(rq->queue_lock);
 			schedule();
@@ -104,13 +100,15 @@ static int mtd_blktrans_thread(void *arg)
 		spin_unlock_irq(rq->queue_lock);
 
 		mutex_lock(&dev->lock);
-		res = do_blktrans_request(tr, dev, req);
+		res = tr->do_blktrans_request(tr, dev, req);
 		mutex_unlock(&dev->lock);
 
 		spin_lock_irq(rq->queue_lock);
 
-		if (!__blk_end_request_cur(req, res))
+		if (blk_rq_sectors(req) > 0) {
+		 	__blk_end_request(req, res, 512*blk_rq_sectors(req));
 			req = NULL;
+	}
 	}
 
 	if (req)
@@ -195,6 +193,11 @@ static int blktrans_ioctl(struct block_device *bdev, fmode_t mode,
 			return tr->flush(dev);
 		/* The core code did the work, we had nothing to do. */
 		return 0;
+	case BLKGETSECTS:
+	case BLKFREESECTS:
+		if (tr->update_blktrans_sysinfo)
+			tr->update_blktrans_sysinfo(dev, cmd, arg);
+		return 0;
 	default:
 		return -ENOTTY;
 	}
@@ -215,9 +218,11 @@ int add_mtd_blktrans_dev(struct mtd_blktrans_dev *new)
 	int last_devnum = -1;
 	struct gendisk *gd;
 
+	if (!tr->part_bits) {
 	if (mutex_trylock(&mtd_table_mutex)) {
 		mutex_unlock(&mtd_table_mutex);
 		BUG();
+	}
 	}
 
 	list_for_each_entry(d, &tr->devs, list) {
@@ -261,22 +266,22 @@ int add_mtd_blktrans_dev(struct mtd_blktrans_dev *new)
 	gd->first_minor = (new->devnum) << tr->part_bits;
 	gd->fops = &mtd_blktrans_ops;
 
-	if (tr->part_bits)
+	/*if (tr->part_bits)
 		if (new->devnum < 26)
 			snprintf(gd->disk_name, sizeof(gd->disk_name),
-				 "%s%c", tr->name, 'a' + new->devnum);
+				 "%s%d", tr->name, new->devnum);
 		else
 			snprintf(gd->disk_name, sizeof(gd->disk_name),
 				 "%s%c%c", tr->name,
 				 'a' - 1 + new->devnum / 26,
 				 'a' + new->devnum % 26);
-	else
+	else*/
 		snprintf(gd->disk_name, sizeof(gd->disk_name),
 			 "%s%d", tr->name, new->devnum);
 
 	/* 2.5 has capacity in units of 512 bytes while still
 	   having BLOCK_SIZE_BITS set to 10. Just to keep us amused. */
-	set_capacity(gd, (new->size * tr->blksize) >> 9);
+	set_capacity(gd, (new->size * (tr->blksize >> 9)));
 
 	gd->private_data = new;
 	new->blkcore_priv = gd;
@@ -389,11 +394,15 @@ int register_mtd_blktrans(struct mtd_blktrans_ops *tr)
 	INIT_LIST_HEAD(&tr->devs);
 	list_add(&tr->list, &blktrans_majors);
 
+	if (tr->part_bits)
+		mutex_unlock(&mtd_table_mutex);
 	for (i=0; i<MAX_MTD_DEVICES; i++) {
 		if (mtd_table[i] && mtd_table[i]->type != MTD_ABSENT)
 			tr->add_mtd(tr, mtd_table[i]);
 	}
-
+	if (!tr->do_blktrans_request)
+		tr->do_blktrans_request = do_blktrans_request;
+	if (!tr->part_bits)
 	mutex_unlock(&mtd_table_mutex);
 
 	return 0;

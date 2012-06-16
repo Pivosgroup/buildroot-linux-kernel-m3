@@ -125,7 +125,11 @@ static inline int getmiso(const struct spi_device *spi)
  * reaching even one Mbit/sec (except when we can inline bitops), so for now
  * we'll just assume we never need additional per-bit slowdowns.
  */
-#define spidelay(nsecs)	do {} while (0)
+//#define spidelay(nsecs)	do {} while (0)
+static inline void spidelay(int nsecs)
+{
+	while(nsecs--) {}
+}
 
 #define	EXPAND_BITBANG_TXRX
 #include <linux/spi/spi_bitbang.h>

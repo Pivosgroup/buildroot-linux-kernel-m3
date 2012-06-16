@@ -129,7 +129,43 @@ static ssize_t codec_reg_show(struct device *dev,
 	return soc_codec_reg_show(devdata->card->codec, buf);
 }
 
-static DEVICE_ATTR(codec_reg, 0444, codec_reg_show, NULL);
+/*
+ * echo value reg > sys/devices/platform/soc-audio/codec_reg
+ */
+
+static ssize_t codec_reg_write(struct device *dev,
+    struct device_attribute* attr, const char* buf, size_t count)
+{
+  struct snd_soc_device *socdev = dev_get_drvdata(dev);
+  struct snd_soc_card *card = socdev->card;
+  struct snd_soc_codec *codec = card->codec;
+  char *start = buf;
+  unsigned long reg, value;
+  int step = 1;
+  
+  if (codec->reg_cache_step)
+  	step = codec->reg_cache_step;
+  
+  while (*start == ' ')
+  	start++;
+  reg = simple_strtoul(start, &start, 16);
+  if ((reg >= codec->reg_cache_size) || (reg % step)){
+    printk("error 2: %x\n", reg);
+  	return -EINVAL;
+  }
+  while (*start == ' ')
+  	start++;
+  if (strict_strtoul(start, 16, &value)){
+    printk("error 3: %x\n", value);
+  	return -EINVAL;
+  }
+	
+  printk("write reg: %x, val: %x\n", reg, value);
+  codec->write(codec, reg, value);
+  return count;
+}
+
+static DEVICE_ATTR(codec_reg, 0664, codec_reg_show, codec_reg_write);
 
 static ssize_t pmdown_time_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
@@ -203,6 +239,8 @@ static ssize_t codec_reg_write_file(struct file *file,
 		start++;
 	if (strict_strtoul(start, 16, &value))
 		return -EINVAL;
+	
+	printk("write reg: %x, val: %x\n", reg, value);
 	codec->write(codec, reg, value);
 	return buf_size;
 }
@@ -232,7 +270,7 @@ static void soc_init_codec_debugfs(struct snd_soc_codec *codec)
 		return;
 	}
 
-	codec->debugfs_reg = debugfs_create_file("codec_reg", 0644,
+	codec->debugfs_reg = debugfs_create_file("codec_reg", 0664,
 						 codec->debugfs_codec_root,
 						 codec, &codec_reg_fops);
 	if (!codec->debugfs_reg)

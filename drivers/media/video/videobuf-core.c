@@ -201,7 +201,8 @@ void videobuf_queue_cancel(struct videobuf_queue *q)
 		if (NULL == q->bufs[i])
 			continue;
 		if (q->bufs[i]->state == VIDEOBUF_QUEUED) {
-			list_del(&q->bufs[i]->queue);
+			if(q->bufs[i]->queue.next!=LIST_POISON1 && q->bufs[i]->queue.prev!=LIST_POISON2)
+				list_del(&q->bufs[i]->queue);
 			q->bufs[i]->state = VIDEOBUF_ERROR;
 			wake_up_all(&q->bufs[i]->done);
 		}

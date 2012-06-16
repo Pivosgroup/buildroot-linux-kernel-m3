@@ -1,0 +1,188 @@
+menu "Meson platform type"
+	depends on ARCH_MESON
+
+config MACH_MESON_6236M
+	select GENERIC_ALLOCATOR
+	bool "Support M1 6236(MODE:MBOX728) platform(machid=2951)"
+	help
+	  Include support for the AMLOGIC M1 6236M Emulation Baseboard platform.
+
+config MACH_MESON_8626M_REFC02
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8626(MBOX_8626M1_V1.0) platform(machid=2952)"
+	help
+	  Include support for the AMLOGIC M1 8626M Emulation Baseboard platform.
+
+config MACH_MESON_6236M_SH
+	select GENERIC_ALLOCATOR
+	bool "Support M1 6236(dpf_aml6236-m_innolux8_skt_v1) platform(machid=2953)"
+	help
+	  Include support for the AMLOGIC M1 6236M Emulation Baseboard platform.
+
+config MACH_MESON_8626M_SH
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8626(mbx_aml8626-m_skt_v1) platform(machid=2954)"
+	help
+	  Include support for the AMLOGIC M1 8626M Emulation Baseboard platform.
+
+config MACH_MESON_8226M
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8226(dvbc_8226m1_v1.0) platform(machid=2955)"
+	help
+	  Include support for the AMLOGIC M1 8226M Emulation Baseboard platform.
+
+config MACH_MESON_8726M_REFA00
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(mid_8726m1_v1.0) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+
+config MACH_MESON_8726M_REFC01
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(Meson Board_AML8726-M) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+
+config MACH_MESON_8726M_REFC03
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(DVBC_8726M1_V1.0) platform(machid=2957)"
+	help
+	  Include support for the AMLOGIC M1 8726M DVBC Emulation Baseboard platform.
+
+config MACH_MESON_8726M_REFC06
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(Giec) platform(machid=2957)"
+	help
+	  Include support for the AMLOGIC M1 8726M Giec Baseboard platform.
+	  
+config MACH_MESON_8726M_REFB05
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(ML) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+	  
+config MACH_MESON_8726M_REFB06
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(MlMBX) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+
+config MACH_MESON_8726M_REFB02
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(W10) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+
+config MACH_MESON_8726M_REFB01
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(W7) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+
+config MACH_MESON_8726M_REFB08
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(W8) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+
+config MACH_MESON_8726M_REFB09
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(P7new) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+
+config MACH_MESON_8726M_REFB03
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(K7) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+	  
+config MACH_MESON_8726M_REFB07
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(C7) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+	  
+config MACH_MESON_8726M_REFB04
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(K8) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.  
+
+config MACH_MESON_8726M_REFC05
+        select GENERIC_ALLOCATOR
+        bool "Support M1 8726(Skyworth) platform(machid=2957)"
+        help
+          Include support for the AMLOGIC M1 8726M Skyworth platform.
+
+config MACH_MESON_8726M_REFC04
+        select GENERIC_ALLOCATOR
+        bool "Support M1 8726(Hisense) platform(machid=2957)"
+        help
+          Include support for the AMLOGIC M1 8726M Hisense platform.
+
+config MACH_MESON_8726M_REFC08
+        select GENERIC_ALLOCATOR
+        bool "Support M1 8726(refc08) platform(machid=2957)"
+        help
+          Include support for the AMLOGIC M1 8726M refc08 platform.
+ 
+config MACH_MESON_8726M_REFB10
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(G7) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+
+config MACH_MESON_8726M_REFB11
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(B11) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+	  	  
+config MACH_MESON_8726M_REFB12
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(r10) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+
+config MACH_MESON_8726M_REFB13
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(refb13) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+	  
+config MACH_MESON_8726M_REFB17
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(REFB17) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+
+config MACH_MESON_8726M_REFB18
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(P10) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+
+config MACH_MESON_8726M_REFB19
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(REFB19) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+	  	  
+config MACH_MESON_8726M_REFB14
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(refb14) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.
+	  
+config MACH_MESON_8726M_REFB16
+	select GENERIC_ALLOCATOR
+	bool "Support M1 8726(refb16) platform(machid=2956)"
+	help
+	  Include support for the AMLOGIC M1 8726M Emulation Baseboard platform.	  
+	  	  
+config MESON_CLOCK_TICK_RATE
+    int "Clock Tick Rate"
+	default 25000000
+
+endmenu

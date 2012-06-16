@@ -1106,4 +1106,21 @@ config USB_S2255
 	  This driver can be compiled as a module, called s2255drv.
 
 endif # V4L_USB_DRIVERS
+
+config VIDEO_AMLOGIC_CAPTURE
+	tristate "Amlogic Platform Capture Driver"
+	depends on VIDEO_DEV && VIDEO_V4L2 && !SPARC32 && !SPARC64 &&!AMLOGIC_CAMERA_ENABLE
+	select VIDEOBUF_VMALLOC
+	select AMLOGIC_VIDEOIN_MANAGER
+	default n
+	---help---
+	  Amlogic capture driver interface in v4l style. it can not work well together with 
+	  AMLOGIC_CAMERA_ENABLE
+	  Say Y here if you want this driver.
+
+if  VIDEO_AMLOGIC_CAPTURE
+source "drivers/media/video/amlcamera/Kconfig"
+endif # VIDEO_AMLOGIC_CAPTURE
+
+
 endif # VIDEO_CAPTURE_DRIVERS

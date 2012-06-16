@@ -37,6 +37,8 @@ source "sound/soc/s6000/Kconfig"
 source "sound/soc/sh/Kconfig"
 source "sound/soc/txx9/Kconfig"
 
+#for AMLogic SoC
+source "sound/soc/aml/Kconfig"
 # Supported codecs
 source "sound/soc/codecs/Kconfig"
 

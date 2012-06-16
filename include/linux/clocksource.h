@@ -261,6 +261,27 @@ static inline u32 clocksource_hz2mult(u32 hz, u32 shift_constant)
 }
 
 /**
+ * clocksource_hz2shift - calculates shift from hz and # of bits
+ * @bits: Number of bits this clocksource uses
+ * @hz: Clocksource frequency in Hz
+ *
+ * Helper functions that calculates the best shift value
+ * based on the hz and # of bits of any given clock.
+ */
+static inline u32 clocksource_hz2shift(u32 bits, u32 hz)
+{
+	u64 temp;
+
+	for (; bits > 0; bits--) {
+		temp = (u64) NSEC_PER_SEC << bits;
+		do_div(temp, hz);
+		if ((temp >> 32) == 0)
+			break;
+	}
+	return bits;
+}
+
+/**
  * clocksource_cyc2ns - converts clocksource cycles to nanoseconds
  *
  * Converts cycles to nanoseconds, using the given mult and shift.

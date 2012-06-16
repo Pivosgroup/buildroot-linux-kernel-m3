@@ -48,6 +48,8 @@
 
 #define VERSION "1.2"
 
+extern struct bt_dev_data bt_dev;
+
 struct h4_struct {
 	unsigned long rx_state;
 	unsigned long rx_count;
@@ -140,7 +142,12 @@ static inline int h4_check_data_len(struct h4_struct *h4, int len)
 		h4->rx_count = len;
 		return len;
 	}
-
+#ifdef SUPPORTED_BCM4325  
+    BT_DBG("BT Sleep");
+    if (NULL != bt_dev.bt_dev_suspend) {
+        bt_dev.bt_dev_suspend();
+    }
+#endif;	
 	h4->rx_state = H4_W4_PACKET_TYPE;
 	h4->rx_skb   = NULL;
 	h4->rx_count = 0;
@@ -176,7 +183,12 @@ static int h4_recv(struct hci_uart *hu, void *data, int count)
 				BT_DBG("Complete data");
 
 				hci_recv_frame(h4->rx_skb);
-
+#ifdef SUPPORTED_BCM4325  
+                BT_DBG("BT Sleep");
+                if (NULL != bt_dev.bt_dev_suspend) {
+                    bt_dev.bt_dev_suspend();
+                }
+#endif;	
 				h4->rx_state = H4_W4_PACKET_TYPE;
 				h4->rx_skb = NULL;
 				continue;

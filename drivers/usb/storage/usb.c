@@ -299,7 +299,7 @@ static int usb_stor_control_thread(void * __us)
 		 * is UNKNOWN
 		 */
 		if (us->srb->sc_data_direction == DMA_BIDIRECTIONAL) {
-			US_DEBUGP("UNKNOWN data direction\n");
+			US_DEBUGPE("UNKNOWN data direction\n");
 			us->srb->result = DID_ERROR << 16;
 		}
 
@@ -327,7 +327,7 @@ static int usb_stor_control_thread(void * __us)
 			    0x00, 0x80, 0x02, 0x02,
 			    0x1F, 0x00, 0x00, 0x00};
 
-			US_DEBUGP("Faking INQUIRY command\n");
+			US_DEBUGPE("Faking INQUIRY command\n");
 			fill_inquiry_response(us, data_ptr, 36);
 			us->srb->result = SAM_STAT_GOOD;
 		}
@@ -348,7 +348,7 @@ static int usb_stor_control_thread(void * __us)
 			us->srb->scsi_done(us->srb);
 		} else {
 SkipForAbort:
-			US_DEBUGP("scsi command aborted\n");
+			US_DEBUGPE("scsi command aborted\n");
 		}
 
 		/* If an abort request was received we need to signal that
@@ -411,14 +411,14 @@ static int associate_dev(struct us_data *us, struct usb_interface *intf)
 	us->cr = usb_buffer_alloc(us->pusb_dev, sizeof(*us->cr),
 			GFP_KERNEL, &us->cr_dma);
 	if (!us->cr) {
-		US_DEBUGP("usb_ctrlrequest allocation failed\n");
+		US_DEBUGPE("usb_ctrlrequest allocation failed\n");
 		return -ENOMEM;
 	}
 
 	us->iobuf = usb_buffer_alloc(us->pusb_dev, US_IOBUF_SIZE,
 			GFP_KERNEL, &us->iobuf_dma);
 	if (!us->iobuf) {
-		US_DEBUGP("I/O buffer allocation failed\n");
+		US_DEBUGPE("I/O buffer allocation failed\n");
 		return -ENOMEM;
 	}
 	return 0;
@@ -676,7 +676,7 @@ static int get_pipes(struct us_data *us)
 	}
 
 	if (!ep_in || !ep_out || (us->protocol == US_PR_CBI && !ep_int)) {
-		US_DEBUGP("Endpoint sanity check failed! Rejecting dev.\n");
+		US_DEBUGPE("Endpoint sanity check failed! Rejecting dev.\n");
 		return -EIO;
 	}
 
@@ -703,7 +703,7 @@ static int usb_stor_acquire_resources(struct us_data *us)
 
 	us->current_urb = usb_alloc_urb(0, GFP_KERNEL);
 	if (!us->current_urb) {
-		US_DEBUGP("URB allocation failed\n");
+		US_DEBUGPE("URB allocation failed\n");
 		return -ENOMEM;
 	}
 
@@ -914,7 +914,7 @@ int usb_stor_probe1(struct us_data **pus,
 	return 0;
 
 BadDevice:
-	US_DEBUGP("storage_probe() failed\n");
+	US_DEBUGPE("storage_probe1() failed\n");
 	release_everything(us);
 	return result;
 }
@@ -973,7 +973,7 @@ int usb_stor_probe2(struct us_data *us)
 
 	/* We come here if there are any problems */
 BadDevice:
-	US_DEBUGP("storage_probe() failed\n");
+	US_DEBUGPE("storage_probe2() failed\n");
 	release_everything(us);
 	return result;
 }
@@ -984,7 +984,7 @@ void usb_stor_disconnect(struct usb_interface *intf)
 {
 	struct us_data *us = usb_get_intfdata(intf);
 
-	US_DEBUGP("storage_disconnect() called\n");
+	US_DEBUGPE("storage_disconnect() called\n");
 	quiesce_and_remove_host(us);
 	release_everything(us);
 }

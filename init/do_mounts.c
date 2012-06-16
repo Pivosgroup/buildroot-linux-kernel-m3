@@ -235,6 +235,7 @@ void __init mount_block_root(char *name, int flags)
 	char *fs_names = __getname_gfp(GFP_KERNEL
 		| __GFP_NOTRACK_FALSE_POSITIVE);
 	char *p;
+	unsigned rootfs_mount_timount_cnt = 0;
 #ifdef CONFIG_BLOCK
 	char b[BDEVNAME_SIZE];
 #else
@@ -252,7 +253,13 @@ retry:
 				flags |= MS_RDONLY;
 				goto retry;
 			case -EINVAL:
+			case -EIO:
 				continue;
+			//add by xiaojun_pi for wait device init completely 500 means 5s
+			case -ENXIO:
+				msleep(10);
+				if((++rootfs_mount_timount_cnt) < 500)
+					goto retry;
 		}
 	        /*
 		 * Allow the user to distinguish between failed sys_open

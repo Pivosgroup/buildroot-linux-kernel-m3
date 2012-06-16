@@ -1,0 +1,14 @@
+
+menu "Amlogic SATA Support"
+
+if !ATA
+comment "Need config 'Serial ATA and Parallel ATA drivers'"
+endif
+config SATA_DWC_AHCI
+        bool "Amloigc SATA AHCI support"
+				depends on ATA
+        help
+           depend on libATA
+
+
+endmenu

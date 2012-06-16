@@ -31,6 +31,13 @@ config USB_STORAGE_DEBUG
 	  Say Y here in order to have the USB Mass Storage code generate
 	  verbose debugging messages.
 
+config USB_STORAGE_ERROR
+	bool "USB Mass Storage error message verbose"
+	depends on USB_STORAGE
+	help
+	  Say Y here in order to have the USB Mass Storage code generate
+	  verbose debugging error messages. (Only show error messages.)
+
 config USB_STORAGE_DATAFAB
 	tristate "Datafab Compact Flash Reader support"
 	depends on USB_STORAGE

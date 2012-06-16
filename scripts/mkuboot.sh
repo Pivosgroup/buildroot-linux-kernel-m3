@@ -4,11 +4,12 @@
 # Build U-Boot image when `mkimage' tool is available.
 #
 
-MKIMAGE=$(type -path "${CROSS_COMPILE}mkimage")
-
-if [ -z "${MKIMAGE}" ]; then
-	MKIMAGE=$(type -path mkimage)
-	if [ -z "${MKIMAGE}" ]; then
+if [ -z ${MKUIMAGE}  ];then
+MKUIMAGE=$(type -path "${CROSS_COMPILE}mkimage")
+fi
+if [ -z "${MKUIMAGE}" ]; then
+	MKUIMAGE=$(type -path mkimage)
+	if [ -z "${MKUIMAGE}" ]; then
 		# Doesn't exist
 		echo '"mkimage" command not found - U-Boot images will not be built' >&2
 		exit 0;
@@ -16,4 +17,4 @@ if [ -z "${MKIMAGE}" ]; then
 fi
 
 # Call "mkimage" to create U-Boot image
-${MKIMAGE} "$@"
+${MKUIMAGE} "$@"

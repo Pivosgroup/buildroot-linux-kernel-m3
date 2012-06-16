@@ -90,6 +90,7 @@ static int __kprobes notifier_call_chain(struct notifier_block **nl,
 			continue;
 		}
 #endif
+      if(nb->notifier_call != NULL)
 		ret = nb->notifier_call(nb, val, v);
 
 		if (nr_calls)

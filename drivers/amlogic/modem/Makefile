@@ -1,0 +1,1 @@
+obj-$(CONFIG_AMLOGIC_MODEM) 				+= aml_modem.o

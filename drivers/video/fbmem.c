@@ -886,6 +886,14 @@ fb_pan_display(struct fb_info *info, struct fb_var_screeninfo *var)
         return 0;
 }
 
+static int fb_cursor(struct fb_info *info, struct fb_cursor *var)
+{
+	if (info->fbops->fb_cursor)
+		return info->fbops->fb_cursor(info, var);
+	return -EINVAL;
+}
+
+
 static int fb_check_caps(struct fb_info *info, struct fb_var_screeninfo *var,
 			 u32 activate)
 {
@@ -1037,6 +1045,7 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	struct fb_cmap cmap_from;
 	struct fb_cmap_user cmap;
 	struct fb_event event;
+	struct fb_cursor cursor;
 	void __user *argp = (void __user *)arg;
 	long ret = 0;
 
@@ -1098,7 +1107,16 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			return -EFAULT;
 		break;
 	case FBIO_CURSOR:
-		ret = -EINVAL;
+		if (copy_from_user(&cursor, argp, sizeof(cursor)))
+			return -EFAULT;
+		if (!lock_fb_info(info))
+			return -ENODEV;
+		acquire_console_sem();
+		ret = fb_cursor(info, &cursor);
+		release_console_sem();
+		unlock_fb_info(info);
+		if (ret == 0 && copy_to_user(argp, &cursor, sizeof(cursor)))
+			return -EFAULT;
 		break;
 	case FBIOGET_CON2FBMAP:
 		if (copy_from_user(&con2fb, argp, sizeof(con2fb)))

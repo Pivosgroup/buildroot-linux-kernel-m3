@@ -1,0 +1,10 @@
+
+menu "Amlogic GPS Support"
+
+config GPS_POWERCTRL
+	bool "Amlogic gps power control support"
+	depends on SERIAL_CORE
+	---help---
+	  This module adds support for gps power control.
+	  
+endmenu

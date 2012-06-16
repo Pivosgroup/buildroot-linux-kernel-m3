@@ -1,0 +1,11 @@
+
+menu "Amlogic Backlight Support"
+
+config AMLOGIC_BACKLIGHT
+	bool "Amlogic backlight support"
+	select BACKLIGHT_CLASS_DEVICE
+	default n
+	help
+	  Say Y here if you want to use the amlogic backlight management.
+
+endmenu

@@ -40,7 +40,7 @@ int header_page_size_size;
 int header_page_data_offset;
 int header_page_data_size;
 
-bool latency_format;
+int latency_format;
 
 static char *input_buf;
 static unsigned long long input_buf_ptr;

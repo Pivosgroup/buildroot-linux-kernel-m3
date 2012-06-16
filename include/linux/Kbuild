@@ -1,3 +1,4 @@
+header-y += amports/
 header-y += byteorder/
 header-y += can/
 header-y += dvb/
@@ -15,6 +16,7 @@ header-y += netfilter_bridge/
 header-y += netfilter_ipv4/
 header-y += netfilter_ipv6/
 header-y += usb/
+header-y += vout/
 
 header-y += affs_hardblocks.h
 header-y += aio_abi.h

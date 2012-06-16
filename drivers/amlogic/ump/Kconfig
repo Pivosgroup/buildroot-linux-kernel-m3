@@ -1,0 +1,14 @@
+#
+# Mali 400 GPU OpenGL device driver
+#
+
+menu "Mali 400 UMP device driver"
+
+config UMP
+	tristate "Mali 400 UMP device driver"
+	depends on m
+	default m
+	help
+	  Enable kernel module build for Mali 400 Unified Memory Provider device driver.
+
+endmenu

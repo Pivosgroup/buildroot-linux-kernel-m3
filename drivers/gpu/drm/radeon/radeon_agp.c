@@ -270,8 +270,3 @@ void radeon_agp_fini(struct radeon_device *rdev)
 	}
 #endif
 }
-
-void radeon_agp_suspend(struct radeon_device *rdev)
-{
-	radeon_agp_fini(rdev);
-}

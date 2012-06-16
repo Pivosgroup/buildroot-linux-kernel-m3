@@ -1,0 +1,21 @@
+#
+# AMLOGIC tvin devices configuration
+#
+
+menu "Amlogic TVIN Tuner Support"
+
+config TVIN_TUNER
+	bool "Amlogic TVIN Tuner Core"
+	default n
+	help
+		TVIN Tuner Bridge Driver.
+
+config TVIN_TUNER_FQ1216ME
+	bool "Philips FQ1216ME Tuner Device Support"
+	default n
+	select TVIN_TUNER
+	help
+		PHILIPS FQ1216ME tuner driver.
+
+endmenu
+

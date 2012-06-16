@@ -9,12 +9,21 @@
 #define __MTD_TRANS_H__
 
 #include <linux/mutex.h>
+#include <linux/kthread.h>
+#include <linux/spinlock.h>
+#include <linux/blkdev.h>
 
 struct hd_geometry;
 struct mtd_info;
 struct mtd_blktrans_ops;
 struct file;
 struct inode;
+
+struct mtd_blkcore_priv {
+	struct task_struct *thread;
+	struct request_queue *rq;
+	spinlock_t queue_lock;
+};
 
 struct mtd_blktrans_dev {
 	struct mtd_blktrans_ops *tr;
@@ -37,6 +46,9 @@ struct mtd_blktrans_ops {
 	int blkshift;
 
 	/* Access functions */
+	void (*update_blktrans_sysinfo)(struct mtd_blktrans_dev *dev, unsigned int cmd, unsigned long arg);	
+	int (*do_blktrans_request)(struct mtd_blktrans_ops *tr, struct mtd_blktrans_dev *dev, struct request *req);			//for nftl could do much requests once a time not just 1page a time
+
 	int (*readsect)(struct mtd_blktrans_dev *dev,
 		    unsigned long block, char *buffer);
 	int (*writesect)(struct mtd_blktrans_dev *dev,

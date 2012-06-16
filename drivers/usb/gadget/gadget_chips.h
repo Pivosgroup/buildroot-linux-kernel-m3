@@ -142,7 +142,11 @@
 #define gadget_is_s3c_hsotg(g)    0
 #endif
 
-
+#ifdef CONFIG_USB_DWC_OTG_HCD
+#define gadget_is_dwc_otg(g)		(!strcmp("dwc_otg_pcd", (g)->name))
+#else
+#define gadget_is_dwc_otg(g)		0
+#endif
 /**
  * usb_gadget_controller_number - support bcdDevice id convention
  * @gadget: the controller being driven
@@ -200,6 +204,8 @@ static inline int usb_gadget_controller_number(struct usb_gadget *gadget)
 		return 0x25;
 	else if (gadget_is_s3c_hsotg(gadget))
 		return 0x26;
+	else if (gadget_is_dwc_otg(gadget))
+		return 0x31;
 	return -ENOENT;
 }
 

@@ -1,0 +1,14 @@
+#
+# AMLOGIC tvin devices configuration
+#
+
+menu "Amlogic Linux Debug Support"
+
+config AML_LINUX_DEBUG
+	bool "Amlogic Linux Debug"
+	default y
+	help
+		Amlogic Linux debug for register etc..
+
+endmenu
+

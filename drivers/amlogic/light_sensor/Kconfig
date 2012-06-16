@@ -1,0 +1,18 @@
+
+menu "Amlogic Light Sensor Support"
+
+config LS_GL3526
+	bool "ADC Light Sensor - GL3526"
+	select INPUT_POLLDEV
+	default n
+	---help---
+	  This module adds support for adc light sensor gl3526
+
+config LS_ON9658
+	bool "ADC Light Sensor - ON9658"
+	select INPUT_POLLDEV
+	default n
+	---help---
+	  This module adds support for adc light sensor on9658
+
+endmenu

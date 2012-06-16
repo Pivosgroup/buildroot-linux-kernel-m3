@@ -284,10 +284,11 @@ u32 usbhid_lookup_quirk(const u16 idVendor, const u16 idProduct)
 	u32 quirks = 0;
 	const struct hid_blacklist *bl_entry = NULL;
 
-	/* NCR devices must not be queried for reports */
-	if (idVendor == USB_VENDOR_ID_NCR &&
+	/* NCR and SIG devices must not be queried for reports */
+	if ((idVendor == USB_VENDOR_ID_NCR &&
 			idProduct >= USB_DEVICE_ID_NCR_FIRST &&
 			idProduct <= USB_DEVICE_ID_NCR_LAST)
+			||(idVendor == USB_VENDOR_ID_SIG && idProduct == USB_VENDOR_ID_SIG_PID))
 			return HID_QUIRK_NO_INIT_REPORTS;
 
 	down_read(&dquirks_rwsem);

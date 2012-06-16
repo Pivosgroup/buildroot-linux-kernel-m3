@@ -1,0 +1,13 @@
+#
+# Amlogic efuse device configuration
+#
+
+menu "Amlogic EFUSE Support"
+
+config EFUSE
+        tristate "EFUSE Driver"
+        default m
+        help
+         	EFUSE device driver.
+
+endmenu

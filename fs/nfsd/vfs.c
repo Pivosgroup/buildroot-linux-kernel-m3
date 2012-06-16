@@ -443,7 +443,8 @@ nfsd_setattr(struct svc_rqst *rqstp, struct svc_fh *fhp, struct iattr *iap,
 	if (size_change)
 		put_write_access(inode);
 	if (!err)
-		commit_metadata(fhp);
+		if (EX_ISSYNC(fhp->fh_export))
+			write_inode_now(inode, 1);
 out:
 	return err;
 
@@ -723,7 +724,7 @@ nfsd_open(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 	struct inode	*inode;
 	int		flags = O_RDONLY|O_LARGEFILE;
 	__be32		err;
-	int		host_err = 0;
+	int		host_err;
 
 	validate_process_creds();
 
@@ -760,8 +761,7 @@ nfsd_open(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 	 * Check to see if there are any leases on this file.
 	 * This may block while leases are broken.
 	 */
-	if (!(access & NFSD_MAY_NOT_BREAK_LEASE))
-		host_err = break_lease(inode, O_NONBLOCK | ((access & NFSD_MAY_WRITE) ? O_WRONLY : 0));
+	host_err = break_lease(inode, O_NONBLOCK | ((access & NFSD_MAY_WRITE) ? O_WRONLY : 0));
 	if (host_err == -EWOULDBLOCK)
 		host_err = -ETIMEDOUT;
 	if (host_err) /* NOMEM or WOULDBLOCK */
@@ -1169,8 +1169,7 @@ nfsd_commit(struct svc_rqst *rqstp, struct svc_fh *fhp,
 			goto out;
 	}
 
-	err = nfsd_open(rqstp, fhp, S_IFREG,
-			NFSD_MAY_WRITE|NFSD_MAY_NOT_BREAK_LEASE, &file);
+	err = nfsd_open(rqstp, fhp, S_IFREG, NFSD_MAY_WRITE, &file);
 	if (err)
 		goto out;
 	if (EX_ISSYNC(fhp->fh_export)) {

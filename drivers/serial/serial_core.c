@@ -94,6 +94,9 @@ static void __uart_start(struct tty_struct *tty)
 	struct uart_state *state = tty->driver_data;
 	struct uart_port *port = state->uart_port;
 
+	if (port->ops->wake_peer)
+		port->ops->wake_peer(port);
+
 	if (!uart_circ_empty(&state->xmit) && state->xmit.buf &&
 	    !tty->stopped && !tty->hw_stopped)
 		port->ops->start_tx(port);
@@ -2354,8 +2357,8 @@ int uart_register_driver(struct uart_driver *drv)
 	normal->type		= TTY_DRIVER_TYPE_SERIAL;
 	normal->subtype		= SERIAL_TYPE_NORMAL;
 	normal->init_termios	= tty_std_termios;
-	normal->init_termios.c_cflag = B9600 | CS8 | CREAD | HUPCL | CLOCAL;
-	normal->init_termios.c_ispeed = normal->init_termios.c_ospeed = 9600;
+	normal->init_termios.c_cflag = B115200 | CS8 | CREAD | HUPCL | CLOCAL;
+	normal->init_termios.c_ispeed = normal->init_termios.c_ospeed = 115200;
 	normal->flags		= TTY_DRIVER_REAL_RAW | TTY_DRIVER_DYNAMIC_DEV;
 	normal->driver_state    = drv;
 	tty_set_operations(normal, &uart_ops);

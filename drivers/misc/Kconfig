@@ -27,6 +27,10 @@ config AD525X_DPOT
 	  This driver can also be built as a module.  If so, the module
 	  will be called ad525x_dpot.
 
+config ANDROID_PMEM
+	bool "Android pmem allocator"
+	default y
+
 config ATMEL_PWM
 	tristate "Atmel AT32/AT91 PWM support"
 	depends on AVR32 || ARCH_AT91SAM9263 || ARCH_AT91SAM9RL || ARCH_AT91CAP9
@@ -173,6 +177,13 @@ config ENCLOSURE_SERVICES
 	  driver (SCSI/ATA) which supports enclosures
 	  or a SCSI enclosure device (SES) to use these services.
 
+config KERNEL_DEBUGGER_CORE
+	bool "Kernel Debugger Core"
+	default n
+	---help---
+	  Generic kernel debugging command processor used by low level
+	  (interrupt context) platform-specific debuggers.
+
 config SGI_XP
 	tristate "Support communication between SGI SSIs"
 	depends on NET
@@ -311,6 +322,10 @@ config TI_DAC7512
 	  This driver can also be built as a module. If so, the module
 	  will be calles ti_dac7512.
 
+config UID_STAT
+	bool "UID based statistics tracking exported to /proc/uid_stat"
+	default n
+
 config VMWARE_BALLOON
 	tristate "VMware Balloon Driver"
 	depends on X86
@@ -327,9 +342,63 @@ config VMWARE_BALLOON
 	  To compile this driver as a module, choose M here: the
 	  module will be called vmware_balloon.
 
+config WL127X_RFKILL
+	tristate "Bluetooth power control driver for TI wl127x"
+	depends on RFKILL
+	default n
+	---help---
+	 Creates an rfkill entry in sysfs for power control of Bluetooth
+	 TI wl127x chips.
+
+config APANIC
+	bool "Android kernel panic diagnostics driver"
+	default n
+	---help---
+	 Driver which handles kernel panics and attempts to write
+	 critical debugging data to flash.
+
+config APANIC_PLABEL
+	string "Android panic dump flash partition label"
+	depends on APANIC
+	default "kpanic"
+	---help---
+	 If your platform uses a different flash partition label for storing
+ 	 crashdumps, enter it here.
+
+config SIX_AXIS_SENSOR_MPU3050
+	bool "6 Axis sensor mpu3050"
+	default n
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
 source "drivers/misc/iwmc3200top/Kconfig"
+
+choice
+    prompt "Motion Processing Unit driver version"
+    depends on I2C
+    default MPU_NEW
+
+config MPU_PRE_V340
+    bool "MPU version < v3.4.0"
+    help
+      This is the MPU driver of version < v3.4.0
+
+config MPU_NEW
+    bool "MPU version >= v3.4.0"
+    help
+      This is the MPU driver of version >= v3.4.0.
+endchoice
+
+source "drivers/misc/mpu3050/Kconfig"
+source "drivers/misc/mpu3050_new/Kconfig"
+
+config BOSCH_SENSOR
+	tristate "BOSCH BMA222 acceleration sensor"
+	depends on I2C && SYSFS
+	help
+	  If you say yes here you get support for the BOSCH BMA222
+	  acceleration sensor.
+source "drivers/misc/bosch_bma222/Kconfig"
 
 endif # MISC_DEVICES

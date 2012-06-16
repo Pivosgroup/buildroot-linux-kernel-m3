@@ -463,6 +463,16 @@ config USB_SERIAL_PL2303
 	  To compile this driver as a module, choose M here: the
 	  module will be called pl2303.
 
+config USB_SERIAL_PL2303_AML
+	tristate "USB Prolific 2303 Single Port Serial Driver(using INTR tranfer)"
+	depends on USB_SERIAL_PL2303=n
+	help
+	  Say Y here if you want to use the PL2303 USB Serial single port
+	  adapter from Prolific as a usb dongle for hisense remote controller.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called pl2303_intr.
+
 config USB_SERIAL_OTI6858
 	tristate "USB Ours Technology Inc. OTi-6858 USB To RS232 Bridge Controller"
 	help

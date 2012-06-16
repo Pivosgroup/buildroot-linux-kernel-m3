@@ -119,7 +119,7 @@ config SPI_DAVINCI
 
 config SPI_GPIO
 	tristate "GPIO-based bitbanging SPI Master"
-	depends on GENERIC_GPIO
+#	depends on GENERIC_GPIO
 	select SPI_BITBANG
 	help
 	  This simple GPIO bitbanging SPI master uses the arch-neutral GPIO

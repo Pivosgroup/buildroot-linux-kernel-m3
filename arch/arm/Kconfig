@@ -31,6 +31,9 @@ config ARM
 	  Europe.  There is an ARM Linux project with a web page at
 	  <http://www.arm.linux.org.uk/>.
 
+config HOLES_IN_ZONE
+        bool
+
 config HAVE_PWM
 	bool
 
@@ -205,6 +208,9 @@ config VECTORS_BASE
 	help
 	  The base address of exception vectors.
 
+config AMLOGIC_SERIES
+        bool
+
 source "init/Kconfig"
 
 source "kernel/Kconfig.freezer"
@@ -233,6 +239,36 @@ config ARCH_AAEC2000
 	select HAVE_CLK
 	help
 	  This enables support for systems based on the Agilent AAEC-2000
+
+config ARCH_MESON
+	bool "Amlogic Meson series"
+	depends on MMU
+	select AMLOGIC_SERIES
+	select HOLES_IN_ZONE
+	select CPU_V7
+	select FIQ
+	select HAVE_CLK
+	select COMMON_CLKDEV
+	select ARCH_HAS_CPUFREQ
+	select GENERIC_TIME
+	select GENERIC_CLOCKEVENTS
+	help
+	  Amlogic Meson series based systems
+
+config ARCH_MESON3
+	bool "Amlogic Meson3 series"
+	depends on MMU
+	select AMLOGIC_SERIES
+	select HOLES_IN_ZONE
+	select CPU_V7
+	select FIQ
+	select HAVE_CLK
+	select COMMON_CLKDEV
+	select ARCH_HAS_CPUFREQ
+	select GENERIC_TIME
+	select GENERIC_CLOCKEVENTS
+	help
+	  Amlogic Meson series based systems
 
 config ARCH_INTEGRATOR
 	bool "ARM Ltd. Integrator family"
@@ -850,6 +886,10 @@ source "arch/arm/mach-ks8695/Kconfig"
 source "arch/arm/mach-lh7a40x/Kconfig"
 
 source "arch/arm/mach-loki/Kconfig"
+
+source "arch/arm/mach-meson/Kconfig"
+
+source "arch/arm/mach-meson3/Kconfig"
 
 source "arch/arm/mach-msm/Kconfig"
 

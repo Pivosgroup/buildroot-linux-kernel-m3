@@ -27,7 +27,6 @@
 #include <linux/moduleparam.h>
 #include <linux/ftrace_event.h>
 #include <linux/slab.h>
-#include <linux/tboot.h>
 #include "kvm_cache_regs.h"
 #include "x86.h"
 
@@ -1177,16 +1176,9 @@ static __init int vmx_disabled_by_bios(void)
 	u64 msr;
 
 	rdmsrl(MSR_IA32_FEATURE_CONTROL, msr);
-	if (msr & FEATURE_CONTROL_LOCKED) {
-		if (!(msr & FEATURE_CONTROL_VMXON_ENABLED_INSIDE_SMX)
-			&& tboot_enabled())
-			return 1;
-		if (!(msr & FEATURE_CONTROL_VMXON_ENABLED_OUTSIDE_SMX)
-			&& !tboot_enabled())
-			return 1;
-	}
-
-	return 0;
+	return (msr & (FEATURE_CONTROL_LOCKED |
+		       FEATURE_CONTROL_VMXON_ENABLED))
+	    == FEATURE_CONTROL_LOCKED;
 	/* locked but not enabled */
 }
 
@@ -1194,23 +1186,21 @@ static int hardware_enable(void *garbage)
 {
 	int cpu = raw_smp_processor_id();
 	u64 phys_addr = __pa(per_cpu(vmxarea, cpu));
-	u64 old, test_bits;
+	u64 old;
 
 	if (read_cr4() & X86_CR4_VMXE)
 		return -EBUSY;
 
 	INIT_LIST_HEAD(&per_cpu(vcpus_on_cpu, cpu));
 	rdmsrl(MSR_IA32_FEATURE_CONTROL, old);
-
-	test_bits = FEATURE_CONTROL_LOCKED;
-	test_bits |= FEATURE_CONTROL_VMXON_ENABLED_OUTSIDE_SMX;
-	if (tboot_enabled())
-		test_bits |= FEATURE_CONTROL_VMXON_ENABLED_INSIDE_SMX;
-
-	if ((old & test_bits) != test_bits) {
+	if ((old & (FEATURE_CONTROL_LOCKED |
+		    FEATURE_CONTROL_VMXON_ENABLED))
+	    != (FEATURE_CONTROL_LOCKED |
+		FEATURE_CONTROL_VMXON_ENABLED))
 		/* enable and lock */
-		wrmsrl(MSR_IA32_FEATURE_CONTROL, old | test_bits);
-	}
+		wrmsrl(MSR_IA32_FEATURE_CONTROL, old |
+		       FEATURE_CONTROL_LOCKED |
+		       FEATURE_CONTROL_VMXON_ENABLED);
 	write_cr4(read_cr4() | X86_CR4_VMXE); /* FIXME: not cpu hotplug safe */
 	asm volatile (ASM_VMX_VMXON_RAX
 		      : : "a"(&phys_addr), "m"(phys_addr)
@@ -4125,10 +4115,6 @@ static void vmx_cpuid_update(struct kvm_vcpu *vcpu)
 	}
 }
 
-static void vmx_set_supported_cpuid(u32 func, struct kvm_cpuid_entry2 *entry)
-{
-}
-
 static struct kvm_x86_ops vmx_x86_ops = {
 	.cpu_has_kvm_support = cpu_has_kvm_support,
 	.disabled_by_bios = vmx_disabled_by_bios,
@@ -4200,8 +4186,6 @@ static struct kvm_x86_ops vmx_x86_ops = {
 	.cpuid_update = vmx_cpuid_update,
 
 	.rdtscp_supported = vmx_rdtscp_supported,
-
-	.set_supported_cpuid = vmx_set_supported_cpuid,
 };
 
 static int __init vmx_init(void)

@@ -162,8 +162,14 @@ static ssize_t firmware_loading_store(struct device *dev,
 			mutex_unlock(&fw_lock);
 			break;
 		}
-		vfree(fw_priv->fw->data);
+		vunmap(fw_priv->fw->data);
 		fw_priv->fw->data = NULL;
+		if (fw_priv->fw->pages) { 
+			 for (i = 0; i < PFN_UP(fw_priv->fw->size); i++) 
+				 __free_page(fw_priv->fw->pages[i]); 
+			 kfree(fw_priv->fw->pages); 
+		 } 
+
 		for (i = 0; i < fw_priv->nr_pages; i++)
 			__free_page(fw_priv->pages[i]);
 		kfree(fw_priv->pages);
@@ -176,7 +182,7 @@ static ssize_t firmware_loading_store(struct device *dev,
 		break;
 	case 0:
 		if (test_bit(FW_STATUS_LOADING, &fw_priv->status)) {
-			vfree(fw_priv->fw->data);
+			vunmap(fw_priv->fw->data);
 			fw_priv->fw->data = vmap(fw_priv->pages,
 						 fw_priv->nr_pages,
 						 0, PAGE_KERNEL_RO);
@@ -184,7 +190,9 @@ static ssize_t firmware_loading_store(struct device *dev,
 				dev_err(dev, "%s: vmap() failed\n", __func__);
 				goto err;
 			}
-			/* Pages will be freed by vfree() */
+			 /* Pages are now owned by 'struct firmware' */ 
+			 fw_priv->fw->pages = fw_priv->pages; 
+			 fw_priv->pages = NULL; 
 			fw_priv->page_array_size = 0;
 			fw_priv->nr_pages = 0;
 			complete(&fw_priv->completion);
@@ -571,14 +579,20 @@ void
 release_firmware(const struct firmware *fw)
 {
 	struct builtin_fw *builtin;
-
+	int i;
 	if (fw) {
 		for (builtin = __start_builtin_fw; builtin != __end_builtin_fw;
 		     builtin++) {
 			if (fw->data == builtin->data)
 				goto free_fw;
 		}
-		vfree(fw->data);
+	 vunmap(fw->data); 
+	if (fw->pages) { 
+		for (i = 0; i < PFN_UP(fw->size); i++) 
+			 __free_page(fw->pages[i]); 
+	 	kfree(fw->pages); 
+	} 
+
 	free_fw:
 		kfree(fw);
 	}

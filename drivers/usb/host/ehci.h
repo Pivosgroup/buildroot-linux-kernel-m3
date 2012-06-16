@@ -536,16 +536,6 @@ struct ehci_fstn {
 
 /*-------------------------------------------------------------------------*/
 
-/* Prepare the PORTSC wakeup flags during controller suspend/resume */
-
-#define ehci_prepare_ports_for_controller_suspend(ehci)		\
-		ehci_adjust_port_wakeup_flags(ehci, true);
-
-#define ehci_prepare_ports_for_controller_resume(ehci)		\
-		ehci_adjust_port_wakeup_flags(ehci, false);
-
-/*-------------------------------------------------------------------------*/
-
 #ifdef CONFIG_USB_EHCI_ROOT_HUB_TT
 
 /*

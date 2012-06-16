@@ -1,0 +1,39 @@
+config SND_AML_SOC
+	tristate "soc audio for AMLogic Ssystem-on-system"
+	depends on ARCH_MESON || ARCH_MESON2 || ARCH_A1H || ARM 
+	help
+	  Say Y or M if you want to add support for codecs attached to
+	  the AMLogic I2S interface. You will also need
+	  to select the audio interfaces to support below.
+	  
+config SND_AML_M1
+	tristate "M1 evaluation board with internel audio dac"
+	depends on SND_AML_SOC
+
+
+config SND_AML_M1_MID_WM8900
+	tristate "AML6236 MID board with WM8900"
+	depends on SND_AML_SOC
+        select SND_SOC_WM8900 if SND_AML_M1_MID_WM8900
+
+config SND_AML_M1_ARMDEV_WM8900
+	tristate "AML8726M ARM Dev board with WM8900"
+	depends on SND_AML_SOC
+		select SND_SOC_WM8900 if SND_AML_M1_ARMDEV_WM8900
+	
+config SND_AML_M1_MID_RT5621
+	tristate "AML8726M MID board with RT5621"
+	depends on SND_AML_SOC
+		select SND_SOC_RT5621 if SND_AML_M1_MID_RT5621
+config SND_AML_M2
+	tristate "M2 evaluation board with internal audio codec"
+	depends on SND_AML_SOC
+
+config SND_AML_M3
+	tristate "M3 evaluation board with internal audio codec"
+	depends on SND_AML_SOC
+	
+config SND_AML_M3_CS4334
+    tristate "AMLM3 board with CS4334"
+    depends on SND_AML_SOC
+    select SND_SOC_CS4334 if SND_AML_M3_CS4334

@@ -487,7 +487,7 @@ static struct mtd_part *add_one_partition(struct mtd_info *master,
 	slave->mtd.ecclayout = master->ecclayout;
 	if (master->block_isbad) {
 		uint64_t offs = 0;
-
+	
 		while (offs < slave->mtd.size) {
 			if (master->block_isbad(master,
 						offs + slave->offset))

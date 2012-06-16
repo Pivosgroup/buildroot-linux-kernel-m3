@@ -1,0 +1,16 @@
+#
+# Input core configuration
+#
+
+
+
+config ADC_TOUCHSCREEN_AM
+	tristate "Amlogic ADC touchscreen support"
+	depends on SARADC_AM
+	help
+	  Say Y here if you want to use the amlogic ADC touchscreen.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called .
+
+

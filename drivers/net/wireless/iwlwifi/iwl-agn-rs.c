@@ -2077,12 +2077,10 @@ static void rs_rate_scale_perform(struct iwl_priv *priv,
 	}
 	/* Else we have enough samples; calculate estimate of
 	 * actual average throughput */
-	if (window->average_tpt != ((window->success_ratio *
-			tbl->expected_tpt[index] + 64) / 128)) {
-		IWL_ERR(priv, "expected_tpt should have been calculated by now\n");
-		window->average_tpt = ((window->success_ratio *
-					tbl->expected_tpt[index] + 64) / 128);
-	}
+
+	/* Sanity-check TPT calculations */
+	BUG_ON(window->average_tpt != ((window->success_ratio *
+			tbl->expected_tpt[index] + 64) / 128));
 
 	/* If we are searching for better modulation mode, check success. */
 	if (lq_sta->search_better_tbl &&

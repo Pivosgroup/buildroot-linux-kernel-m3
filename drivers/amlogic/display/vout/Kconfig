@@ -1,0 +1,108 @@
+#
+# Video output configuration
+#
+menu "Amlogic video output module"
+
+config AM_TV_OUTPUT
+	tristate "TV output"
+	default y
+	help  
+		tv output module
+
+config AM_TCON_OUTPUT
+	tristate "LCD output" 
+	help  
+		LCD output module
+
+choice
+    prompt "LCD Output I/F Type"
+    depends on AM_TCON_OUTPUT
+    help
+        For TFT LCD panels, there are three interfaces: RGB TTL I/F for Traditional panels, LVDS I/F for for New high resolution panels, and MiniLVDS I/F for special panels.
+        Our early chips only support RGB TTL I/F. From M3 chips, also support LVDS and MiniLVDS I/F.
+
+config AM_LCD_TTL_OUTPUT
+    bool "RGB TTL Interface"
+    help
+        LCD output module, RGB TTL Interface, for Tranditional lcd panels
+
+config AM_LCD_LVDS_OUTPUT
+    bool "LVDS Interface"
+    help        
+        LCD output module, Internal LVDS Interface, for new high resolution panels
+
+config AM_LCD_MLVDS_OUTPUT
+    bool "miniLVDS Interface"
+    help        
+        LCD output module, Internal miniLVDS Interface, for special panels
+endchoice
+
+config AML_TCON_W7NEW
+	tristate "W7NEW panel driver"
+	depends on  AM_LCD_TTL_OUTPUT
+	help  
+		W7NEW LCD panel module
+
+config AML_TCON_W8
+	tristate "W8 panel driver"
+	depends on  AM_LCD_TTL_OUTPUT
+	help  
+		W8 LCD panel module
+
+config AML_TCON_Y7
+	tristate "Y7 panel driver"
+	depends on  AM_LCD_TTL_OUTPUT
+	help  
+		Y7 LCD panel module
+		
+config AML_TCON_S7
+	tristate "S7 panel driver"
+	depends on  AM_LCD_TTL_OUTPUT
+	help  
+		S7 LCD panel module			
+
+config AML_LVDS_R_AT070TNA2
+	tristate "R_AT070TNA2"
+	depends on AM_LCD_LVDS_OUTPUT
+	help
+		AT070TNA2 LVDS panel.
+		
+config AML_LVDS_HV070WSA_100
+  tristate "HV070WSA_100"
+  depends on AM_LCD_LVDS_OUTPUT
+  help
+	  HV070WSA_100 LVDS panel.
+	  
+config AML_LVDS_G_TM081JF01
+  tristate "G_TM081JF01"
+  depends on AM_LCD_LVDS_OUTPUT
+  help
+	  G_TM081JF01 LVDS panel.
+
+
+config AML_MLVDS_A_TM080XDH		
+	tristate "A_TM080XDH"
+	depends on AM_LCD_MLVDS_OUTPUT
+	help
+		TM080XDH miniLVDS panel.
+
+config AML_LVDS_G_W13		
+	tristate "W13"
+	depends on AM_LCD_LVDS_OUTPUT
+	help
+		W13 LVDS panel.
+		
+config AML_MLVDS_G_TM080XDH		
+	tristate "G_TM080XDH"
+	depends on AM_LCD_MLVDS_OUTPUT
+	help
+		TM080XDH miniLVDS panel.
+		
+config AML_MLVDS_G_TM080XDH2D		
+	tristate "G_TM080XDH_2D"
+	depends on AM_LCD_MLVDS_OUTPUT
+	help
+		TM080XDH_2D miniLVDS panel.
+		
+endmenu
+	

@@ -43,7 +43,7 @@ static u64		turbo_frequency;
 
 static u64		first_time, last_time;
 
-static bool		power_only;
+static int		power_only;
 
 
 struct per_pid;

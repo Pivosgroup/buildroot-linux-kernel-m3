@@ -1819,7 +1819,7 @@ static int do_start_stop(struct fsg_dev *fsg)
 		if (loej) {		// Simulate an unload/eject
 			up_read(&fsg->filesem);
 			down_write(&fsg->filesem);
-			fsg_lun_close(curlun);
+			fsg_lun_close(NULL, curlun);
 			up_write(&fsg->filesem);
 			down_read(&fsg->filesem);
 		}
@@ -3141,7 +3141,8 @@ static void fsg_release(struct kref *ref)
 
 static void lun_release(struct device *dev)
 {
-	struct rw_semaphore	*filesem = dev_get_drvdata(dev);
+	struct fsg_common *common = dev_get_drvdata(dev);
+	struct rw_semaphore	*filesem = &common->filesem;
 	struct fsg_dev		*fsg =
 		container_of(filesem, struct fsg_dev, filesem);
 
@@ -3164,7 +3165,7 @@ static void /* __init_or_exit */ fsg_unbind(struct usb_gadget *gadget)
 		if (curlun->registered) {
 			device_remove_file(&curlun->dev, &dev_attr_ro);
 			device_remove_file(&curlun->dev, &dev_attr_file);
-			fsg_lun_close(curlun);
+			fsg_lun_close(NULL, curlun);
 			device_unregister(&curlun->dev);
 			curlun->registered = 0;
 		}
@@ -3352,7 +3353,7 @@ static int __init fsg_bind(struct usb_gadget *gadget)
 		kref_get(&fsg->ref);
 
 		if (mod_data.file[i] && *mod_data.file[i]) {
-			if ((rc = fsg_lun_open(curlun,
+			if ((rc = fsg_lun_open(NULL, curlun,
 					mod_data.file[i])) != 0)
 				goto out;
 		} else if (!mod_data.removable) {

@@ -1,0 +1,13 @@
+# mount point	fstype		device			device2
+/spi		mtd		spi
+/uboot		mtd		uboot
+/ubootenv	mtd		ubootenv
+/recovery	mtd		recovery
+/boot		mtd		boot
+/logo		mtd		logo
+/system		yaffs2		system
+/cache		yaffs2		cache
+/media	vfat	/dev/block/avnftl4
+/data	yaffs2	userdata
+/sdcard		vfat	/dev/block/cardblksd#
+/udisk	vfat	/dev/block/sda#

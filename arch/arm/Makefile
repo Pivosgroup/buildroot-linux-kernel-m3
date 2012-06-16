@@ -23,7 +23,7 @@ KBUILD_CFLAGS	+=$(call cc-option,-marm,)
 
 # Do not use arch/arm/defconfig - it's always outdated.
 # Select a platform tht is kept up-to-date
-KBUILD_DEFCONFIG := versatile_defconfig
+KBUILD_DEFCONFIG := meson_defconfig
 
 # defines filename extension depending memory management type.
 ifeq ($(CONFIG_MMU),)
@@ -139,6 +139,8 @@ machine-$(CONFIG_ARCH_KS8695)		:= ks8695
 machine-$(CONFIG_ARCH_L7200)		:= l7200
 machine-$(CONFIG_ARCH_LH7A40X)		:= lh7a40x
 machine-$(CONFIG_ARCH_LOKI) 		:= loki
+machine-$(CONFIG_ARCH_MESON)		:= meson
+machine-$(CONFIG_ARCH_MESON3)		:= meson3
 machine-$(CONFIG_ARCH_MMP)		:= mmp
 machine-$(CONFIG_ARCH_MSM)		:= msm
 machine-$(CONFIG_ARCH_MV78XX0)		:= mv78xx0
@@ -255,7 +257,7 @@ archprepare:
 # Convert bzImage to zImage
 bzImage: zImage
 
-zImage Image xipImage bootpImage uImage: vmlinux
+ugImage uzImage zImage Image xipImage bootpImage uImage: vmlinux
 	$(Q)$(MAKE) $(build)=$(boot) MACHINE=$(MACHINE) $(boot)/$@
 
 zinstall install: vmlinux

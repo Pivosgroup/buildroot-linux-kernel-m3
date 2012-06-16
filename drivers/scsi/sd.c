@@ -2448,6 +2448,7 @@ static int sd_resume(struct device *dev)
 
 done:
 	scsi_disk_put(sdkp);
+	scsi_test_unit_ready(sdkp->device, SD_TIMEOUT, SD_MAX_RETRIES,NULL);
 	return ret;
 }
 

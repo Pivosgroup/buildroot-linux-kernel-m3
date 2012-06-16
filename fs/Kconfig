@@ -9,6 +9,7 @@ if BLOCK
 source "fs/ext2/Kconfig"
 source "fs/ext3/Kconfig"
 source "fs/ext4/Kconfig"
+source "fs/exfat/Kconfig"
 
 config FS_XIP
 # execute in place
@@ -175,6 +176,7 @@ source "fs/befs/Kconfig"
 source "fs/bfs/Kconfig"
 source "fs/efs/Kconfig"
 source "fs/jffs2/Kconfig"
+source "fs/yaffs2/Kconfig"
 # UBIFS File system configuration
 source "fs/ubifs/Kconfig"
 source "fs/logfs/Kconfig"

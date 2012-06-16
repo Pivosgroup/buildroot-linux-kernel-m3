@@ -1,0 +1,17 @@
+#support amlogic rtc
+
+menu "Amlogic RTC support"
+
+if !RTC_CLASS
+comment "Need config 'Real Time Clock'"
+endif
+
+config AML_RTC
+		bool "Amlogic RTC support"
+		default n
+		depends on AMLOGIC_SERIES && RTC_CLASS
+		
+		help
+		  This is amlogic inernal rtc driver
+		  
+endmenu

@@ -48,6 +48,9 @@
 #define DVB_DEVICE_NET        7
 #define DVB_DEVICE_OSD        8
 
+/*Descrambler added by Gong Ke*/
+#define DVB_DEVICE_DSC        9
+
 #define DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr) \
 	static short adapter_nr[] = \
 		{[0 ... (DVB_MAX_ADAPTERS - 1)] = DVB_UNSET }; \

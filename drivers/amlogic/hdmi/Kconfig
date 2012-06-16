@@ -1,0 +1,18 @@
+
+menu "Amlogic HDMI Support"
+
+
+config AML_HDMI_TX
+        tristate "HDMI output enable"
+        default y
+        help  
+                hdmi output enable,It should be enalbe if board have hdmi out interface
+
+if AML_HDMI_TX
+config AML_HDMI_TX_HDCP
+        tristate "HDMITX hdcp enable"
+        default n
+        help  
+                hdmitx hdcp enable,It should be enalbe if board have hdmitx hdcp key
+endif        
+endmenu

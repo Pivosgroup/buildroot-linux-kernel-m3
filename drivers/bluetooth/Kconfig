@@ -15,7 +15,7 @@ config BT_HCIBTUSB
 
 config BT_HCIBTSDIO
 	tristate "HCI SDIO driver"
-	depends on MMC
+	depends on SDIO
 	help
 	  Bluetooth HCI SDIO driver.
 	  This driver is required if you want to use Bluetooth device with

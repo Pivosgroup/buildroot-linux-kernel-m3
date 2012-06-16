@@ -1,0 +1,143 @@
+menu "Meson3 platform type"
+	depends on ARCH_MESON3
+
+config MACH_MESON3_REFF01
+	select GENERIC_ALLOCATOR
+	bool "Support M3 (M3_SKT_V1) platform"
+	help
+	  Include support for the AMLOGIC M3 Socket Emulation Baseboard platform.
+
+config MACH_MESON3_REFF02
+	select GENERIC_ALLOCATOR
+	bool "Support M3 (WA) platform"
+	help
+	  Include support for the WA M3 board platform.
+	  
+config MACH_MESON3_REFF03
+	select GENERIC_ALLOCATOR
+	bool "Support M3 (Shuttle) platform"
+	help
+	  Include support for the Shuttle M3 board platform.	  
+
+config MACH_MESON3_REFF04
+	select GENERIC_ALLOCATOR
+	bool "Support M3 (Ramos) platform"
+	help
+	  Include support for the Ramos M3 board platform.
+
+config MACH_MESON3_REFF05
+	select GENERIC_ALLOCATOR
+	bool "Support M3 (SOCKET) platform"
+	help
+	  Include support for the AML M3 socket board platform.
+
+config MACH_MESON3_REFF06
+	select GENERIC_ALLOCATOR
+	bool "Support M3 (Ainol) platform"
+	help
+	  Include support for the AML M3 socket board platform.
+
+config MACH_MESON3_REFF07
+	select GENERIC_ALLOCATOR
+	bool "Support M3 (Malata) platform"
+	help
+	  Include support for the AML M3 Malata board platform.
+	    
+config MACH_MESON3_REFF08
+	select GENERIC_ALLOCATOR
+	bool "Support M3 F08 platform"
+	help
+	  Include support for the AML M3 socket board platform.
+
+config MACH_MESON3_REFF09
+	select GENERIC_ALLOCATOR
+	bool "Support M3 F09 platform"
+	help
+	  Include support for the AML M3 board platform.
+
+config MACH_MESON3_REFF10
+	select GENERIC_ALLOCATOR
+	bool "Support M3 (Asus) MBX platform"
+	help
+	  Include support for the Asus M3 board platform.
+
+config MACH_MESON3_REFF11
+	select GENERIC_ALLOCATOR
+	bool "Support M3 (Gadmei) platform"
+	help
+	  Include support for the AML M3 Gadmei board platform.
+
+config MACH_MESON3_REFF11_P800
+	select GENERIC_ALLOCATOR
+	bool "Support M3 (Gadmei Portrait 1280*800)"
+	help
+	  Include support for the AML M3 Gadmei board platform.
+
+config MACH_MESON3_REFF11_4329
+	select GENERIC_ALLOCATOR
+	bool "Support M3 (Gadmei BC 4329)"
+	help
+	  Include support for the AML M3 Gadmei board platform.
+
+config MACH_MESON3_REFF14
+	select GENERIC_ALLOCATOR
+	bool "Support MT720 (Keenhi M3 1024*600) platform"
+	help
+	  Include support for the Keenhi M3 board platform.
+
+config MACH_MESON3_REFF16
+	select GENERIC_ALLOCATOR
+	bool "Support M3 MBX platform"
+	help
+	  Include support for the Ref M3 board platform.
+	  
+config MACH_MESON3_REFF16_1
+	select GENERIC_ALLOCATOR
+	bool "Support M3(lenovo) MBX platform"
+	help
+	  Include support for the Ref M3 board platform.	  
+config MACH_MESON3_STV_MBX_MC
+	select GENERIC_ALLOCATOR
+	bool "Support M3 (geniatech) platform"
+	help
+	  Include support for the AML M3 geniatech board platform.
+config STV
+	bool "support STV mod"
+	help
+		Just for all stv config.
+config MACH_MESON3_REFF20
+	select GENERIC_ALLOCATOR
+	bool "Support M3 Bestv MBX platform"
+	help
+	  Include support for the Ref M3 board platform.
+
+config MESON3_CLOCK_TICK_RATE
+    int "Clock Tick Rate"
+	default 25000000
+
+config AML_SUSPEND
+		bool "Support M3 A9 domain power down"
+		depends on SUSPEND
+		default n
+		
+config SUSPEND_WATCHDOG
+	bool "Enable watchdog while suspend and resume"
+	depends on AML_SUSPEND
+	default n
+
+config AML_INIT_GATE_OFF
+	bool "turn the gates off when system init"
+	default n
+	
+config CLK81_DFS
+	bool "scale clk81 freqence in dynamic mode"
+	default n
+
+config AML_SUSPEND_FIRMWARE_BASE
+	hex
+	default 0x1ff00000
+	depends on AML_SUSPEND
+	help
+	  The base address of 1MB of memory to be reserved for suspend firmware.
+
+endmenu
