@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2012 ARM Limited. All rights reserved.
+ * Copyright (C) 2010-2011 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -736,6 +736,7 @@ static u32 subsystem_maligp_irq_handler_upper_half(mali_core_renderunit * core)
 
 	irq_readout = mali_core_renderunit_register_read(core, MALIGP2_REG_ADDR_MGMT_INT_STAT);
 
+
 	if ( MALIGP2_REG_VAL_IRQ_MASK_NONE != irq_readout )
 	{
 		/* Mask out all IRQs from this core until IRQ is handled */
@@ -1097,7 +1098,6 @@ static _mali_osk_errcode_t subsystem_maligp_get_new_job_from_user(struct mali_co
 	job = GET_JOB_EMBEDDED_PTR(jobgp);
 
 	job->session = session;
-	job->flags = MALI_UK_START_JOB_FLAG_DEFAULT; /* Current flags only make sence for PP jobs */
 	job_priority_set(job, jobgp->user_input.priority);
 	job_watchdog_set(job, jobgp->user_input.watchdog_msecs );
 	jobgp->heap_current_addr = jobgp->user_input.frame_registers[4];
@@ -1111,11 +1111,16 @@ static _mali_osk_errcode_t subsystem_maligp_get_new_job_from_user(struct mali_co
 	jobgp->tid = _mali_osk_get_tid();
 #endif
 
-	if (mali_job_queue_full(session))
+	if (NULL != session->job_waiting_to_run)
 	{
-		/* Cause jobgp to free: */
-		user_ptr_job_input->status = _MALI_UK_START_JOB_NOT_STARTED_DO_REQUEUE;
-		goto function_exit;
+		/* IF NOT( newjow HAS HIGHER PRIORITY THAN waitingjob) EXIT_NOT_START new job */
+		if(!job_has_higher_priority(job, session->job_waiting_to_run))
+		{
+			/* The job we try to add does NOT have higher pri than current */
+			/* Cause jobgp to free: */
+			user_ptr_job_input->status = _MALI_UK_START_JOB_NOT_STARTED_DO_REQUEUE;
+			goto function_exit;
+		}
 	}
 
 	/* We now know that we have a job, and a slot to put it in */
@@ -1277,9 +1282,9 @@ static void subsystem_maligp_return_job_to_user( mali_core_job * job, mali_subsy
 	job_input= &(jobgp->user_input);
 	session = job->session;
 
-	MALI_DEBUG_PRINT(5, ("Mali GP: Job: 0x%08x OUTPUT to user. Runtime: %d us, irq readout %x\n",
+	MALI_DEBUG_PRINT(5, ("Mali GP: Job: 0x%08x OUTPUT to user. Runtime: %d ms, irq readout %x\n",
 			(u32)jobgp->user_input.user_job_ptr,
-			job->render_time_usecs,
+			job->render_time_msecs,
 		   	jobgp->irq_status)) ;
 
 	_mali_osk_memset(job_out, 0 , sizeof(_mali_uk_gp_job_finished_s));
@@ -1314,7 +1319,7 @@ static void subsystem_maligp_return_job_to_user( mali_core_job * job, mali_subsy
 	job_out->perf_counter1 = jobgp->perf_counter1;
 	job_out->perf_counter_src0 = jobgp->user_input.perf_counter_src0 ;
 	job_out->perf_counter_src1 = jobgp->user_input.perf_counter_src1 ;
-	job_out->render_time = job->render_time_usecs;
+	job_out->render_time = job->render_time_msecs;
 #if defined(USING_MALI400_L2_CACHE)
 	job_out->perf_counter_l2_src0 = jobgp->perf_counter_l2_src0;
 	job_out->perf_counter_l2_src1 = jobgp->perf_counter_l2_src1;

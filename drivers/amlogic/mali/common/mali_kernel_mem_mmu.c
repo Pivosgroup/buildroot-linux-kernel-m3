@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2012 ARM Limited. All rights reserved.
+ * Copyright (C) 2010-2011 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -61,11 +61,6 @@
  * Extract the memory address from an PDE/PTE entry
  */
 #define MALI_MMU_ENTRY_ADDRESS(value) ((value) & 0xFFFFFC00)
-
-/**
- * Calculate memory address from PDE and PTE
- */
-#define MALI_MMU_ADDRESS(pde, pte) (((pde)<<22) | ((pte)<<12))
 
 /**
  * Linux kernel version has marked SA_SHIRQ as deprecated, IRQF_SHARED should be used.
@@ -937,9 +932,7 @@ static _mali_osk_errcode_t mali_memory_core_system_info_fill(_mali_system_info* 
 {
 	_mali_mem_info * mem_info;
 
-	/* Make sure we won't leak any memory. It could also be that it's an
-	 * uninitialized variable, but the caller should have zeroed the
-	 * variable. */
+	/* make sure we won't leak any memory. It could also be that it's an uninitialized variable, but that would be a bug in the caller */
 	MALI_DEBUG_ASSERT(NULL == info->mem_info);
 
 	info->has_mmu = 1;
@@ -2619,22 +2612,11 @@ static void mali_address_manager_release(mali_memory_allocation * descriptor)
 
 	for (i = first_pde_idx; i <= last_pde_idx; i++)
 	{
-		int size_inside_pte = left < 0x400000 ? left : 0x400000;
-		const int first_pte_idx = MALI_MMU_PTE_ENTRY(mali_address);
-		int last_pte_idx = MALI_MMU_PTE_ENTRY(mali_address + size_inside_pte - 1);
+		const int size_inside_pte = left < 0x400000 ? left : 0x400000;
 
-		if (last_pte_idx < first_pte_idx)
-		{
-			/* The last_pte_idx is into the next PTE, crop it to fit into this */
-			last_pte_idx = 1023; /* 1024 PTE entries, so 1023 is the last one */
-			size_inside_pte = MALI_MMU_ADDRESS(i + 1, 0) - mali_address;
-		}
-
-		MALI_DEBUG_ASSERT_POINTER(session_data->page_entries_mapped[i]);
-		MALI_DEBUG_ASSERT(0 != session_data->page_entries_usage_count[i]);
-		MALI_DEBUG_PRINT(4, ("PDE %d: zapping entries %d through %d, address 0x%08X, size 0x%08X, left 0x%08X (page table at 0x%08X)\n",
-		                     i, first_pte_idx, last_pte_idx, mali_address, size_inside_pte, left,
-		                     MALI_MMU_ENTRY_ADDRESS(_mali_osk_mem_ioread32(session_data->page_directory_mapped, i * sizeof(u32)))));
+        MALI_DEBUG_ASSERT_POINTER(session_data->page_entries_mapped[i]);
+        MALI_DEBUG_ASSERT(0 != session_data->page_entries_usage_count[i]);
+		MALI_DEBUG_PRINT(4, ("PDE %d\n", i));
 
 		session_data->page_entries_usage_count[i]--;
 
@@ -2652,11 +2634,19 @@ static void mali_address_manager_release(mali_memory_allocation * descriptor)
 		else
 		{
 			int j;
+			const int first_pte_idx = MALI_MMU_PTE_ENTRY(mali_address);
+			const int last_pte_idx = MALI_MMU_PTE_ENTRY(mali_address + size_inside_pte - 1);
+
+			MALI_DEBUG_PRINT(4, ("Partial page table fill detected, zapping entries %d through %d (page table at 0x%08X)\n", first_pte_idx, last_pte_idx, MALI_MMU_ENTRY_ADDRESS(_mali_osk_mem_ioread32(session_data->page_directory_mapped, i * sizeof(u32)))));
 
 			for (j = first_pte_idx; j <= last_pte_idx; j++)
 			{
 				_mali_osk_mem_iowrite32(session_data->page_entries_mapped[i], j * sizeof(u32), 0);
 			}
+
+			MALI_DEBUG_PRINT(5, ("zap complete\n"));
+
+			mali_address += size_inside_pte;
 
 #if defined USING_MALI400_L2_CACHE
 			if (1 == has_active_mmus)
@@ -2667,7 +2657,6 @@ static void mali_address_manager_release(mali_memory_allocation * descriptor)
 #endif
 		}
 		left -= size_inside_pte;
-		mali_address += size_inside_pte;
 	}
 
 #if defined USING_MALI400_L2_CACHE

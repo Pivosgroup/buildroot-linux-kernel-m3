@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2012 ARM Limited. All rights reserved.
+ * Copyright (C) 2010-2011 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -156,7 +156,7 @@ void mali_utilization_term(void)
 
 
 
-void mali_utilization_core_start(u64 time_now)
+void mali_utilization_core_start(void)
 {
 	if (_mali_osk_atomic_inc_return(&num_running_cores) == 1)
 	{
@@ -167,16 +167,8 @@ void mali_utilization_core_start(u64 time_now)
 
 		_mali_osk_lock_wait(time_data_lock, _MALI_OSK_LOCKMODE_RW);
 
-		if (time_now < period_start_time)
-		{
-			/*
-			 * This might happen if the calculate_gpu_utilization() was able
-			 * to run between the sampling of time_now and us grabbing the lock above
-			 */
-			time_now = period_start_time;
-		}
+		work_start_time = _mali_osk_time_get_ns();
 
-		work_start_time = time_now;
 		if (timer_running != MALI_TRUE)
 		{
 			timer_running = MALI_TRUE;
@@ -195,24 +187,18 @@ void mali_utilization_core_start(u64 time_now)
 
 
 
-void mali_utilization_core_end(u64 time_now)
+void mali_utilization_core_end(void)
 {
 	if (_mali_osk_atomic_dec_return(&num_running_cores) == 0)
 	{
 		/*
 		 * No more cores are working, so accumulate the time we was busy.
 		 */
+		u64 time_now;
+
 		_mali_osk_lock_wait(time_data_lock, _MALI_OSK_LOCKMODE_RW);
 
-		if (time_now < work_start_time)
-		{
-			/*
-			 * This might happen if the calculate_gpu_utilization() was able
-			 * to run between the sampling of time_now and us grabbing the lock above
-			 */
-			time_now = work_start_time;
-		}
-
+		time_now = _mali_osk_time_get_ns();
 		accumulated_work_time += (time_now - work_start_time);
 		work_start_time = 0;
 

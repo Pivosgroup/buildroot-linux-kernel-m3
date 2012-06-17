@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2012 ARM Limited. All rights reserved.
+ * Copyright (C) 2010-2011 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -35,7 +35,7 @@
 #define WATCHDOG_MSECS_MAX 3600000 /* 1 hour */
 #define WATCHDOG_MSECS_DEFAULT 900000 /* 15 mins */
 
-/* max value that will be converted from jiffies to micro seconds and written to job->render_time_usecs */
+/* max value that will be converted from jiffies to msecs and written to job->render_time_msecs */
 #define JOB_MAX_JIFFIES 100000
 
 int mali_hang_check_interval = HANG_CHECK_MSECS_DEFAULT;
@@ -851,16 +851,14 @@ static void find_and_abort(mali_core_session* session, u32 abort_id)
 
 	MALI_CORE_SUBSYSTEM_MUTEX_GRAB( subsystem );
 
-	job = mali_job_queue_abort_job(session, abort_id);
-	if (NULL != job)
+	job = session->job_waiting_to_run;
+	if ( (job!=NULL) && job_should_be_aborted (job, abort_id) )
 	{
 		MALI_DEBUG_PRINT(3, ("Core: Aborting %s job, with id nr: %u, from the waiting_to_run slot.\n", subsystem->name, abort_id ));
-		if (mali_job_queue_empty(session))
-		{
-			_mali_osk_list_delinit(&(session->awaiting_sessions_list));
-		}
+		session->job_waiting_to_run = NULL;
+		_mali_osk_list_delinit(&(session->awaiting_sessions_list));
 		subsystem->awaiting_sessions_sum_all_priorities--;
-		subsystem->return_job_to_user(job , JOB_STATUS_END_ABORT);
+		subsystem->return_job_to_user( job , JOB_STATUS_END_ABORT);
 	}
 
 	_MALI_OSK_LIST_FOREACHENTRY( core, tmp, &session->renderunits_working_head, mali_core_renderunit, list )
@@ -1025,7 +1023,6 @@ static void mali_core_subsystem_move_set_working(mali_core_renderunit *core, mal
 {
 	mali_core_subsystem *subsystem;
 	mali_core_session *session;
-	u64 time_now;
 
 	session   = job->session;
 	subsystem = core->subsystem;
@@ -1038,14 +1035,9 @@ static void mali_core_subsystem_move_set_working(mali_core_renderunit *core, mal
 
 	MALI_DEBUG_PRINT(5, ("Core: subsystem_move_set_working: %s\n", core->description) ) ;
 
-	time_now = _mali_osk_time_get_ns();
-	job->start_time = time_now;
-#if MALI_GPU_UTILIZATION
-	mali_utilization_core_start(time_now);
-#endif
-
 	core->current_job = job ;
 	core->state = CORE_WORKING ;
+	job->start_time_jiffies = _mali_osk_time_tickcount();
 	_mali_osk_list_move( &core->list, &session->renderunits_working_head );
 
 }
@@ -1064,7 +1056,7 @@ static void mali_core_subsystem_move_core_set_off(mali_core_renderunit *core)
 	/* Cores must be idle before powering off */
 	MALI_DEBUG_ASSERT(core->state == CORE_IDLE);
 
-	MALI_DEBUG_PRINT(5, ("Core: subsystem_move_core_set_off: %s\n", core->description) ) ;
+    MALI_DEBUG_PRINT(5, ("Core: subsystem_move_core_set_off: %s\n", core->description) ) ;
 
 	core->current_job = NULL ;
 	core->state = CORE_OFF ;
@@ -1107,26 +1099,10 @@ static mali_core_job * mali_core_subsystem_release_session_get_job(mali_core_sub
 	MALI_CHECK_SUBSYSTEM(subsystem);
 	MALI_ASSERT_MUTEX_IS_GRABBED(subsystem);
 
-	job = mali_job_queue_get_job(session);
+	_mali_osk_list_delinit(&session->awaiting_sessions_list);
 	subsystem->awaiting_sessions_sum_all_priorities--;
-
-	if(mali_job_queue_empty(session))
-	{
-		/* This is the last job, so remove it from the list */
-		_mali_osk_list_delinit(&session->awaiting_sessions_list);
-	}
-	else
-	{
-		if (0 == (job->flags & MALI_UK_START_JOB_FLAG_MORE_JOBS_FOLLOW))
-		{
-			/* There are more jobs, but the follow flag is not set, so let other sessions run their jobs first */
-			_mali_osk_list_del(&(session->awaiting_sessions_list));
-			_mali_osk_list_addtail(&(session->awaiting_sessions_list), &(subsystem->awaiting_sessions_head[
-			                       session->queue[session->queue_head]->priority]));
-		}
-		/* else; keep on list, follow flag is set and there are more jobs in queue for this session */
-	}
-
+	job = session->job_waiting_to_run;
+	session->job_waiting_to_run = NULL;
 	MALI_CHECK_JOB(job);
 	return job;
 }
@@ -1157,21 +1133,22 @@ static void mali_core_job_start_on_core(mali_core_job *job, mali_core_renderunit
 	mali_core_subsystem_move_set_working(core, job);
 
 #if defined USING_MALI400_L2_CACHE
-	if (0 == (job->flags & MALI_UK_START_JOB_FLAG_NO_FLUSH))
+	/* Invalidate the L2 cache */
+	if (_MALI_OSK_ERR_OK != mali_kernel_l2_cache_invalidate_all() )
 	{
-		/* Invalidate the L2 cache */
-		if (_MALI_OSK_ERR_OK != mali_kernel_l2_cache_invalidate_all() )
-		{
-			MALI_DEBUG_PRINT(4, ("Core: Clear of L2 failed, return job. System may not be usable for some reason.\n"));
-			mali_core_subsystem_move_core_set_idle(core);
-			subsystem->return_job_to_user(job,JOB_STATUS_END_SYSTEM_UNUSABLE );
-			return;
-		}
+		MALI_DEBUG_PRINT(4, ("Core: Clear of L2 failed, return job. System may not be usable for some reason.\n"));
+		mali_core_subsystem_move_core_set_idle(core);
+		subsystem->return_job_to_user(job,JOB_STATUS_END_SYSTEM_UNUSABLE );
+		return;
 	}
 #endif
 
 	/* Tries to start job on the core. Returns MALI_FALSE if the job could not be started */
 	err = subsystem->start_job(job, core);
+
+#if MALI_GPU_UTILIZATION
+	mali_utilization_core_start();
+#endif
 
 	if ( _MALI_OSK_ERR_OK != err )
 	{
@@ -1309,7 +1286,6 @@ static void mali_core_subsystem_schedule(mali_core_subsystem * subsystem)
 void mali_core_session_begin(mali_core_session * session)
 {
 	mali_core_subsystem * subsystem;
-	int i;
 
 	subsystem = session->subsystem;
 	if ( NULL == subsystem )
@@ -1323,12 +1299,7 @@ void mali_core_session_begin(mali_core_session * session)
 
 	_MALI_OSK_INIT_LIST_HEAD(&session->renderunits_working_head);
 
-	for (i = 0; i < MALI_JOB_QUEUE_SIZE; i++)
-	{
-		session->queue[i] = NULL;
-	}
-	session->queue_head = 0;
-	session->queue_tail = 0;
+	session->job_waiting_to_run = NULL;
 	_MALI_OSK_INIT_LIST_HEAD(&session->awaiting_sessions_list);
 	_MALI_OSK_INIT_LIST_HEAD(&session->all_sessions_list);
 
@@ -1367,17 +1338,12 @@ void mali_core_session_close(mali_core_session * session)
 	is owned by the subsystem */
 	MALI_CORE_SUBSYSTEM_MUTEX_GRAB( subsystem );
 
-	/* Remove this session from the global sessionlist */
-	_mali_osk_list_delinit(&session->all_sessions_list);
-
-	_mali_osk_list_delinit(&(session->awaiting_sessions_list));
-
 	/* Return the potensial waiting job to user */
-	while ( !mali_job_queue_empty(session) )
+	if ( session->job_waiting_to_run )
 	{
-		/* Queue not empty */
-		mali_core_job *job = mali_job_queue_get_job(session);
-		subsystem->return_job_to_user( job, JOB_STATUS_END_SHUTDOWN );
+		subsystem->return_job_to_user( session->job_waiting_to_run, JOB_STATUS_END_SHUTDOWN );
+		session->job_waiting_to_run = NULL;
+		_mali_osk_list_delinit(&(session->awaiting_sessions_list));
 		subsystem->awaiting_sessions_sum_all_priorities--;
 	}
 
@@ -1390,6 +1356,9 @@ void mali_core_session_close(mali_core_session * session)
 		mali_core_renderunit_detach_job_from_core(core, SUBSYSTEM_RESCHEDULE, JOB_STATUS_END_SHUTDOWN );
 	}
 	_MALI_OSK_INIT_LIST_HEAD(&session->renderunits_working_head); /* Not necessary - we will _mali_osk_free session*/
+
+	/* Remove this session from the global sessionlist */
+	_mali_osk_list_delinit(&session->all_sessions_list);
 
 	MALI_DEBUG_PRINT(5, ("Core: session_close: for %s FINISHED\n", session->subsystem->name )) ;
 	MALI_CORE_SUBSYSTEM_MUTEX_RELEASE( subsystem );
@@ -1413,26 +1382,34 @@ _mali_osk_errcode_t mali_core_session_add_job(mali_core_session * session, mali_
 	MALI_DEBUG_ASSERT_POINTER(job_return);
 	*job_return = NULL;
 
-	if (mali_job_queue_empty(session))
+	if ( NULL != session->job_waiting_to_run)
 	{
-		/* Add session to the wait list only if it didn't already have a job waiting. */
-		_mali_osk_list_addtail( &(session->awaiting_sessions_list), &(subsystem->awaiting_sessions_head[job->priority]));
-	}
-
-
-	if (_MALI_OSK_ERR_OK != mali_job_queue_add_job(session, job))
-	{
-		if (mali_job_queue_empty(session))
+		MALI_DEBUG_PRINT(5, ("The session already had a job waiting\n")) ;
+		/* Checing if the new job has a higher priority than the one that was pending.*/
+		if ( job_has_higher_priority(job,session->job_waiting_to_run))
 		{
-			_mali_osk_list_delinit(&(session->awaiting_sessions_list));
+			/* Remove this session from current priority */
+			_mali_osk_list_del( &(session->awaiting_sessions_list));
+			subsystem->awaiting_sessions_sum_all_priorities--;
+			/* Returning the previous waiting job through the input double pointer*/
+			*job_return = session->job_waiting_to_run;
 		}
-		MALI_DEBUG_PRINT(4, ("Core: session_add_job: %s queue is full\n", subsystem->name));
-		MALI_ERROR(_MALI_OSK_ERR_FAULT);
+		else
+		{
+			MALI_PRINT_ERROR(("Illegal internal state."));
+			/* There was a job waiting in this session, and the priority of this job
+			   we try to add was NOT higher. Return -1 indicated new job NOT enqueued.*/
+			/* We check prior to calling this function that we are not in this state.*/
+            MALI_ERROR(_MALI_OSK_ERR_FAULT);
+		}
 	}
-
 	/* Continue to add the new job as the next job from this session */
 	MALI_DEBUG_PRINT(6, ("Core: session_add_job job=0x%x\n", job));
 
+	/* Adding this session to the subsystem list of sessions with pending job, with priority */
+	session->job_waiting_to_run = job;
+
+	_mali_osk_list_addtail( &(session->awaiting_sessions_list), &(subsystem->awaiting_sessions_head[job->priority]));
 	subsystem->awaiting_sessions_sum_all_priorities++;
 
 	mali_core_subsystem_schedule(subsystem);
@@ -1442,12 +1419,16 @@ _mali_osk_errcode_t mali_core_session_add_job(mali_core_session * session, mali_
 	MALI_SUCCESS;
 }
 
-static void mali_core_job_set_run_time(mali_core_job * job, u64 end_time)
+static void mali_core_job_set_run_time(mali_core_job * job)
+{
+	u32 jiffies_used;
+	jiffies_used =	_mali_osk_time_tickcount() - job->start_time_jiffies;
+	if ( jiffies_used > JOB_MAX_JIFFIES )
 	{
-	u32 time_used_nano_seconds;
-
-	time_used_nano_seconds = end_time - job->start_time;
-	job->render_time_usecs = time_used_nano_seconds / 1000;
+		MALI_PRINT_ERROR(("Job used too many jiffies: %d\n", jiffies_used ));
+		jiffies_used = 0;
+	}
+	job->render_time_msecs = _mali_osk_time_tickstoms(jiffies_used);
 }
 
 static void mali_core_renderunit_detach_job_from_core(mali_core_renderunit* core, mali_subsystem_reschedule_option reschedule, mali_subsystem_job_end_code end_status)
@@ -1455,12 +1436,10 @@ static void mali_core_renderunit_detach_job_from_core(mali_core_renderunit* core
 	mali_core_job * job;
 	mali_core_subsystem * subsystem;
 	mali_bool already_in_detach_function;
-	u64 time_now;
 
-	MALI_DEBUG_ASSERT(CORE_IDLE != core->state);
-	time_now = _mali_osk_time_get_ns();
 	job = core->current_job;
 	subsystem = core->subsystem;
+	MALI_DEBUG_ASSERT(CORE_IDLE != core->state);
 
 	/* The reset_core() called some lines below might call this detach
 	 * funtion again. To protect the core object from being modified by 
@@ -1468,13 +1447,12 @@ static void mali_core_renderunit_detach_job_from_core(mali_core_renderunit* core
 	 */
 	already_in_detach_function = core->in_detach_function;
 	
-
 	if ( MALI_FALSE == already_in_detach_function )
 	{
 		core->in_detach_function = MALI_TRUE;
 		if ( NULL != job )
 		{
-			mali_core_job_set_run_time(job, time_now);
+			mali_core_job_set_run_time(job);
 			core->current_job = NULL;
 		}
 	}
@@ -1493,7 +1471,7 @@ static void mali_core_renderunit_detach_job_from_core(mali_core_renderunit* core
 		if ( CORE_IDLE != core->state )
 		{
 			#if MALI_GPU_UTILIZATION
-			mali_utilization_core_end(time_now);
+			mali_utilization_core_end();
 			#endif
 			mali_core_subsystem_move_core_set_idle(core);
 		}
@@ -1939,21 +1917,12 @@ u32 mali_core_renderunit_dump_state(mali_core_subsystem* subsystem, char *buf, u
 		                          (u32)(subsystem->mali_core_array[i]->current_job));
 		if (subsystem->mali_core_array[i]->current_job)
 		{
-			u64 time_used_nano_seconds;
-			u32 time_used_micro_seconds;
-			u64 time_now = _mali_osk_time_get_ns();
-
-			time_used_nano_seconds = time_now - subsystem->mali_core_array[i]->current_job->start_time;
-			time_used_micro_seconds = ((u32)(time_used_nano_seconds)) / 1000;
-
 			len += _mali_osk_snprintf(buf + len, size - len, "      Current job session: 0x%X\n",
 			                          subsystem->mali_core_array[i]->current_job->session);
 			len += _mali_osk_snprintf(buf + len, size - len, "      Current job number: %d\n",
 			                          subsystem->mali_core_array[i]->current_job->job_nr);
-			len += _mali_osk_snprintf(buf + len, size - len, "      Current job render_time micro seconds: %d\n",
-			                          time_used_micro_seconds  );
-			len += _mali_osk_snprintf(buf + len, size - len, "      Current job start time micro seconds: %d\n",
-			                          (u32) (subsystem->mali_core_array[i]->current_job->start_time >>10)  );
+			len += _mali_osk_snprintf(buf + len, size - len, "      Current job render_time jiffies: %d\n",
+			                          _mali_osk_time_tickcount()-subsystem->mali_core_array[i]->current_job->start_time_jiffies);
 		}
 		len += _mali_osk_snprintf(buf + len, size - len, "    Core version: 0x%X\n",
 		                          subsystem->mali_core_array[i]->core_version);
@@ -1983,9 +1952,7 @@ u32 mali_core_renderunit_dump_state(mali_core_subsystem* subsystem, char *buf, u
 		len += _mali_osk_snprintf(buf + len, size - len,
 				"    Session 0x%X:\n", (u32)session);
 		len += _mali_osk_snprintf(buf + len, size - len,
-				"      Queue depth: %u\n", mali_job_queue_size(session));
-		len += _mali_osk_snprintf(buf + len, size - len,
-				"      First waiting job: 0x%p\n", session->queue[session->queue_head]);
+				"      Waiting job: 0x%X\n", (u32)session->job_waiting_to_run);
 		len += _mali_osk_snprintf(buf + len, size - len, "      Notification queue: %s\n",
 				_mali_osk_notification_queue_is_empty(session->notification_queue) ? "EMPTY" : "NON-EMPTY");
 		len += _mali_osk_snprintf(buf + len, size - len,
@@ -2009,7 +1976,7 @@ u32 mali_core_renderunit_dump_state(mali_core_subsystem* subsystem, char *buf, u
 		{
 			len += _mali_osk_snprintf(buf + len, size - len, "      Session 0x%X:\n", (u32)session);
 			len += _mali_osk_snprintf(buf + len, size - len, "        Waiting job: 0x%X\n",
-					(u32)session->queue[session->queue_head]);
+					(u32)session->job_waiting_to_run);
 			len += _mali_osk_snprintf(buf + len, size - len, "        Notification queue: %s\n",
 					_mali_osk_notification_queue_is_empty(session->notification_queue) ? "EMPTY" : "NON-EMPTY");
 		}

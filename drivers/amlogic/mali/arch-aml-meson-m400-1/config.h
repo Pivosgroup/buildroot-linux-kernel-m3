@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 Amlogic, Inc. All rights reserved.
+ * Copyright (C) 2011 Amlogic, Inc. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -55,7 +55,7 @@ static _mali_osk_resource_t arch_configuration [] =
 		.type = OS_MEMORY,
 		.description = "Mali Memory",
 		.alloc_order = 5, /* Medium preference for this memory */
-		.size = 0x14800000,
+		.size = 0x08000000,
 		.flags = _MALI_CPU_WRITEABLE | _MALI_CPU_READABLE | _MALI_PP_READABLE | _MALI_PP_WRITEABLE |_MALI_GP_READABLE | _MALI_GP_WRITEABLE
 	},
 	{

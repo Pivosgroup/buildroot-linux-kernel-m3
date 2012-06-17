@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 ARM Limited. All rights reserved.
+ * Copyright (C) 2010-2011 ARM Limited. All rights reserved.
  * 
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -144,16 +144,12 @@ void mali_driver_exit(void)
 {
 	mali_kernel_destructor();
 
-#if MALI_LICENSE_IS_GPL
 #if USING_MALI_PMM
+#if MALI_LICENSE_IS_GPL
 #ifdef CONFIG_PM
 	_mali_dev_platform_unregister();
 #endif
 #endif
-
-	flush_workqueue(mali_wq);
-	destroy_workqueue(mali_wq);
-	mali_wq = NULL;
 #endif
 }
 
