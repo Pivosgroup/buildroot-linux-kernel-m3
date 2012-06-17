@@ -41,6 +41,7 @@
 #include <linux/reboot.h>
 #include <mach/usbclock.h>
 #include <mach/am_regs.h>
+#include <sound/soc.h>
 
 #ifdef CONFIG_AM_UART_WITH_S_CORE 
 #include <linux/uart-aml.h>
@@ -194,8 +195,9 @@ static inline int key_input_init_func(void)
 //    WRITE_AOBUS_REG(AO_RTC_ADDR1, (READ_AOBUS_REG(AO_RTC_ADDR1) &~(1<<3)));
     return 0;
 }
-static inline int key_scan(int *key_state_list)
+static inline int key_scan(void *data)
 {
+    int *key_state_list = data;
     int ret = 0;
 	 // GPIOAO_3
 	 #ifdef CONFIG_SUSPEND
