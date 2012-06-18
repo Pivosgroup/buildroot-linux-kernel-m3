@@ -603,7 +603,7 @@ void mute_spk(struct snd_soc_codec* codec, int flag)
 #endif
 
 
-#ifdef CONFIG_ANDROID_PMEM
+#if defined(CONFIG_ANDROID_PMEM) || defined(CONFIG_CMEM)
 static struct android_pmem_platform_data pmem_data =
 {
     .name = "pmem",
@@ -1348,7 +1348,7 @@ static struct platform_device __initdata *platform_devs[] = {
 #if defined(CONFIG_SUSPEND)
     &aml_pm_device,
 #endif
-#if defined(CONFIG_ANDROID_PMEM)
+#if defined(CONFIG_ANDROID_PMEM) || defined(CONFIG_CMEM)
     &android_pmem_device,
 #endif
 #if defined(CONFIG_I2C_SW_AML)
