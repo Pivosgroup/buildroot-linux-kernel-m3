@@ -140,6 +140,7 @@ struct _rx_desc {
 #define PHY_SMSC_8700			0x7c0c4
 #define PHY_SMSC_8720			0x7c0f1
 #define PHY_ATHEROS_8032		0x004dd023
+#define PHY_IC_IP101ALF         0x02430c54
 
 struct am_net_private {
 		struct _rx_desc *rx_ring;

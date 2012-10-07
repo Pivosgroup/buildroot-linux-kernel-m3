@@ -32,11 +32,17 @@
 #include <linux/mii.h>
 #include <linux/sched.h>
 #include <linux/crc32.h>
-
+#include <linux/aml_eth.h>
 
 #include <asm/delay.h>
 #include <mach/pinmux.h>
 #include <mach/gpio.h>
+
+#ifdef CONFIG_PM
+#include <linux/pm.h>
+#include <linux/platform_device.h>
+#include <mach/clk_set.h>
+#endif
 
 #include "am_net8218.h"
 
@@ -293,12 +299,12 @@ int init_rxtx_rings(struct net_device *dev)
 	unsigned long tx = 0, rx = 0;
 #endif
 #ifdef DMA_USE_MALLOC_ADDR
-	rx = (unsigned long)kmalloc((RX_RING_SIZE) * np->rx_buf_sz, GFP_KERNEL);
+	rx = (unsigned long)kmalloc((RX_RING_SIZE) * np->rx_buf_sz, GFP_KERNEL | GFP_DMA);
 	if (rx == 0) {
 		printk("error to alloc Rx  ring buf\n");
 		return -1;
 	}
-	tx = (unsigned long)kmalloc((TX_RING_SIZE) * np->rx_buf_sz, GFP_KERNEL);
+	tx = (unsigned long)kmalloc((TX_RING_SIZE) * np->rx_buf_sz, GFP_KERNEL | GFP_DMA);
 	if (tx == 0) {
 		kfree((void *)rx);
 		printk("error to alloc Tx  ring buf\n");
@@ -382,7 +388,7 @@ static int alloc_ringdesc(struct net_device *dev)
 	                                 sizeof(struct _rx_desc) * RX_RING_SIZE,
 	                                 (dma_addr_t *)&np->rx_ring_dma, GFP_KERNEL);
 #else
-	np->rx_ring = kmalloc(sizeof(struct _rx_desc) * RX_RING_SIZE, GFP_KERNEL);
+	np->rx_ring = kmalloc(sizeof(struct _rx_desc) * RX_RING_SIZE, GFP_KERNEL | GFP_DMA);
 	np->rx_ring_dma = (void*)virt_to_phys(np->rx_ring);
 #endif
 	if (!np->rx_ring) {
@@ -398,14 +404,14 @@ static int alloc_ringdesc(struct net_device *dev)
 	                                 sizeof(struct _tx_desc) * TX_RING_SIZE ,
 	                                 (dma_addr_t *)&np->tx_ring_dma, GFP_KERNEL);
 #else
-	np->tx_ring = kmalloc(sizeof(struct _tx_desc) * TX_RING_SIZE, GFP_KERNEL);
+	np->tx_ring = kmalloc(sizeof(struct _tx_desc) * TX_RING_SIZE, GFP_KERNEL | GFP_DMA);
 	np->tx_ring_dma = (void*)virt_to_phys(np->tx_ring);
 #endif
 	if (init_rxtx_rings(dev)) {
 		printk("init rx tx ring failed!!\n");
 		return -1;
 	}
-	//make sure all the data are write to memory
+
 	return 0;
 }
 
@@ -424,19 +430,19 @@ static int free_ringdesc(struct net_device *dev)
 	int i;
 	for (i = 0; i < RX_RING_SIZE; i++) {
 		if (np->rx_ring[i].skb) {
-			dev_kfree_skb_any(np->rx_ring[i].skb);
 			if (np->rx_ring[i].buf_dma != 0) {
 				dma_unmap_single(&dev->dev, np->rx_ring[i].buf_dma, np->rx_buf_sz, DMA_FROM_DEVICE);
 			}
+			dev_kfree_skb_any(np->rx_ring[i].skb);
 		}
 		np->rx_ring[i].skb = NULL;
 	}
 	for (i = 0; i < TX_RING_SIZE; i++) {
 		if (np->tx_ring[i].skb != NULL) {
-			dev_kfree_skb_any(np->tx_ring[i].skb);
-			if (np->rx_ring[i].buf_dma != 0) {
+			if (np->tx_ring[i].buf_dma != 0) {
 				dma_unmap_single(&dev->dev, np->tx_ring[i].buf_dma, np->rx_buf_sz, DMA_TO_DEVICE);
 			}
+			dev_kfree_skb_any(np->tx_ring[i].skb);
 		}
 		np->tx_ring[i].skb = NULL;
 	}
@@ -553,6 +559,12 @@ static void phy_auto_negotiation_set(struct am_net_private *np)
 		rint = mdio_read(np->dev, np->phys[0], 0x11);
 		s100 = rint & (1 << 14);
 		full = ((rint) & (1 << 13));
+        break;
+	case PHY_IC_IP101ALF:
+		rint = mdio_read(np->dev, np->phys[0], 0);
+		s100 = (rint & (0x1 << 8)) ? 1 : 0;
+		rint = mdio_read(np->dev, np->phys[0], 5);
+		full = (rint & (0x1 << 7)) ? 1 : 0;
 		break;
 	case PHY_SMSC_8700:
 	case PHY_SMSC_8720:
@@ -847,10 +859,10 @@ void net_tasklet(unsigned long dev_instance)
 					printk("send data ok len=%d\n", tx->skb->len);
 				}
 				tx_data_dump((unsigned char *)tx->buf, tx->skb->len);
-				dev_kfree_skb_any(tx->skb);
 				if (tx->buf_dma != 0) {
 					dma_unmap_single(&dev->dev, tx->buf_dma, np->rx_buf_sz, DMA_TO_DEVICE);
 				}
+				dev_kfree_skb_any(tx->skb);
 				tx->skb = NULL;
 				tx->buf = 0;
 				tx->buf_dma = 0;
@@ -873,7 +885,6 @@ void net_tasklet(unsigned long dev_instance)
 
 		}
 		np->start_tx = tx;
-		//data tx end... todo
 	}
 	if (result & 2) {
 		//data  rx;
@@ -882,8 +893,6 @@ void net_tasklet(unsigned long dev_instance)
 		c_rx = np->rx_ring + (c_rx - np->rx_ring_dma);
 		rx = np->last_rx->next;
 		while (rx != NULL) {
-			//if(rx->status !=IO_READ32(&rx->status))
-			//      printk("error of D-chche!\n");
 			CACHE_RSYNC(rx, sizeof(struct _rx_desc));
 			if (!(rx->status & (DescOwnByDma))) {
 				int ip_summed = CHECKSUM_UNNECESSARY;
@@ -895,7 +904,6 @@ void net_tasklet(unsigned long dev_instance)
 				}
 				if (unlikely(rx->status & (DescError))) {	//here is not often occur
 					print_rx_error_log(rx->status);
-					//rx->status=DescOwnByDma;
 					if ((rx->status & DescRxIPChecksumErr) || (rx->status & DescRxTCPChecksumErr)) {	//maybe checksum engine's problem;
 						//we set the NONE for ip/tcp need check it again
 						ip_summed = CHECKSUM_NONE;
@@ -1060,7 +1068,7 @@ static int phy_reset(struct net_device *ndev)
 		printk("error to reset phy!\n");
 		goto error_reset;
 	}
-	// mode = 111; turn on auto-neg mode (previously was power-saving)
+
 	val = (1 << 14) | (7 << 5) | np->phys[0];
 	mdio_write(ndev, np->phys[0], 18, val);
 	// Auto negotiation restart
@@ -1070,15 +1078,8 @@ static int phy_reset(struct net_device *ndev)
 		printk("starting to auto negotiation!\n");
 	}
 
-	//(*ETH_DMA_0_Bus_Mode) = 0x00100800;
 	IO_WRITE32(0x00100800, np->base_addr + ETH_DMA_0_Bus_Mode);
 
-	/*
-	   val=*((unsigned short *)&ndev->dev_addr[4]);
-	   IO_WRITE32(val,np->base_addr+ETH_MAC_Addr0_High);
-	   val=*((unsigned long *)ndev->dev_addr);
-	   IO_WRITE32(val,np->base_addr+ETH_MAC_Addr0_Low);
-	 */
 	write_mac_addr(ndev, ndev->dev_addr);
 
 	val = 0xc80c |		//8<<8 | 8<<17; //tx and rx all 8bit mode;
@@ -1094,7 +1095,6 @@ static int phy_reset(struct net_device *ndev)
 #ifdef PHY_LOOPBACK_TEST
 	/*phy loop back*/
 	val = mdio_read(ndev, np->phys[0], MII_BMCR);
-	//val=1<<14 | 1<<8 | 1<<13;//100M,full,seting it as ;
 	val = 1 << 14 | 1 << 8; /////10M,full,seting it as ;
 	mdio_write(ndev, np->phys[0], MII_BMCR, val);
 
@@ -1175,7 +1175,7 @@ static int netdev_open(struct net_device *dev)
 		printk(KERN_INFO "ethernet_reset err=%d\n", res);
 		goto out_err;
 	}
-	//netif_device_detach(dev);
+
 	res = request_irq(dev->irq, &intr_handler, IRQF_SHARED, dev->name, dev);
 	if (res) {
 		printk(KERN_ERR "%s: request_irq error %d.,err=%d\n",
@@ -1186,7 +1186,7 @@ static int netdev_open(struct net_device *dev)
 	if (g_debug > 0)
 		printk(KERN_DEBUG "%s: opened (irq %d).\n",
 		       dev->name, dev->irq);
-	//enable_irq(dev->irq);
+
 	/* Set the timer to check for link beat. */
 	init_timer(&np->timer);
 	np->timer.expires = jiffies + 1;
@@ -1228,7 +1228,7 @@ static int netdev_close(struct net_device *dev)
 	IO_WRITE32(0, (np->base_addr + ETH_DMA_6_Operation_Mode));
 	IO_WRITE32(0, np->base_addr + ETH_DMA_7_Interrupt_Enable);
 	val = IO_READ32((np->base_addr + ETH_DMA_5_Status));
-	while ((val & (7 << 17)) || (val & (7 << 20))) { /*DMA not finished?*/
+	while ((val & (7 << 17)) || (val & (5 << 20))) { /*DMA not finished?*/
 		printk(KERN_ERR "ERROR! MDA is not stoped,val=%lx!\n", val);
 		msleep(1);//waiting all dma is finished!!
 		val = IO_READ32((np->base_addr + ETH_DMA_5_Status));
@@ -1293,10 +1293,10 @@ static int start_tx(struct sk_buff *skb, struct net_device *dev)
 	}
 #ifdef DMA_USE_SKB_BUF
 	if (tx->skb != NULL) {
-		dev_kfree_skb_any(tx->skb);
 		if (tx->buf_dma != 0) {
-			dma_unmap_single(&dev->dev, tx->buf_dma, np->rx_buf_sz, DMA_FROM_DEVICE);
+			dma_unmap_single(&dev->dev, tx->buf_dma, np->rx_buf_sz, DMA_TO_DEVICE);
 		}
+		dev_kfree_skb_any(tx->skb);
 	}
 	tx->skb = skb;
 	tx->buf = (unsigned long)skb->data;
@@ -1487,13 +1487,12 @@ static unsigned char inline chartonum(char c)
 /* --------------------------------------------------------------------------*/
 static void config_mac_addr(struct net_device *dev, void *mac)
 {
+	unsigned long mac_fir = 0;
+	unsigned char mac_add[6] = {};
+
 	if(g_mac_setup == 0) {
 		printk("*****WARNING: Haven't setup MAC address! Using random MAC address.\n");
-		unsigned long mac_fir = 0;
-		unsigned char mac_add[6] = {};
-
 		mac_fir = READ_MPEG_REG(RAND64_ADDR1);
-
 		mac_add[1] = mac_fir&0xFF; mac_add[2] = (mac_fir>>16)&0xFF;
 		mac_add[3] = (mac_fir>>8)&0xFF; mac_add[4] = (mac_fir>>24) &0xFF;
 		mac_add[5] = (mac_add[1]<<4)|(mac_add[4]>>4);
@@ -1559,63 +1558,78 @@ static void set_multicast_list(struct net_device *dev)
 {
 	struct am_net_private *np = netdev_priv(dev);
 	u32  tmp;
-	if ((dev->flags & IFF_PROMISC)) {
-		tmp = IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
-		tmp |= 1;
-		IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//promisc module
-		printk("ether enter promisc module\n");
-	} else {
-		tmp = IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
-		tmp &= ~1;
-		IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//live promisc
-		//printk("ether leave promisc module\n");
-	}
-	if ((dev->flags & IFF_ALLMULTI)) {
-		tmp = IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
-		tmp |= (1 << 4);
-		IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//all muticast
-		printk("ether enter all multicast module\n");
-	} else {
-		tmp = IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
-		tmp &= (1 << 4);
-		IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//live all muticast
-		//printk("ether leave all muticast module\n");
-	}
+	static  u32  dev_flags=0xefefefef;
+	static  u32  dev_hash[2]={0,0};
 
-	if (dev->mc_count > 0) {
-		int cnt = dev->mc_count;
+	if(dev->flags != dev_flags)//not always change
+	{
+		if ((dev->flags & IFF_PROMISC)) {
+			tmp=IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
+			tmp|=1;
+			IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//promisc module
+			printk("ether enter promisc module\n");
+		}
+		else
+		{
+			tmp=IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
+			tmp&=~1;
+			IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//live promisc
+			printk("ether leave promisc module\n");
+		}
+		if ((dev->flags & IFF_ALLMULTI) ) {
+			tmp=IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
+			tmp|=(1<<4);
+			IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//all muticast
+			printk("ether enter all multicast module\n");
+		}
+		else
+		{
+			tmp=IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
+			tmp&=(1<<4);
+			IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//live all muticast
+			printk("ether leave all muticast module\n");
+		}
+		dev_flags=dev->flags;
+	}
+	if (dev->mc_count > 0)
+	{
+		int cnt=dev->mc_count;
 		u32 hash[2];
 		struct dev_mc_list	*addr_list;
 		u32 hash_id;
 		char * addr;
-		hash[0] = 0;
-		hash[1] = 0;
-		printk("changed the Multicast,mcount=%d\n", dev->mc_count);
+		hash[0]=0;
+		hash[1]=0;
+		//printk("changed the Multicast,mcount=%d\n",dev->mc_count);
 		for (addr_list = dev->mc_list; cnt && addr_list != NULL; addr_list = addr_list->next, cnt--) {
-			addr = addr_list->dmi_addr;
-			hash_id = phy_mc_hash(addr);
+			addr=addr_list->dmi_addr;
+			hash_id=phy_mc_hash(addr);
 			///*
-			printk("add mac address:%02x:%02x:%02x:%02x:%02x:%02x,bit=%d\n",
-			       addr[0], addr[1], addr[2], addr[3], addr[4], addr[5],
-			       hash_id);
+			//printk("add mac address:%02x:%02x:%02x:%02x:%02x:%02x,bit=%d\n",
+			//	addr[0],addr[1],addr[2],addr[3],addr[4],addr[5],
+			//	hash_id);
 			//*/
 			//set_bit(hash_id,hash);
-			if (hash_id > 31) {
-				hash[1] |= 1 << (hash_id - 32);
-			} else {
-				hash[0] |= 1 << hash_id;
-			}
+			if(hash_id>31)
+				hash[1]|=1<<(hash_id-32);
+			else
+				hash[0]|=1<<hash_id;
 		}
-		printk("set hash low=%x,high=%x\n", hash[0], hash[1]);
+		
+		if((dev_hash[0]==hash[0]) && (dev_hash[1]==hash[1])) return;
+		dev_hash[0]=hash[0] ;
+		dev_hash[1]=hash[1];
+		printk("set hash low=%x,high=%x\n",hash[0],hash[1]);
 		IO_WRITE32(hash[1], np->base_addr + ETH_MAC_2_Hash_Table_High);
 		IO_WRITE32(hash[0], np->base_addr + ETH_MAC_3_Hash_Table_Low);
-		tmp = IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
-		tmp = (1 << 2) | 	//hash filter
-		      0;
-		printk("changed the filter setting to :%x\n", tmp);
+		tmp=IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
+		tmp= (1<<2) | 	//hash filter 
+			0;
+		//printk("changed the filter setting to :%x\n",tmp);
 		IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//hash muticast
 	}
 }
+
 
 static const struct net_device_ops am_netdev_ops = {
 	.ndo_open			= netdev_open,
@@ -1680,7 +1694,7 @@ static int probe_init(struct net_device *ndev)
 	int phy = 0;
 	int phy_idx = 0;
 	int found = 0;
-	int res;
+	int res = 0;
 	unsigned int val;
 	int k, kk;
 
@@ -1708,7 +1722,7 @@ static int probe_init(struct net_device *ndev)
 			udelay(1);
 		}
 		if (kk >= 1000) {
-			printk("error to reset mac!\n");
+			printk("error to reset mac at probe!\n");
 			goto error0;
 		}
 
@@ -2248,6 +2262,100 @@ static int __init am_eth_class_init(void)
 	return ret;
 }
 
+#ifdef CONFIG_PM
+static int has_ethernet_pm = 0;
+static struct aml_eth_platform_data *eth_pm_ops;
+typedef void(*reset)(void);
+typedef void(*eth_clk_enable)(int);
+/* --------------------------------------------------------------------------*/
+/**
+ * @brief ethernet_pm_probe 
+ *
+ * @param pdev
+ *
+ * @return 
+ */
+/* --------------------------------------------------------------------------*/
+static int ethernet_pm_probe(struct platform_device *pdev)
+{
+
+	printk("ethernet_pm_driver probe!\n");
+	eth_pm_ops = pdev->dev.platform_data;
+	if (!eth_pm_ops) {
+		printk("\nethernet pm ops resource undefined.\n");
+		return -EFAULT;
+	}
+	return 0;
+}
+
+/* --------------------------------------------------------------------------*/
+/**
+ * @brief ethernet_pm_remove 
+ *
+ * @param pdev
+ *
+ * @return 
+ */
+/* --------------------------------------------------------------------------*/
+static int ethernet_pm_remove(struct platform_device *pdev)
+{
+	printk("ethernet_pm_driver remove!\n");
+	return 0;
+}
+
+/* --------------------------------------------------------------------------*/
+/**
+ * @brief ethernet_suspend 
+ *
+ * @param dev
+ * @param event
+ *
+ * @return 
+ */
+/* --------------------------------------------------------------------------*/
+static int ethernet_suspend(struct platform_device *dev, pm_message_t event)
+{
+	netdev_close(my_ndev);
+	eth_pm_ops->clock_enable(0);
+	printk("ethernet_suspend!\n");
+	return 0;
+}
+
+/* --------------------------------------------------------------------------*/
+/**
+ * @brief ethernet_resume 
+ *
+ * @param dev
+ *
+ * @return 
+ */
+/* --------------------------------------------------------------------------*/
+static int ethernet_resume(struct platform_device *dev)
+{
+	int res = 0;
+	eth_pm_ops->clock_enable(1);
+	eth_pm_ops->reset();
+	printk("\ngot it ?\n");
+	// res = probe_init(my_ndev);
+	res = netdev_open(my_ndev);
+	if (res != 0) {
+		printk("nono, it can not be true!\n");
+	}
+	printk("ethernet_resume!\n");
+	return 0;
+}
+
+static struct platform_driver ethernet_pm_driver = {
+	.probe   = ethernet_pm_probe,
+	.remove  = ethernet_pm_remove,
+	.suspend = ethernet_suspend,
+	.resume  = ethernet_resume,
+	.driver  = {
+		.name = "ethernet_pm_driver",
+	}
+};
+#endif
+
 /* --------------------------------------------------------------------------*/
 /**
  * @brief  am_net_init 
@@ -2267,9 +2375,19 @@ static int __init am_net_init(void)
 	res = probe_init(my_ndev);
 	if (res != 0) {
 		free_netdev(my_ndev);
-	}
+	} else {
+		res = am_eth_class_init();
+#ifdef CONFIG_PM
+		printk("ethernet_pm_driver init\n");
 
-	res = am_eth_class_init();
+		if (platform_driver_register(&ethernet_pm_driver)) {
+			printk("failed to register ethernet_pm driver\n");
+			has_ethernet_pm = 0;
+		} else {
+			has_ethernet_pm = 1;
+		}
+#endif
+	}
 
 	return res;
 }
@@ -2300,6 +2418,13 @@ static void __exit am_net_exit(void)
 	am_net_free(my_ndev);
 	free_netdev(my_ndev);
 	class_destroy(eth_sys_class);
+#ifdef CONFIG_PM
+	if (has_ethernet_pm == 1) {
+		printk("ethernet_pm driver remove.\n");
+		platform_driver_unregister(&ethernet_pm_driver);
+		has_ethernet_pm = 0;
+	}
+#endif
 	return;
 }
 
