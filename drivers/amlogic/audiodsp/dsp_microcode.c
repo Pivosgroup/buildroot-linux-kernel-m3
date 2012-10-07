@@ -118,7 +118,7 @@ error1:
 	struct audiodsp_microcode *pmcode;
 	int len;
 	pmcode=audiodsp_find_mcode_by_name(priv,filename);
-	if(pmcode!=NULL)
+	if(pmcode!=NULL&&(fmt&pmcode->fmt))
 		{
 			DSP_PRNT("Have register the firmware code before=%s\n",filename);
 			DSP_PRNT("Refresh the firmware settings now\n");
