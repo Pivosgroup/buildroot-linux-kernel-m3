@@ -1,13 +1,13 @@
 /* ==========================================================================
- * $File: //dwh/usb_iip/dev/software/otg_ipmate/linux/drivers/dwc_otg_pcd.h $
- * $Revision: #6 $
- * $Date: 2007/02/07 $
- * $Change: 791271 $
+ * $File: //dwh/usb_iip/dev/software/otg/linux/drivers/dwc_otg_pcd.h $
+ * $Revision: #48 $
+ * $Date: 2012/08/10 $
+ * $Change: 2047372 $
  *
  * Synopsys HS OTG Linux Software Driver and documentation (hereinafter,
  * "Software") is an Unsupported proprietary work of Synopsys, Inc. unless
  * otherwise expressly agreed to in writing between Synopsys and you.
- * 
+ *
  * The Software IS NOT an item of Licensed Software or Licensed Product under
  * any End User Software License Agreement or Agreement for Licensed Product
  * with Synopsys or any supplement thereto. You are permitted to use and
@@ -17,7 +17,7 @@
  * any information contained herein except pursuant to this license grant from
  * Synopsys. If you do not agree with this notice, including the disclaimer
  * below, then you are not authorized to use the Software.
- * 
+ *
  * THIS SOFTWARE IS BEING DISTRIBUTED BY SYNOPSYS SOLELY ON AN "AS IS" BASIS
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -34,19 +34,11 @@
 #if !defined(__DWC_PCD_H__)
 #define __DWC_PCD_H__
 
-#include <linux/types.h>
-#include <linux/list.h>
-#include <linux/errno.h>
-#include <linux/device.h>
-#include <linux/usb/ch9.h>
-#include <linux/usb/gadget.h>
-#include <linux/interrupt.h>
-#include <linux/dma-mapping.h>
-
-struct lm_device;
-struct dwc_otg_device;
-
+#include "dwc_otg_os_dep.h"
+#include "usb.h"
 #include "dwc_otg_cil.h"
+#include "dwc_otg_pcd_if.h"
+struct cfiobject;
 
 /**
  * @file
@@ -55,7 +47,7 @@ struct dwc_otg_device;
  * the Perpherial Contoller Driver (PCD).
  *
  * The Peripheral Controller Driver (PCD) for Linux will implement the
- * Gadget API, so that the existing Gadget drivers can be used.	 For
+ * Gadget API, so that the existing Gadget drivers can be used. For
  * the Mass Storage Function driver the File-backed USB Storage Gadget
  * (FBS) driver will be used.  The FBS driver supports the
  * Control-Bulk (CB), Control-Bulk-Interrupt (CBI), and Bulk-Only
@@ -64,16 +56,15 @@ struct dwc_otg_device;
  */
 
 /** Invalid DMA Address */
-#define DMA_ADDR_INVALID	(~(dma_addr_t)0)
-/** Maxpacket size for EP0 */
-#define MAX_EP0_SIZE	64
-/** Maxpacket size for any EP */
-#define MAX_PACKET_SIZE 1024
+#define DWC_DMA_ADDR_INVALID	(~(dwc_dma_t)0)
+
+/** Max Transfer size for any EP */
+#define DDMA_MAX_TRANSFER_SIZE 65535
 
 /**
  * Get the pointer to the core_if from the pcd pointer.
  */
-#define GET_CORE_IF( _pcd ) (_pcd->otg_dev->core_if)
+#define GET_CORE_IF( _pcd ) (_pcd->core_if)
 
 /**
  * States of EP0.
@@ -83,48 +74,119 @@ typedef enum ep0_state {
 	EP0_IDLE,
 	EP0_IN_DATA_PHASE,
 	EP0_OUT_DATA_PHASE,
-	EP0_STATUS,
+	EP0_IN_STATUS_PHASE,
+	EP0_OUT_STATUS_PHASE,
 	EP0_STALL,
 } ep0state_e;
 
 /** Fordward declaration.*/
 struct dwc_otg_pcd;
 
+/** DWC_otg iso request structure.
+ *
+ */
+typedef struct usb_iso_request dwc_otg_pcd_iso_request_t;
+
+#ifdef DWC_UTE_PER_IO
+
+/**
+ * This shall be the exact analogy of the same type structure defined in the
+ * usb_gadget.h. Each descriptor contains
+ */
+struct dwc_iso_pkt_desc_port {
+	uint32_t offset;
+	uint32_t length;	/* expected length */
+	uint32_t actual_length;
+	uint32_t status;
+};
+
+struct dwc_iso_xreq_port {
+	/** transfer/submission flag */
+	uint32_t tr_sub_flags;
+	/** Start the request ASAP */
+#define DWC_EREQ_TF_ASAP		0x00000002
+	/** Just enqueue the request w/o initiating a transfer */
+#define DWC_EREQ_TF_ENQUEUE		0x00000004
+
+	/**
+	* count of ISO packets attached to this request - shall
+	* not exceed the pio_alloc_pkt_count
+	*/
+	uint32_t pio_pkt_count;
+	/** count of ISO packets allocated for this request */
+	uint32_t pio_alloc_pkt_count;
+	/** number of ISO packet errors */
+	uint32_t error_count;
+	/** reserved for future extension */
+	uint32_t res;
+	/** Will be allocated and freed in the UTE gadget and based on the CFC value */
+	struct dwc_iso_pkt_desc_port *per_io_frame_descs;
+};
+#endif
+/** DWC_otg request structure.
+ * This structure is a list of requests.
+ */
+typedef struct dwc_otg_pcd_request {
+	void *priv;
+	void *buf;
+	dwc_dma_t dma;
+	uint32_t length;
+	uint32_t actual;
+	unsigned sent_zlp:1;
+    /**
+     * Used instead of original buffer if
+     * it(physical address) is not dword-aligned.
+     **/
+     uint8_t *dw_align_buf;
+     dwc_dma_t dw_align_buf_dma;
+
+	 DWC_CIRCLEQ_ENTRY(dwc_otg_pcd_request) queue_entry;
+#ifdef DWC_UTE_PER_IO
+	struct dwc_iso_xreq_port ext_req;
+	//void *priv_ereq_nport; /*  */
+#endif
+} dwc_otg_pcd_request_t;
+
+DWC_CIRCLEQ_HEAD(req_list, dwc_otg_pcd_request);
+
 /**	  PCD EP structure.
  * This structure describes an EP, there is an array of EPs in the PCD
  * structure.
  */
 typedef struct dwc_otg_pcd_ep {
-	/** USB EP data */
-	struct usb_ep ep;
 	/** USB EP Descriptor */
-	const struct usb_endpoint_descriptor *desc;
+	const usb_endpoint_descriptor_t *desc;
 
 	/** queue of dwc_otg_pcd_requests. */
-	struct list_head queue;
+	struct req_list queue;
 	unsigned stopped:1;
 	unsigned disabling:1;
 	unsigned dma:1;
 	unsigned queue_sof:1;
+
+#ifdef DWC_EN_ISOC
+	/** ISOC req handle passed */
+	void *iso_req_handle;
+#endif				//_EN_ISOC_
 
 	/** DWC_otg ep data. */
 	dwc_ep_t dwc_ep;
 
 	/** Pointer to PCD */
 	struct dwc_otg_pcd *pcd;
+
+	void *priv;
 } dwc_otg_pcd_ep_t;
 
 /** DWC_otg PCD Structure.
  * This structure encapsulates the data for the dwc_otg PCD.
  */
-typedef struct dwc_otg_pcd {
-	/** USB gadget */
-	struct usb_gadget gadget;
-	/** USB gadget driver pointer*/
-	struct usb_gadget_driver *driver;
-	/** The DWC otg device pointer. */
+struct dwc_otg_pcd {
+	const struct dwc_otg_pcd_function_ops *fops;
+	/** The DWC otg device pointer */
 	struct dwc_otg_device *otg_dev;
-
+	/** Core Interface */
+	dwc_otg_core_if_t *core_if;
 	/** State of EP0 */
 	ep0state_e ep0state;
 	/** EP0 Request is pending */
@@ -142,81 +204,63 @@ typedef struct dwc_otg_pcd {
 	/** Count of pending Requests */
 	unsigned request_pending;
 
-		/** SETUP packet for EP0 
+	/** SETUP packet for EP0
 	 * This structure is allocated as a DMA buffer on PCD initialization
 	 * with enough space for up to 3 setup packets.
 	 */
 	union {
-		struct usb_ctrlrequest req;
+		usb_device_request_t req;
 		uint32_t d32[2];
 	} *setup_pkt;
 
-	dma_addr_t setup_pkt_dma_handle;
+	dwc_dma_t setup_pkt_dma_handle;
+
+	/* Additional buffer and flag for CTRL_WR premature case */
+	uint8_t *backup_buf;
+	unsigned data_terminated;
 
 	/** 2-byte dma buffer used to return status from GET_STATUS */
 	uint16_t *status_buf;
-	dma_addr_t status_buf_dma_handle;
+	dwc_dma_t status_buf_dma_handle;
 
-	/** Array of EPs. */
+	/** EP0 */
 	dwc_otg_pcd_ep_t ep0;
+
 	/** Array of IN EPs. */
 	dwc_otg_pcd_ep_t in_ep[MAX_EPS_CHANNELS - 1];
 	/** Array of OUT EPs. */
 	dwc_otg_pcd_ep_t out_ep[MAX_EPS_CHANNELS - 1];
 	/** number of valid EPs in the above array. */
-//        unsigned      num_eps : 4;            
-	spinlock_t lock;
-	/** Timer for SRP.	If it expires before SRP is successful
-	 * clear the SRP. */
-	struct timer_list srp_timer;
+//        unsigned      num_eps : 4;
+	dwc_spinlock_t *lock;
 
 	/** Tasklet to defer starting of TEST mode transmissions until
 	 *	Status Phase has been completed.
 	 */
-	struct tasklet_struct test_mode_tasklet;
+	dwc_tasklet_t *test_mode_tasklet;
 
 	/** Tasklet to delay starting of xfer in DMA mode */
-	struct tasklet_struct *start_xfer_tasklet;
+	dwc_tasklet_t *start_xfer_tasklet;
 
 	/** The test mode to enter when the tasklet is executed. */
 	unsigned test_mode;
-
-	/* For shared none_perioc TxFIFO*/
-	int ep_in_sync;
-	int ep_in_same_cnt;
-	struct list_head req_queue;
-
-} dwc_otg_pcd_t;
-
-/** DWC_otg request structure.
- * This structure is a list of requests.
- */
-typedef struct dwc_otg_pcd_request {
-	struct usb_request req;	     /**< USB Request. */
-	struct list_head queue;		/**< queue of these requests. */
-	struct list_head pcd_queue;	
-	dwc_otg_pcd_ep_t *ep;
-} dwc_otg_pcd_request_t;
-
-static inline void dwc_otg_device_soft_connect(dwc_otg_core_if_t *_core_if) {
-        dwc_modify_reg32( &_core_if->dev_if->dev_global_regs->dctl,2,0); //clr
-}
-
-static inline void dwc_otg_device_soft_disconnect(dwc_otg_core_if_t *_core_if) {
-    	 dwc_modify_reg32( &_core_if->dev_if->dev_global_regs->dctl,0,2);  //set
-}
-
-extern int __init dwc_otg_pcd_init(struct lm_device *_lmdev);
-
-//extern void dwc_otg_pcd_remove( struct dwc_otg_device *_otg_dev );
-extern void dwc_otg_pcd_remove(struct lm_device *_lmdev);
-extern int32_t dwc_otg_pcd_handle_intr(dwc_otg_pcd_t * _pcd);
-extern void dwc_otg_pcd_start_srp_timer(dwc_otg_pcd_t * _pcd);
-
-extern void dwc_otg_pcd_initiate_srp(dwc_otg_pcd_t * _pcd);
-extern void dwc_otg_pcd_remote_wakeup(dwc_otg_pcd_t * _pcd, int set);
-extern void dwc_otg_pcd_dma_map(dwc_ep_t * ep, struct usb_request * _req);
-extern void dwc_otg_pcd_dma_unmap(dwc_ep_t * ep);
-
+	/** The cfi_api structure that implements most of the CFI API
+	 * and OTG specific core configuration functionality
+	 */
+#ifdef DWC_UTE_CFI
+	struct cfiobject *cfi;
 #endif
-#endif				/* DWC_HOST_ONLY */
+
+};
+
+//FIXME this functions should be static, and this prototypes should be removed
+extern void dwc_otg_request_nuke(dwc_otg_pcd_ep_t * ep);
+extern void dwc_otg_request_done(dwc_otg_pcd_ep_t * ep,
+				 dwc_otg_pcd_request_t * req, int32_t status);
+
+void dwc_otg_iso_buffer_done(dwc_otg_pcd_t * pcd, dwc_otg_pcd_ep_t * ep,
+			     void *req_handle);
+
+extern void do_test_mode(void *data);
+#endif
+#endif /* DWC_HOST_ONLY */
