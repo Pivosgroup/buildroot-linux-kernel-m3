@@ -2068,6 +2068,10 @@ static void _set_video_window(int *p)
     video_property_changed = true;
 }
 
+u32 get_current_screenmode(void)
+{
+    return wide_setting;
+}
 /*********************************************************
  * /dev/amvideo APIs
  *********************************************************/

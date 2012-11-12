@@ -71,8 +71,10 @@ static int backup_content_w = 0, backup_content_h = 0;
 static int scaler_x = 0,scaler_y = 0,scaler_w = 0,scaler_h = 0;
 static int scale_clear_count = 0;
 static int scaler_pos_changed = 0 ;
+static u32 cur_screenmode = 0;
 extern u32 amvideo_get_scaler_mode(void);
 extern u32 amvideo_get_scaler_para(int* x, int* y, int* w, int* h, u32* ratio);
+extern u32 get_current_screenmode(void);
 #endif
 
 static spinlock_t lock = SPIN_LOCK_UNLOCKED;
@@ -505,7 +507,9 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
 #ifdef CONFIG_POST_PROCESS_MANAGER_PPSCALER
     int rect_x = 0, rect_y = 0, rect_w = 0, rect_h = 0;
     u32 ratio = 100;
+    u32 screen_mode = 0;
     mode = amvideo_get_scaler_para(&rect_x, &rect_y, &rect_w, &rect_h, &ratio);
+    screen_mode = get_current_screenmode();
 #endif
 
     new_vf = vfq_pop(&q_free);
@@ -557,12 +561,13 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
         new_vf->height = ppmgr_device.disp_height;
         new_vf->ratio_control = DISP_RATIO_FORCECONFIG|DISP_RATIO_NO_KEEPRATIO;
         if((rect_x != scaler_x)||(rect_w != scaler_w)
-          ||(rect_y != scaler_y)||(rect_h != scaler_h)){
+          ||(rect_y != scaler_y)||(rect_h != scaler_h)||(cur_screenmode!=screen_mode)){
             scale_clear_count = VF_POOL_SIZE;
             scaler_x = rect_x;
             scaler_y = rect_y;
             scaler_w = rect_w;
             scaler_h = rect_h; 
+            cur_screenmode = screen_mode;
             //printk("--ppmgr new rect x:%d, y:%d, w:%d, h:%d.\n", rect_x, rect_y, rect_w, rect_h);
         }
         if((!rect_w)||(!rect_h)){
@@ -869,7 +874,7 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
             sh = vf->height;
             dh = rect_h;
         }
-        if((dx >=0)&&(dy>=0)){
+        if((dx >=0)&&(dy>=0)&&(screen_mode == 0)){
             vf_ratio_adjust(vf, &dx,&dy,&dw,&dh);
         }
         //if(scale_clear_count==3)
