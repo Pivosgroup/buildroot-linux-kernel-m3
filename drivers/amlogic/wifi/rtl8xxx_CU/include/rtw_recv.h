@@ -48,10 +48,10 @@ static u8 oui_8021h[] = {0x00, 0x00, 0xf8};
 static u8 oui_rfc1042[]= {0x00,0x00,0x00};
 
 #define MAX_SUBFRAME_COUNT	64
-static u8 rfc1042_header[] =
+static u8 rtw_rfc1042_header[] =
 { 0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00 };
 /* Bridge-Tunnel header (for EtherTypes ETH_P_AARP and ETH_P_IPX) */
-static u8 bridge_tunnel_header[] =
+static u8 rtw_bridge_tunnel_header[] =
 { 0xaa, 0xaa, 0x03, 0x00, 0x00, 0xf8 };
 
 //for Rx reordering buffer control
@@ -143,10 +143,12 @@ struct rx_pkt_attrib	{
 
 	u8	mcs_rate;
 	u8	rxht;
+	u8 	sgi;
 	u8	signal_qual;
 	s8	rx_mimo_signal_qual[2];	
 	u8	signal_strength;
-
+	u8	rx_rssi[2];  //This value is percentage
+	u8	rx_snr[2];
 	u32	RxPWDBAll;
 	s32	RecvSignalPower;
 };

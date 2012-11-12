@@ -329,6 +329,11 @@ static int prepare_capture_urb(struct snd_usb_substream *subs,
 		offs += subs->curpacksize;
 	}
 	urb->transfer_buffer_length = offs;
+	/* Logitech C170 Webcam */
+	if((le16_to_cpu(subs->dev->descriptor.idVendor) == 0x046d) &&
+		(le16_to_cpu(subs->dev->descriptor.idProduct) == 0x082b))
+		urb->transfer_buffer_length = 1024;
+
 	urb->number_of_packets = ctx->packets;
 	return 0;
 }
@@ -984,10 +989,18 @@ static int snd_usb_pcm_capture_trigger(struct snd_pcm_substream *substream,
 static void release_urb_ctx(struct snd_urb_ctx *u)
 {
 	if (u->urb) {
-		if (u->buffer_size)
-			usb_buffer_free(u->subs->dev, u->buffer_size,
+		if (u->buffer_size){
+			/* Logitech C170 Webcam */
+			if((le16_to_cpu(u->subs->dev->descriptor.idVendor) == 0x046d) &&
+				(le16_to_cpu(u->subs->dev->descriptor.idProduct) == 0x082b))
+				usb_buffer_free(u->subs->dev, 1024,
 					u->urb->transfer_buffer,
 					u->urb->transfer_dma);
+			else
+				usb_buffer_free(u->subs->dev, u->buffer_size,
+					u->urb->transfer_buffer,
+					u->urb->transfer_dma);
+		}
 		usb_free_urb(u->urb);
 		u->urb = NULL;
 	}
@@ -1112,9 +1125,18 @@ static int init_substream_urbs(struct snd_usb_substream *subs, unsigned int peri
 		u->urb = usb_alloc_urb(u->packets, GFP_KERNEL);
 		if (!u->urb)
 			goto out_of_memory;
-		u->urb->transfer_buffer =
-			usb_buffer_alloc(subs->dev, u->buffer_size, GFP_KERNEL,
+
+		/* Logitech C170 Webcam */
+		if((le16_to_cpu(subs->dev->descriptor.idVendor) == 0x046d) &&
+			(le16_to_cpu(subs->dev->descriptor.idProduct) == 0x082b))
+			u->urb->transfer_buffer =
+				usb_buffer_alloc(subs->dev, 1024, GFP_KERNEL,
+					 &u->urb->transfer_dma);		
+		else
+			u->urb->transfer_buffer =
+				usb_buffer_alloc(subs->dev, u->buffer_size, GFP_KERNEL,
 					 &u->urb->transfer_dma);
+
 		if (!u->urb->transfer_buffer)
 			goto out_of_memory;
 		u->urb->pipe = subs->datapipe;
@@ -2995,6 +3017,14 @@ static int parse_audio_endpoints(struct snd_usb_audio *chip, int iface_no)
 		fp->ep_attr = get_endpoint(alts, 0)->bmAttributes;
 		fp->datainterval = parse_datainterval(chip, alts);
 		fp->maxpacksize = le16_to_cpu(get_endpoint(alts, 0)->wMaxPacketSize);
+
+		/* Logitech C170 Webcam */
+		if((chip->usb_id == USB_ID(0x046d, 0x082b)) && (iface_no == 3) && (altno == 1)){
+			//fp->maxpacksize = 1024;
+			alts->endpoint[0].desc.wMaxPacketSize = 1024;
+			snd_printk(KERN_WARNING "%s fix ep size to 1024\n",__func__);
+		}
+		
 		/* num_channels is only set for v2 interfaces */
 		fp->channels = num_channels;
 		if (snd_usb_get_speed(dev) == USB_SPEED_HIGH)

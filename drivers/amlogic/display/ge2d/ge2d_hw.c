@@ -574,7 +574,7 @@ int ge2d_cmd_fifo_full(void)
 //####################################################################################################
 void ge2d_set_cmd (ge2d_cmd_t *cfg)
 {
-    int widthi, heighti, tmp_widthi, tmp_heighti, widtho, heighto;
+    unsigned int widthi, heighti, tmp_widthi, tmp_heighti, widtho, heighto;
     unsigned int multo;
     unsigned x_extra_bit_start = 0, x_extra_bit_end = 0;
     unsigned y_extra_bit_start = 0, y_extra_bit_end = 0;
@@ -663,10 +663,10 @@ void ge2d_set_cmd (ge2d_cmd_t *cfg)
     tmp_heighti = sc_prevsc_en ? ((heighti+1) >>1): heighti; 
    
     if (cfg->hsc_phase_step == 0)
-       cfg->hsc_phase_step = ((tmp_widthi << 20) / widtho) <<4;
+       cfg->hsc_phase_step = ((tmp_widthi << 18) / widtho) <<6;//width no more than 8192
 
     if (cfg->vsc_phase_step == 0)
-       cfg->vsc_phase_step = ((tmp_heighti << 20) / heighto) << 4;   
+       cfg->vsc_phase_step = ((tmp_heighti << 18) / heighto) << 6;//height no more than 8192
        
     if ((cfg->sc_hsc_en) && (cfg->hsc_div_en)) {
         cfg->hsc_div_length = (124 << 24) / cfg->hsc_phase_step;

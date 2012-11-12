@@ -182,6 +182,11 @@ static u32 video_scaler_mode = 0;
 static int content_top = 0, content_left = 0, content_w = 0, content_h = 0;
 static int scaler_pos_changed = 0;
 #endif
+
+#if defined(CONFIG_ARCH_MESON3) && !defined(CONFIG_AM_TCON_OUTPUT)
+static u32 v_current_field = 0;
+#endif
+
 #if 0
 int video_property_notify(int flag)
 {
@@ -959,8 +964,22 @@ static int detect_vout_type(void)
     int vout_type;
     int encp_enable = READ_MPEG_REG(ENCP_VIDEO_EN) & 1;
 
-    if (encp_enable) {
+    int viu2_sel = (READ_MPEG_REG(VPU_VIU_VENC_MUX_CTRL)>>2)&0x3; // 0=No connection, 1=ENCI, 2=ENCP, 3=ENCT.
+    
+    if (viu2_sel==2) {
         if (READ_MPEG_REG(ENCP_VIDEO_MODE) & (1 << 12)) {
+#if defined(CONFIG_ARCH_MESON3)
+            /* 1080I */
+            if(READ_MPEG_REG(VENC_INTFLAG) & 0x200) {
+                WRITE_MPEG_REG(VENC_INTCTRL, 0x200);
+                v_current_field = 0;
+            }
+            else {
+                v_current_field = v_current_field^1;
+            }
+            vout_type = (v_current_field & 1) ?
+                    VOUT_TYPE_BOT_FIELD : VOUT_TYPE_TOP_FIELD;
+#else
             /* 1080I */
             if (READ_MPEG_REG(VENC_ENCP_LINE) < 562) {
                 vout_type = VOUT_TYPE_TOP_FIELD;
@@ -968,14 +987,30 @@ static int detect_vout_type(void)
             } else {
                 vout_type = VOUT_TYPE_BOT_FIELD;
             }
-
-        } else {
+#endif
+        }
+        else {
             vout_type = VOUT_TYPE_PROG;
         }
 
-    } else {
+    } else if(viu2_sel==1) {
+#if defined(CONFIG_ARCH_MESON3)
+        if(READ_MPEG_REG(VENC_INTFLAG) & 4) {
+            WRITE_MPEG_REG(VENC_INTCTRL, 4);
+            v_current_field = 0;
+        }
+        else {
+            v_current_field = v_current_field^1;
+        }
+        vout_type = (v_current_field & 1) ?
+                    VOUT_TYPE_BOT_FIELD : VOUT_TYPE_TOP_FIELD;
+#else
         vout_type = (READ_MPEG_REG(VENC_STATA) & 1) ?
                     VOUT_TYPE_BOT_FIELD : VOUT_TYPE_TOP_FIELD;
+#endif
+    }
+    else{
+        vout_type = VOUT_TYPE_PROG;    
     }
 
     return vout_type;
@@ -1269,23 +1304,35 @@ static irqreturn_t vsync_isr(int irq, void *dev_id)
                 vf = video_vf_get();
                 video_vf_put(vf);
             }
+            else if(clone_frame_rate_force < 0){
+                vf = video_vf_get();
+                vsync_toggle_frame(vf);
+                
+            }
             else if(clone_vpts_remainder < vsync_pts_inc){
                 vf = video_vf_get();
 #ifdef CONFIG_TVIN_VIUIN
-                if(clone_frame_scale_width != 0){
-                    vdin0_set_hscale(
-                        vf->width, //int src_w, 
-                        clone_frame_scale_width, //int dst_w, 
-                        1, //int hsc_en, 
-                        0, //int prehsc_en, 
-                        4, //int hsc_bank_length,
-                        1, //int hsc_rpt_p0_num,
-                        4, //int hsc_ini_rcv_num,
-                        0, //int hsc_ini_phase,
-                        1  //int short_lineo_en
-                    ); 
-                    vf->width = clone_frame_scale_width;
-                }
+				if(vf->width >= 1280){
+					if(clone_frame_scale_width != 0){
+						vdin0_set_hscale(
+							vf->width, //int src_w, 
+							clone_frame_scale_width, //int dst_w, 
+							1, //int hsc_en, 
+							0, //int prehsc_en, 
+							4, //int hsc_bank_length,
+							1, //int hsc_rpt_p0_num,
+							4, //int hsc_ini_rcv_num,
+							0, //int hsc_ini_phase,
+							1  //int short_lineo_en
+						); 
+						vf->width = clone_frame_scale_width;
+					}
+				}else{
+/*
+   the vframe is  freescale processed , so nothing to change
+   freescale width&height is less than 800*600
+*/					
+				}
 #endif                
                 vsync_toggle_frame(vf);
                 //clone_vpts_remainder += DUR2PTS(vf->duration);
@@ -1695,9 +1742,9 @@ static void video_vf_unreg_provider(void)
     }
 
     //if (!trickmode_fffb)
-    {
-        vf_keep_current();
-    }
+    //{
+        //vf_keep_current();
+    //}
 
     if(clone == 0){
         tsync_avevent(VIDEO_STOP, 0);
@@ -2387,7 +2434,7 @@ static int start_clone(void)
         para.fmt_info.h_active = info->width;
         para.fmt_info.v_active = info->height;
         para.port  = TVIN_PORT_VIU_ENCT;
-        para.fmt_info.fmt = TVIN_SIG_FMT_MAX+1;//TVIN_SIG_FMT_MAX+1;TVIN_SIG_FMT_CAMERA_1280X720P_30Hz
+        para.fmt_info.fmt = info->mode; //TVIN_SIG_FMT_MAX+1;//TVIN_SIG_FMT_MAX+1;TVIN_SIG_FMT_CAMERA_1280X720P_30Hz
         para.fmt_info.frame_rate = clone_frame_rate*10;
         para.fmt_info.hsync_phase = 1;
       	para.fmt_info.vsync_phase  = 0;	

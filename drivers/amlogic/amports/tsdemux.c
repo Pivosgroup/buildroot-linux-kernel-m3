@@ -28,6 +28,7 @@
 #include <linux/fs.h>
 #include <linux/amports/ptsserv.h>
 #include <linux/amports/amstream.h>
+#include <linux/amports/vframe_provider.h>
 #include <linux/device.h>
 
 #include <asm/uaccess.h>
@@ -52,6 +53,10 @@ static struct tsdemux_ops *demux_ops = NULL;
 static irq_handler_t       demux_handler;
 static void               *demux_data;
 static DEFINE_SPINLOCK(demux_ops_lock);
+
+static int aud_pid = 0xffff;
+static int vid_pid = 0xffff;
+static int sub_pid = 0xffff;
 
 void tsdemux_set_ops(struct tsdemux_ops *ops)
 {
@@ -88,6 +93,7 @@ static int tsdemux_reset(void)
 
     spin_lock_irqsave(&demux_ops_lock, flags);
     if (demux_ops && demux_ops->reset) {
+        tsdemux_set_reset_flag();
         r = demux_ops->reset();
     } else {
         WRITE_MPEG_REG(RESET1_REGISTER, RESET_DEMUXSTB);
@@ -159,6 +165,10 @@ static int tsdemux_set_vid(int vpid)
     unsigned long flags;
     int r = 0;
 
+    if(vpid == vid_pid){
+        return r;
+    }
+
     spin_lock_irqsave(&demux_ops_lock, flags);
     if (demux_ops && demux_ops->set_vid) {
         r = demux_ops->set_vid(vpid);
@@ -174,6 +184,7 @@ static int tsdemux_set_vid(int vpid)
         WRITE_MPEG_REG(MAX_FM_COMP_ADDR, 1);
         r = 0;
     }
+    vid_pid = vpid;
     spin_unlock_irqrestore(&demux_ops_lock, flags);
 
     return r;
@@ -183,6 +194,10 @@ static int tsdemux_set_aid(int apid)
 {
     unsigned long flags;
     int r = 0;
+
+    if(apid==aud_pid){
+        return r;
+    }
 
     spin_lock_irqsave(&demux_ops_lock, flags);
     if (demux_ops && demux_ops->set_aid) {
@@ -199,6 +214,7 @@ static int tsdemux_set_aid(int apid)
         WRITE_MPEG_REG(MAX_FM_COMP_ADDR, 1);
         r = 0;
     }
+    aud_pid = apid;
     spin_unlock_irqrestore(&demux_ops_lock, flags);
 
     return r;
@@ -208,6 +224,10 @@ static int tsdemux_set_sid(int spid)
 {
     unsigned long flags;
     int r = 0;
+
+    if(spid==sub_pid){
+        return r;
+    }
 
     spin_lock_irqsave(&demux_ops_lock, flags);
     if (demux_ops && demux_ops->set_sid) {
@@ -222,6 +242,7 @@ static int tsdemux_set_sid(int spid)
         WRITE_MPEG_REG(MAX_FM_COMP_ADDR, 1);
         r = 0;
     }
+    sub_pid = spid;
     spin_unlock_irqrestore(&demux_ops_lock, flags);
 
     return r;
@@ -304,20 +325,25 @@ static irqreturn_t tsdemux_isr(int irq, void *dev_id)
 
         WRITE_MPEG_REG(STB_PTS_DTS_STATUS, pdts_status);
 #else
-        u32 pdts_status = id ? READ_MPEG_REG(STB_PTS_DTS_STATUS_2) : READ_MPEG_REG(STB_PTS_DTS_STATUS);
+#define DMX_READ_REG(i,r)\
+	((i)?((i==1)?READ_MPEG_REG(r##_2):READ_MPEG_REG(r##_3)):READ_MPEG_REG(r))
+	
+        u32 pdts_status = DMX_READ_REG(id, STB_PTS_DTS_STATUS);
 
         if (pdts_status & (1 << VIDEO_PTS_READY))
             pts_checkin_wrptr(PTS_TYPE_VIDEO,
-                              id ? READ_MPEG_REG(VIDEO_PDTS_WR_PTR_2) : READ_MPEG_REG(VIDEO_PDTS_WR_PTR),
-                              id ? READ_MPEG_REG(VIDEO_PTS_DEMUX_2) : READ_MPEG_REG(VIDEO_PTS_DEMUX));
+                              DMX_READ_REG(id, VIDEO_PDTS_WR_PTR),
+                              DMX_READ_REG(id, VIDEO_PTS_DEMUX));
 
         if (pdts_status & (1 << AUDIO_PTS_READY))
             pts_checkin_wrptr(PTS_TYPE_AUDIO,
-                              id ? READ_MPEG_REG(AUDIO_PDTS_WR_PTR_2) : READ_MPEG_REG(AUDIO_PDTS_WR_PTR),
-                              id ? READ_MPEG_REG(AUDIO_PTS_DEMUX_2) : READ_MPEG_REG(AUDIO_PTS_DEMUX));
+                              DMX_READ_REG(id, AUDIO_PDTS_WR_PTR),
+                              DMX_READ_REG(id, AUDIO_PTS_DEMUX));
 
-        if (id) {
+        if (id == 1) {
             WRITE_MPEG_REG(STB_PTS_DTS_STATUS_2, pdts_status);
+        } else if (id == 2){
+            WRITE_MPEG_REG(STB_PTS_DTS_STATUS_3, pdts_status);
         } else {
             WRITE_MPEG_REG(STB_PTS_DTS_STATUS, pdts_status);
         }

@@ -131,9 +131,24 @@ struct dvb_frontend_private {
 	int quality;
 	unsigned int check_wrapped;
 	enum dvbfe_search algo_status;
+	int user_delay;		
 };
 
 static void dvb_frontend_wakeup(struct dvb_frontend *fe);
+
+void dvb_frontend_retune(struct dvb_frontend *fe)
+{
+	struct dvb_frontend_private *fepriv = fe->frontend_priv;
+
+	fepriv->state = FESTATE_RETUNE;
+	
+	fepriv->algo_status |= DVBFE_ALGO_SEARCH_AGAIN;
+
+	dvb_frontend_wakeup(fe);
+	fepriv->status = 0;
+}
+
+EXPORT_SYMBOL(dvb_frontend_retune);
 
 static void dvb_frontend_add_event(struct dvb_frontend *fe, fe_status_t status)
 {
@@ -580,6 +595,8 @@ restart:
 			fepriv->reinitialise = 0;
 		}
 
+		if (fepriv->user_delay>=0)
+
 		/* do an iteration of the tuning loop */
 		if (fe->ops.get_frontend_algo) {
 			algo = fe->ops.get_frontend_algo(fe);
@@ -656,6 +673,12 @@ restart:
 		} else {
 			dvb_frontend_swzigzag(fe);
 		}
+
+		if(fepriv->user_delay>0)
+			msleep(fepriv->user_delay);
+		else if(fepriv->user_delay<0)
+			msleep(200);
+
 	}
 
 	if (dvb_powerdown_on_sleep) {
@@ -1487,6 +1510,7 @@ static int dvb_frontend_ioctl(struct inode *inode, struct file *file,
 	struct dvb_frontend *fe = dvbdev->priv;
 	struct dvb_frontend_private *fepriv = fe->frontend_priv;
 	int err = -EOPNOTSUPP;
+	int need_lock = 1;
 
 	dprintk("%s (%d)\n", __func__, _IOC_NR(cmd));
 
@@ -1498,8 +1522,17 @@ static int dvb_frontend_ioctl(struct inode *inode, struct file *file,
 	     cmd == FE_DISEQC_RECV_SLAVE_REPLY))
 		return -EPERM;
 
-	if (down_interruptible (&fepriv->sem))
-		return -ERESTARTSYS;
+	if (cmd==FE_READ_STATUS ||
+			cmd==FE_READ_BER ||
+			cmd==FE_READ_SIGNAL_STRENGTH ||
+			cmd==FE_READ_SNR ||
+			cmd==FE_READ_UNCORRECTED_BLOCKS ||
+			cmd==FE_GET_FRONTEND)
+		need_lock = 0;
+
+	if (need_lock)
+		if (down_interruptible (&fepriv->sem))
+			return -ERESTARTSYS;
 
 	if ((cmd == FE_SET_PROPERTY) || (cmd == FE_GET_PROPERTY))
 		err = dvb_frontend_ioctl_properties(inode, file, cmd, parg);
@@ -1508,7 +1541,8 @@ static int dvb_frontend_ioctl(struct inode *inode, struct file *file,
 		err = dvb_frontend_ioctl_legacy(inode, file, cmd, parg);
 	}
 
-	up(&fepriv->sem);
+	if(need_lock)
+		up(&fepriv->sem);
 	return err;
 }
 
@@ -1878,6 +1912,47 @@ static int dvb_frontend_ioctl_legacy(struct inode *inode, struct file *file,
 		fepriv->tune_mode_flags = (unsigned long) parg;
 		err = 0;
 		break;
+
+	#if 1  // for dvbs2 blind scan;	
+	case  FE_SET_BLINDSCAN:
+		printk("FE_SET_BLINDSCAN\n");
+		if (fe->ops.blindscan_scan)
+			err = fe->ops.blindscan_scan(fe, (struct dvbsx_blindscanpara*) parg);
+	
+		break;
+
+	case  FE_GET_BLINDSCANSTATUS:
+		printk("FE_GET_BLINDSCANSTATUS\n");
+		if (fe->ops.blindscan_getscanstatus)
+			err = fe->ops.blindscan_getscanstatus(fe, (struct dvbsx_blindscaninfo*) parg);
+		break;
+
+	case  FE_SET_BLINDSCANCANCEl:
+		printk("FE_SET_BLINDSCANCANCEl\n");
+		if (fe->ops.blindscan_cancel)
+			err = fe->ops.blindscan_cancel(fe);
+
+		break;
+
+	case FE_READ_BLINDSCANCHANNELINFO:
+		printk("FE_READ_BLINDSCANCHANNELINFO\n");
+		if (fe->ops.blindscan_readchannelinfo)
+			err = fe->ops.blindscan_readchannelinfo(fe, (struct dvb_frontend_parameters*) parg);
+
+		break;
+
+	case FE_SET_BLINDSCANRESET:
+		printk("FE_SET_BLINDSCANRESET\n");
+		if (fe->ops.blindscan_reset)
+			err = fe->ops.blindscan_reset(fe);
+
+		break;
+	case FE_SET_DELAY:
+		fepriv->user_delay = (int)parg;
+		err = 0;
+		break;			
+	
+	#endif
 	};
 
 	if (fe->dvb->fe_ioctl_override) {

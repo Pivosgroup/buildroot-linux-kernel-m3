@@ -1,18 +1,20 @@
 on early-init
+    # Set init and its forked children's oom_adj.
+    write /proc/1/oom_adj -16
     start ueventd
-    mkdir /system
-    mount yaffs2 mtd@system /system
+
     # setup logo file for different resolution
     symlink /initlogo.480p.rle /initlogo.480i.rle
     symlink /initlogo.1080p.rle /initlogo.1080i.rle
     symlink /initlogo.576p.rle /initlogo.576i.rle
+#    symlink /initlogo.rle.bak /initlogo.rle
+
     write /sys/class/graphics/fb0/blank 0
     write /sys/class/graphics/fb1/blank 1
     insmod /boot/ump.ko ump_debug_level=2
     insmod /boot/mali.ko mali_debug_level=2
     # create mountpoints
-    mkdir /mnt 0777 root system
-
+    mkdir /mnt 0775 root system
 on init
     sysclktz 0
     loglevel 7
@@ -30,26 +32,24 @@ on init
     export ANDROID_ASSETS /system/app
     export ANDROID_DATA /data
     export EXTERNAL_STORAGE /mnt/sdcard
+    export EXTERNAL_STORAGE2 /mnt/sdcard/external_sdcard
+    export INTERNAL_STORAGE /mnt/sdcard
 #    export INTERNAL_STORAGE /data/internal-device
 #    export INTERNAL_STORAGE_STATE mounted
     export ASEC_MOUNTPOINT /mnt/asec
     export LOOP_MOUNTPOINT /mnt/obb
     export BOOTCLASSPATH /system/framework/core.jar:/system/framework/core-junit.jar:/system/framework/bouncycastle.jar:/system/framework/ext.jar:/system/framework/framework.jar:/system/framework/android.policy.jar:/system/framework/services.jar:/system/framework/apache-xml.jar:/system/framework/filterfw.jar
 
-    # Mount /system rw first to give the filesystem a chance to save a checkpoint
-
-    # Backward compatibility
-    symlink /system/etc /etc
-    symlink /sys/kernel/debug /d
-
     # Right now vendor lives on the same filesystem as system,
     # but someday that may change.
     symlink /system/vendor /vendor
-
+    
+# Backward compatibility
+    symlink /system/etc /etc
+    symlink /sys/kernel/debug /d
 
 # create mountpoints
-    mkdir /mnt/sdcard 0777 system system
-    mkdir /mnt/sdcard/external_sdcard 0777 system system
+    mkdir /mnt/sdcard 0000 system system
 
 # Create cgroup mount point for cpu accounting
     mkdir /acct
@@ -119,7 +119,7 @@ on fs
 
 on post-fs
     # once everything is setup, no need to modify /
-    mount yaffs2 mtd@system /system ro remount     
+    #mount rootfs rootfs / ro remount
 
     # We chown/chmod /cache again so because mount is run as root + defaults
     chown system cache /cache
@@ -147,7 +147,7 @@ on post-fs
 on post-fs-data
     # We chown/chmod /data again so because mount is run as root + defaults
     chown system system /data
-    chmod 0777 /data
+    chmod 0771 /data
     # Create dump dir and collect dumps.
     # Do this before we mount cache so eventually we can use cache for
     # storing dumps on platforms which do not have a dedicated dump partition.
@@ -186,6 +186,8 @@ on post-fs-data
     mkdir /data/app 0771 system system
     mkdir /data/property 0700 root root
     chmod 0777 /etc/ppp
+    mkdir /data/misc/etc 0777 system system
+    mkdir /data/misc/etc/ppp 0777 system system
 
     # BlueTooth
     chmod 0777 /sys/class/rfkill/rfkill0/state
@@ -326,6 +328,9 @@ on boot
     chmod 0666 /sys/class/graphics/fb1/blank
     chmod 0666 /sys/class/graphics/fb1/order
 
+    chmod 0666 /sys/class/amaudio/enable_resample
+    chmod 0666 /sys/class/amaudio/resample_type
+
     chmod 0666 /sys/class/video/blackout_policy
     chmod 0666 /sys/class/video/screen_mode
     chmod 0666 /sys/class/video/axis
@@ -335,6 +340,9 @@ on boot
     chmod 0666 /sys/class/ppmgr/ppscaler
     chmod 0666 /sys/class/ppmgr/ppscaler_rect
     chmod 0666 /sys/class/ppmgr/disp
+    
+    chmod 0666 /sys/class/audiodsp/digital_raw
+
     chmod 0666 /dev/amstream_sub_read
     chmod 0666 /dev/ilitek_ctrl
 
@@ -385,7 +393,14 @@ on boot
     chmod 0666 /sys/class/stb/audio_pts
     chmod 0666 /sys/class/tsync/pcr_recover
 
-    chmod 0666 /sys/module/deinterlace/parameters/deinterlace_mode
+    chmod 0666 /sys/class/vfm/map
+    chmod 0666 /sys/module/amvdec_h264/parameters/dec_control
+    chmod 0666 /sys/module/amvdec_mpeg12/parameters/dec_control
+    chmod 0666 /sys/module/di/parameters/bypass_hd
+    
+    #
+    chown media system /sys/class/graphics/fb0/block_mode
+    chmod 0664 /sys/class/graphics/fb0/block_mode
 
     # HDMI/LCD switch
     chmod 0777 /sys/class/display/mode
@@ -393,6 +408,11 @@ on boot
     chmod 0777 /sys/class/graphics/fb0/scale
     chmod 0777 /sys/class/graphics/fb1/scale
     chmod 0777 /sys/class/amhdmitx/amhdmitx0/disp_mode
+    chmod 0666 /sys/class/amhdmitx/amhdmitx0/config
+    #CVBS switch
+    chmod 0777 /sys/class/display2/mode
+    chmod 0777 /sys/module/amvideo2/parameters/clone_frame_scale_width
+    chmod 0777 /sys/class/video2/screen_mode
     
 
     # Free scale
@@ -403,9 +423,10 @@ on boot
     chmod 0666 /sys/class/graphics/fb1/free_scale
     chmod 0666 /sys/class/graphics/fb1/scale_width
     chmod 0666 /sys/class/graphics/fb1/scale_height
-	chmod 0777 /sys/class/graphics/fb0/request2XScale
+    chmod 0777 /sys/class/graphics/fb0/request2XScale
 
-
+	#video_hole
+	chmod 0666 /sys/class/graphics/fb0/video_hole
     # Speaker mute
     chmod 0666 /sys/devices/platform/soc-audio/codec_reg
 
@@ -414,31 +435,20 @@ on boot
     chmod 0666 /dev/ttyS20
     chmod 0777 /system/etc/init-pppd.sh
 
-# set gpio for geinatech.    
-    chmod 0666 /dev/gpio_dev
-    chmod 0666 /dev/alarm
-    chmod 666 /dev/i2c-0
-    chmod 666 /sys/power/state
-    chmod 666 /sys/power/wake_lock
-    chmod 666 /sys/power/wake_unlock
-    chmod 666 /sys/class/amaudio/audio_channels_mask 
-    chmod 666 /sys/class/amhdmitx/amhdmitx0/debug
-    chmod 666 /sys/class/efuse/userdata
-     
+
+
     # CPU scaling
-    chown system system /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
-    chown system system /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-    chmod 664 /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
-    chmod 664 /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+    chmod 777 /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
+    chmod 666 /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
     # patch to disable suspend 
     # write /sys/power/wake_lock true
 
     # Set CPU scaling policy to conservative
     write /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor performance
-    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq 200000
-    chown system system /sys/devices/system/cpu/cpu0/cpufreq/conservative/freq_step
-    chmod 664 /sys/devices/system/cpu/cpu0/cpufreq/conservative/freq_step
-    write /sys/devices/system/cpu/cpu0/cpufreq/conservative/freq_step 10
+    #write /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor conservative
+    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq 100000
+    chmod 666 /sys/devices/system/cpu/cpu0/cpufreq/conservative/freq_step
+    write /sys/devices/system/cpu/cpu0/cpufreq/conservative/freq_step 20
     # Bluetooth
     chmod 0777 /system/bin/hciattach_usi
     chmod 0777 /sys/class/rfkill/rfkill0/state
@@ -505,6 +515,23 @@ on property:sys.usb.config=adb
     start adbd
     setprop sys.usb.state $sys.usb.config
 
+on property:sys.usb.config=mass_storage
+    write /sys/class/android_usb/android0/enable 0
+    write /sys/class/android_usb/android0/idVendor 18d1
+    write /sys/class/android_usb/android0/idProduct 4e21
+    write /sys/class/android_usb/android0/functions $sys.usb.config
+    write /sys/class/android_usb/android0/enable 1
+    setprop sys.usb.state $sys.usb.config
+
+on property:sys.usb.config=mass_storage,adb
+    write /sys/class/android_usb/android0/enable 0
+    write /sys/class/android_usb/android0/idVendor 18d1
+    write /sys/class/android_usb/android0/idProduct 4e22
+    write /sys/class/android_usb/android0/functions $sys.usb.config
+    write /sys/class/android_usb/android0/enable 1
+    start adbd
+    setprop sys.usb.state $sys.usb.config
+
 # USB accessory configuration
 on property:sys.usb.config=accessory
     write /sys/class/android_usb/android0/enable 0
@@ -543,8 +570,8 @@ service console /system/bin/sh
     class core
     console
 #    disabled
-    user shell
-    group log
+#    user shell
+#    group log
 
 #on property:ro.debuggable=1
 #    start console
@@ -755,6 +782,22 @@ service dhcpcd_wlan0 /system/bin/dhcpcd -d -f /system/etc/dhcpcd/dhcpcd.conf -B
     disabled
     oneshot
 
+service smbd /system/bin/smbd
+    class main
+    group system system
+
+service pppoe_wrapper /system/bin/pppoe_wrapper
+    class main
+    group system system
+    oneshot
+
+
+#service wififix /system/bin/wififix.sh
+#			class main
+#			group root root
+#			oneshot
+#			disabled
+
 
 service audio /system/bin/alsa_ctl restore
     class core
@@ -763,10 +806,6 @@ service audio /system/bin/alsa_ctl restore
 
 service usbpm /system/bin/usbtestpm
     disabled
-    
-#added for samba
-service smbd /system/bin/smbd
-    class main
 
 service hciattach /system/bin/ls /dev/null 
 		user root 
@@ -792,3 +831,4 @@ service remote_control /system/bin/remote_control
     group system
     socket remote_control_event stream 666 root system
     socket remote_control_sensor stream 666 root system
+    socket remote_control_service stream 666 root system

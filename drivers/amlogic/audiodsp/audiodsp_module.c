@@ -45,6 +45,7 @@ MODULE_VERSION("1.0.0");
 
 extern unsigned IEC958_mode_raw;
 extern unsigned IEC958_mode_codec;
+extern int decopt;
 static int IEC958_mode_raw_last = 0;
 static int IEC958_mode_codec_last = 0;
 extern struct audio_info * get_audio_info(void);
@@ -168,15 +169,19 @@ static int audiodsp_ioctl(struct inode *node, struct file *file, unsigned int cm
 		{
 		case AUDIODSP_SET_FMT:
 			priv->stream_fmt=args;
-            if(args == MCODEC_FMT_DTS)
-              	IEC958_mode_codec = 1;
-            else if(args == MCODEC_FMT_AC3)
-            	IEC958_mode_codec = 2; 	
-            else
-            	IEC958_mode_codec = 0;
+			if(IEC958_mode_raw){		
+				if(args == MCODEC_FMT_DTS)
+					IEC958_mode_codec = 1;
+				else if(args == MCODEC_FMT_AC3)
+					IEC958_mode_codec = 2; 	
+				else
+					IEC958_mode_codec = 0;
+			}	
+			else
+				IEC958_mode_codec = 0;
 			break;
 		case AUDIODSP_START:
-			if(IEC958_mode_raw_last != IEC958_mode_raw || (IEC958_mode_raw&&(IEC958_mode_codec_last !=  IEC958_mode_codec)))
+			if(IEC958_mode_codec || (IEC958_mode_codec_last != IEC958_mode_codec))
 			{
 				IEC958_mode_raw_last = IEC958_mode_raw;
 				IEC958_mode_codec_last = IEC958_mode_codec;
@@ -194,6 +199,7 @@ static int audiodsp_ioctl(struct inode *node, struct file *file, unsigned int cm
 				}
 			break;
 		case AUDIODSP_STOP:
+			IEC958_mode_codec = 0;
 			//DSP_PRNT("audiodsp command stop\n");
 			stop_audiodsp_monitor(priv);
 			dsp_stop(priv);
@@ -242,6 +248,8 @@ static int audiodsp_ioctl(struct inode *node, struct file *file, unsigned int cm
 						if(priv->format_wait_count > 5){						
 							if(audio_format->channels&&audio_format->sample_rate){
 								priv->frame_format.channel_num = audio_format->channels>2?2:audio_format->channels;
+								if(audio_format->channels == 1 && (priv->stream_fmt == MCODEC_FMT_AC3 ||priv->stream_fmt == MCODEC_FMT_DTS)) //ac3/dts decoder use Lt/Rt 2ch dmx mode
+                                	priv->frame_format.channel_num = 2; // force stereo
 								priv->frame_format.sample_rate = audio_format->sample_rate;
 								priv->frame_format.data_width = 16;
 								priv->frame_format.valid = CHANNEL_VALID|DATA_WIDTH_VALID|SAMPLE_RATE_VALID;
@@ -255,7 +263,7 @@ static int audiodsp_ioctl(struct inode *node, struct file *file, unsigned int cm
 						}
 					}
 				}else if(priv->frame_format.valid == (CHANNEL_VALID|DATA_WIDTH_VALID|SAMPLE_RATE_VALID)){
-					       DSP_PRNT("audio info from header: sr %d,ch %d\n",audio_format->sample_rate,audio_format->channels);
+					       DSP_PRNT("audio info from header: sr %d,ch %d\n",audio_format->sample_rate,audio_format->channels);       
 						if(audio_format->channels > 0 ){
 							if(audio_format->channels > 2)
 								ch = 2;
@@ -268,6 +276,11 @@ static int audiodsp_ioctl(struct inode *node, struct file *file, unsigned int cm
 							}	
 							
 						}
+                        /**
+                         * force to stereo for ac3/dts decoder
+                         * */
+						if(priv->frame_format.channel_num == 1 && (priv->stream_fmt == MCODEC_FMT_AC3 ||priv->stream_fmt == MCODEC_FMT_DTS)) //ac3/dts decoder use Lt/Rt 2ch dmx mode
+                        	priv->frame_format.channel_num = 2; // force stereo                         
 						if(audio_format->sample_rate&&audio_format->sample_rate != priv->frame_format.sample_rate){
 								DSP_PRNT(" sr num info from dsp and header not match,[dsp %d ],[header %d ]", \
 									priv->frame_format.sample_rate,audio_format->sample_rate);
@@ -701,6 +714,7 @@ static ssize_t dsp_working_status_show(struct class* cla, struct class_attribute
     pbuf += sprintf(pbuf, "\tdsp jeffies  0x%lx\n", DSP_RD(DSP_JIFFIES));
     pbuf += sprintf(pbuf, "\tdsp pcm wp  0x%lx\n", DSP_RD(DSP_DECODE_OUT_WD_ADDR));
     pbuf += sprintf(pbuf, "\tdsp pcm rp  0x%lx\n", DSP_RD(DSP_DECODE_OUT_RD_ADDR));
+	pbuf += sprintf(pbuf, "\tdsp pcm buffer level  0x%lx\n", dsp_codec_get_bufer_data_len(priv));
     pbuf += sprintf(pbuf, "\tdsp pcm buffered size  0x%lx\n", DSP_RD(DSP_BUFFERED_LEN));
     pbuf += sprintf(pbuf, "\tdsp es read offset  0x%lx\n", DSP_RD(DSP_AFIFO_RD_OFFSET1));
 
@@ -709,8 +723,13 @@ static ssize_t dsp_working_status_show(struct class* cla, struct class_attribute
 
 static ssize_t digital_raw_show(struct class*cla, struct class_attribute* attr, char* buf)
 {
+  static char* digital_format[] = {
+    "0 - PCM",
+    "1 - RAW w/o over clock",
+    "2 - RAW w/  over clock",
+  };
   char* pbuf = buf;
-  pbuf += sprintf(pbuf, "Digital output mode: %s\n", (IEC958_mode_raw==0)?"0 - PCM":"1 - RAW");
+  pbuf += sprintf(pbuf, "Digital output mode: %s\n", digital_format[IEC958_mode_raw]);
   return (pbuf-buf);
 }
 static ssize_t digital_raw_store(struct class* class, struct class_attribute* attr,
@@ -718,11 +737,69 @@ static ssize_t digital_raw_store(struct class* class, struct class_attribute* at
 {
   printk("buf=%s\n", buf);
   if(buf[0] == '0'){
-    IEC958_mode_raw = 0;
+    IEC958_mode_raw = 0;	// PCM
   }else if(buf[0] == '1'){
-    IEC958_mode_raw = 1;
+    IEC958_mode_raw = 1;	// RAW without over clock
+  }else if(buf[0] == '2'){
+    IEC958_mode_raw = 2;	// RAW with over clock
   }
   printk("IEC958_mode_raw=%d\n", IEC958_mode_raw);
+  return count;
+}
+
+static ssize_t print_flag_show(struct class*cla, struct class_attribute* attr, char* buf)
+{
+  static char* dec_format[] = {
+    "0 - disable arc dsp print",
+    "1 - enable arc dsp print",  };
+  char* pbuf = buf;
+  pbuf += sprintf(pbuf, "audiodsp decode option: %s\n", dec_format[(decopt&0x5)>>2]);
+  return (pbuf-buf);
+}
+static ssize_t print_flag_store(struct class* class, struct class_attribute* attr,
+   const char* buf, size_t count )
+{
+  unsigned dec_opt = 0x1;
+  printk("buf=%s\n", buf);
+  if(buf[0] == '0'){
+    dec_opt = 0;	// disable print flag
+  }else if(buf[0] == '1'){
+    dec_opt = 1;	// enable print flag
+  }
+  
+  decopt = 	(decopt&(~4))|(dec_opt<<2);
+  printk("dec option=%d, decopt = %x\n", dec_opt, decopt);
+  return count;
+}
+
+static ssize_t dec_option_show(struct class*cla, struct class_attribute* attr, char* buf)
+{
+  static char* dec_format[] = {
+	"0 - mute dts and ac3 ",  	
+    "1 - mute dts.ac3 with noise ",
+    "2 - mute ac3.dts with noise",
+    "3 - both ac3 and dts with noise",
+  };
+  char* pbuf = buf;
+  pbuf += sprintf(pbuf, "audiodsp decode option: %s\n", dec_format[decopt&0x3]);
+  return (pbuf-buf);
+}
+static ssize_t dec_option_store(struct class* class, struct class_attribute* attr,
+   const char* buf, size_t count )
+{
+  unsigned dec_opt = 0x3;
+  printk("buf=%s\n", buf);
+  if(buf[0] == '0'){
+    dec_opt = 0;	// mute ac3/dts
+  }else if(buf[0] == '1'){
+    dec_opt = 1;	// mute dts
+  }else if(buf[0] == '2'){
+    dec_opt = 2;	// mute ac3
+  }else if(buf[0] == '3'){
+  	dec_opt = 3; //with noise
+  }
+  decopt = 	(decopt&(~3))|dec_opt;
+  printk("dec option=%d\n", dec_opt);
   return count;
 }
 
@@ -734,6 +811,8 @@ static struct class_attribute audiodsp_attrs[]={
     __ATTR_RO(swap_buf_ptr),
     __ATTR_RO(dsp_working_status),
     __ATTR(digital_raw, S_IRUGO | S_IWUSR, digital_raw_show, digital_raw_store),
+	__ATTR(dec_option, S_IRUGO | S_IWUSR, dec_option_show, dec_option_store),    
+	__ATTR(print_flag, S_IRUGO | S_IWUSR, print_flag_show, print_flag_store),	 
     __ATTR_NULL
 };
 

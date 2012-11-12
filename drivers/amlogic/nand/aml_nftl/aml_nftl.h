@@ -47,7 +47,7 @@ typedef int16_t     	addr_linearblk_t;
 #define MAX_BLK_NUM_PER_NODE	 4
 #define BASIC_BLK_NUM_PER_NODE	 2
 #define DEFAULT_SPLIT_UNIT		 8
-#define NFTL_FAT_TABLE_NUM		 2
+#define NFTL_FAT_TABLE_NUM		 8
 
 #define DEFAULT_SPLIT_UNIT_GARBAGE		8
 #define NFTL_BOUNCE_FREE		 		0

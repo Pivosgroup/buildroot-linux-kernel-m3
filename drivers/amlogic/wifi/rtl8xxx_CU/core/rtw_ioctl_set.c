@@ -196,7 +196,7 @@ _func_enter_;
 					#endif
 				)
 				{
-					//DBG_8192C("rtw_do_join() when   no desired bss in scanning queue \n");
+					//DBG_8192C("rtw_do_join() when no desired bss in scanning queue \n");
 					if( _SUCCESS!=(ret=rtw_sitesurvey_cmd(padapter, &pmlmepriv->assoc_ssid, 1)) ){
 						RT_TRACE(_module_rtl871x_ioctl_set_c_,_drv_err_,("do_join(): site survey return error\n."));
 					}
@@ -316,6 +316,7 @@ u8 rtw_set_802_11_bssid(_adapter* padapter, u8 *bssid)
 {	
 	_irqL irqL;	
 	u8 status=_SUCCESS;
+	u32 cur_time = 0;
 	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
 	_queue *queue = &pmlmepriv->scanned_queue;
 	
@@ -371,6 +372,22 @@ _func_enter_;
 handle_tkip_countermeasure:
 	//should we add something here...?
 
+#ifdef PLATFORM_LINUX
+	if (padapter->securitypriv.btkip_countermeasure == _TRUE) {
+		cur_time = rtw_get_current_time();
+
+		if( (cur_time - padapter->securitypriv.btkip_countermeasure_time) > 60 * HZ )
+		{
+			padapter->securitypriv.btkip_countermeasure = _FALSE;
+			padapter->securitypriv.btkip_countermeasure_time = 0;
+		}
+		else
+		{
+			status = _FAIL;
+			goto release_mlme_lock;
+		}
+	}
+#endif
 
 	_rtw_memcpy(&pmlmepriv->assoc_bssid, bssid, ETH_ALEN);
 	pmlmepriv->assoc_by_bssid=_TRUE;
@@ -398,6 +415,7 @@ u8 rtw_set_802_11_ssid(_adapter* padapter, NDIS_802_11_SSID *ssid)
 {	
 	_irqL irqL;
 	u8 status = _SUCCESS;
+	u32 cur_time = 0;
 
 	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
 	struct wlan_network *pnetwork = &pmlmepriv->cur_network;
@@ -515,8 +533,18 @@ handle_tkip_countermeasure:
 
 #ifdef PLATFORM_LINUX
 	if (padapter->securitypriv.btkip_countermeasure == _TRUE) {
-		status = _FAIL;
-		goto release_mlme_lock;
+		cur_time = rtw_get_current_time();
+
+		if( (cur_time - padapter->securitypriv.btkip_countermeasure_time) > 60 * HZ )
+		{
+			padapter->securitypriv.btkip_countermeasure = _FALSE;
+			padapter->securitypriv.btkip_countermeasure_time = 0;
+		}
+		else
+		{
+			status = _FAIL;
+			goto release_mlme_lock;
+		}
 	}
 #endif
 
@@ -1269,5 +1297,130 @@ _func_exit_;
 
 	return _TRUE;
 	
+}
+
+/*
+* rtw_get_network_max_rate - 
+* @adapter: pointer to _adapter structure
+* @bss: 
+* 
+* Return 0 or Mbps
+*/
+u16 rtw_get_network_max_rate(_adapter *adapter, WLAN_BSSID_EX *bss)
+{
+	int i =0;
+	u8 *p;
+	u16 rate = 0, max_rate = 0, ht_cap=_FALSE;
+	u32 ht_ielen = 0;	
+	struct mlme_priv	*pmlmepriv = &adapter->mlmepriv;
+	struct rtw_ieee80211_ht_cap *pht_capie;
+	u8	bw_40MHz=0, short_GI=0;
+	u16	mcs_rate=0;
+	u8	rf_type = 0;
+	struct registry_priv *pregpriv = &adapter->registrypriv;
+
+#ifdef CONFIG_MP_INCLUDED
+	if (check_fwstate(pmlmepriv, WIFI_MP_STATE) == _TRUE)
+		return 0;
+#endif
+
+	if((check_fwstate(pmlmepriv, _FW_LINKED) != _TRUE) 
+		&& (check_fwstate(pmlmepriv, WIFI_ADHOC_MASTER_STATE) != _TRUE))
+		return 0;
+	
+
+	p = rtw_get_ie(&bss->IEs[12], _HT_CAPABILITY_IE_, &ht_ielen, bss->IELength-12);
+	if(p && ht_ielen>0)
+	{
+		ht_cap = _TRUE;	
+		pht_capie = (struct rtw_ieee80211_ht_cap *)(p+2);
+	
+		_rtw_memcpy(&mcs_rate , pht_capie->supp_mcs_set, 2);
+
+		bw_40MHz = (pht_capie->cap_info&IEEE80211_HT_CAP_SUP_WIDTH) ? 1:0;
+		short_GI = (pht_capie->cap_info&(IEEE80211_HT_CAP_SGI_20|IEEE80211_HT_CAP_SGI_40)) ? 1:0;
+	}
+
+	while( (bss->SupportedRates[i]!=0) && (bss->SupportedRates[i]!=0xFF))
+	{
+		rate = bss->SupportedRates[i]&0x7F;
+		if(rate>max_rate)
+			max_rate = rate;
+		i++;
+	}
+
+	//TODO: should consider case of WEP and TKIP
+	if(ht_cap == _TRUE)
+	{
+		adapter->HalFunc.GetHwRegHandler(adapter, HW_VAR_RF_TYPE, (u8 *)(&rf_type));
+		if(rf_type == RF_1T1R)
+			max_rate = (bw_40MHz) ? ((short_GI)?150:135):((short_GI)?72:65);				
+		else
+			max_rate = (bw_40MHz) ? ((short_GI)?300:270):((short_GI)?144:130);
+	}
+	else
+	{
+		max_rate/=2;
+	}
+
+	return max_rate;
+}
+
+/*
+* rtw_set_scan_mode - 
+* @adapter: pointer to _adapter structure
+* @scan_mode: 
+* 
+* Return _SUCCESS or _FAIL
+*/
+int rtw_set_scan_mode(_adapter *adapter, RT_SCAN_TYPE scan_mode)
+{
+	if(scan_mode != SCAN_ACTIVE && scan_mode != SCAN_PASSIVE)
+		return _FAIL;
+	
+	adapter->mlmepriv.scan_mode = scan_mode;
+
+	return _SUCCESS;
+}
+
+/*
+* rtw_set_channel_plan - 
+* @adapter: pointer to _adapter structure
+* @channel_plan: 
+* 
+* Return _SUCCESS or _FAIL
+*/
+int rtw_set_channel_plan(_adapter *adapter, u8 channel_plan)
+{
+	struct registry_priv *pregistrypriv = &adapter->registrypriv;
+	struct mlme_priv *pmlmepriv = &adapter->mlmepriv;
+
+	//handle by cmd_thread to sync with scan operation
+	return rtw_set_chplan_cmd(adapter, channel_plan, 1);
+}
+
+/*
+* rtw_set_country - 
+* @adapter: pointer to _adapter structure
+* @country_code: string of country code
+* 
+* Return _SUCCESS or _FAIL
+*/
+int rtw_set_country(_adapter *adapter, const char *country_code)
+{
+	int channel_plan = RT_CHANNEL_DOMAIN_FCC;
+
+	//TODO: should have a table to match country code and RT_CHANNEL_DOMAIN
+	//TODO: should consider 2-character and 3-character counter code
+	if(0 == strcmp(country_code, "US"))
+		channel_plan = RT_CHANNEL_DOMAIN_FCC;
+	else if(0 == strcmp(country_code, "EU"))
+		channel_plan = RT_CHANNEL_DOMAIN_ETSI;
+	else if(0 == strcmp(country_code, "JP"))
+		channel_plan = RT_CHANNEL_DOMAIN_MKK;
+	else
+		DBG_871X("%s unknown country_code:%s\n", __FUNCTION__, country_code);
+	
+	return rtw_set_channel_plan(adapter, channel_plan);
 }
 

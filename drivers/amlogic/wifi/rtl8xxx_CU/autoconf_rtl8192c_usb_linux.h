@@ -32,6 +32,12 @@
 #define PLATFORM_LINUX	1
 
 
+//#define CONFIG_IOCTL_CFG80211 1
+#ifdef CONFIG_IOCTL_CFG80211
+	#define CONFIG_CFG80211_FORCE_COMPATIBLE_2_6_37_UNDER
+	//#define CONFIG_DEBUG_CFG80211 1
+#endif
+
 /*
  * Internal  General Config
  */
@@ -40,6 +46,10 @@
 
 #define CONFIG_EMBEDDED_FWIMG	1
 //#define CONFIG_FILE_FWIMG
+
+#ifdef CONFIG_WAKE_ON_WLAN
+#define CONFIG_WOWLAN 1
+#endif //CONFIG_WAKE_ON_WLAN
 
 #define CONFIG_R871X_TEST	1
 
@@ -87,10 +97,16 @@
 
 //	Unmarked if there is low p2p scanned ratio; Kurt
 //#define CONFIG_P2P_AGAINST_NOISE	1
+#define CONFIG_P2P_REMOVE_GROUP_INFO
+//#define CONFIG_DBG_P2P
 #endif
 
 //	Added by Kurt 20110511
 //#define CONFIG_TDLS	1
+#ifdef CONFIG_TDLS
+	#define CONFIG_TDLS_AUTOSETUP			1
+	#define CONFIG_TDLS_AUTOCHECKALIVE		1
+#endif
 			
 #ifdef CONFIG_AP_MODE
 	#ifndef CONFIG_NATIVEAP_MLME
@@ -158,7 +174,7 @@
 /* 
  * CONFIG_USE_USB_BUFFER_ALLOC_XX uses Linux USB Buffer alloc API and is for Linux platform only now!
  */
-//#define CONFIG_USE_USB_BUFFER_ALLOC_TX 1	// Trade-off: For TX path, improve stability on some platforms, but may cause performance degrade on other platforms.
+#define CONFIG_USE_USB_BUFFER_ALLOC_TX 1	// Trade-off: For TX path, improve stability on some platforms, but may cause performance degrade on other platforms.
 //#define CONFIG_USE_USB_BUFFER_ALLOC_RX 1	// For RX path
 
 /* 
@@ -255,6 +271,7 @@
 //#define DBG_RX_SIGNAL_DISPLAY_PROCESSING
 //#define DBG_RX_SIGNAL_DISPLAY_SSID_MONITORED "jeff-ap"
 
+//#define DBG_EXPIRATION_CHK
 
 
 //#define DBG_SHOW_MCUFWDL_BEFORE_51_ENABLE

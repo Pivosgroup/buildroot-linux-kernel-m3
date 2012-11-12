@@ -146,28 +146,66 @@ int rtw_os_recvbuf_resource_free(_adapter *padapter, struct recv_buf *precvbuf)
 
 void rtw_handle_tkip_mic_err(_adapter *padapter,u8 bgroup)
 {
-    union iwreq_data wrqu;
-    struct iw_michaelmicfailure    ev;
-    struct mlme_priv*              pmlmepriv  = &padapter->mlmepriv;
+#ifdef CONFIG_IOCTL_CFG80211
+	enum nl80211_key_type key_type;
+#endif
+	union iwreq_data wrqu;
+	struct iw_michaelmicfailure    ev;
+	struct mlme_priv		*pmlmepriv  = &padapter->mlmepriv;
+	struct security_priv	*psecuritypriv = &padapter->securitypriv;
+	u32 cur_time = 0;
+	
+	if( psecuritypriv->last_mic_err_time == 0 )
+	{
+		psecuritypriv->last_mic_err_time = rtw_get_current_time();
+	}
+	else
+	{
+		cur_time = rtw_get_current_time();
 
-    
-    _rtw_memset( &ev, 0x00, sizeof( ev ) );
-    if ( bgroup )
-    {
-        ev.flags |= IW_MICFAILURE_GROUP;
-    }
-    else
-    {
-        ev.flags |= IW_MICFAILURE_PAIRWISE;
-    }
-   
-    ev.src_addr.sa_family = ARPHRD_ETHER;
-    _rtw_memcpy( ev.src_addr.sa_data, &pmlmepriv->assoc_bssid[ 0 ], ETH_ALEN );
+		if( cur_time - psecuritypriv->last_mic_err_time < 60*HZ )
+		{
+			psecuritypriv->btkip_countermeasure = _TRUE;
+			psecuritypriv->last_mic_err_time = 0;
+			psecuritypriv->btkip_countermeasure_time = cur_time;
+		}
+		else
+		{
+			psecuritypriv->last_mic_err_time = rtw_get_current_time();
+		}
+	}
 
-    _rtw_memset( &wrqu, 0x00, sizeof( wrqu ) );
-    wrqu.data.length = sizeof( ev );
+#ifdef CONFIG_IOCTL_CFG80211
+	if ( bgroup )
+	{
+		key_type |= NL80211_KEYTYPE_GROUP;
+	}
+	else
+	{
+		key_type |= NL80211_KEYTYPE_PAIRWISE;
+	}
 
-    wireless_send_event( padapter->pnetdev, IWEVMICHAELMICFAILURE, &wrqu, (char*) &ev );
+	cfg80211_michael_mic_failure(padapter->pnetdev, (u8 *)&pmlmepriv->assoc_bssid[ 0 ], key_type, -1,
+		NULL, GFP_ATOMIC);
+#endif
+
+	_rtw_memset( &ev, 0x00, sizeof( ev ) );
+	if ( bgroup )
+	{
+		ev.flags |= IW_MICFAILURE_GROUP;
+	}
+	else
+	{
+		ev.flags |= IW_MICFAILURE_PAIRWISE;
+	}
+
+	ev.src_addr.sa_family = ARPHRD_ETHER;
+	_rtw_memcpy( ev.src_addr.sa_data, &pmlmepriv->assoc_bssid[ 0 ], ETH_ALEN );
+
+	_rtw_memset( &wrqu, 0x00, sizeof( wrqu ) );
+	wrqu.data.length = sizeof( ev );
+
+	wireless_send_event( padapter->pnetdev, IWEVMICHAELMICFAILURE, &wrqu, (char*) &ev );
 }
 
 void rtw_hostapd_mlme_rx(_adapter *padapter, union recv_frame *precv_frame)

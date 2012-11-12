@@ -192,6 +192,9 @@ vinfo_t * hdmi_get_current_vinfo(void)
 #ifdef CONFIG_AM_TV_OUTPUT2
     if(get_cur_vout_index() == 2){
         info = get_current_vinfo2();
+        if(info == NULL){ //add to fix problem when dual display is not enabled in UI
+            info = get_current_vinfo();
+        }
     }
     else{
         info = get_current_vinfo();
@@ -456,7 +459,7 @@ static ssize_t show_disp_cap(struct device * dev, struct device_attribute *attr,
 
 static ssize_t show_hpd_state(struct device * dev, struct device_attribute *attr, char * buf)
 {   
-    int i,pos=0;
+    int pos=0;
     pos += snprintf(buf+pos, PAGE_SIZE,"%d", hdmitx_device.hpd_state);
     return pos;    
 }
@@ -682,37 +685,40 @@ static int hdmitx_notify_callback_a(struct notifier_block *block, unsigned long 
 {
     struct snd_pcm_substream *substream =(struct snd_pcm_substream*)para;
     Hdmi_tx_audio_para_t* audio_param = &(hdmitx_device.cur_audio_param);
+    
+    switch (substream->runtime->rate) {
+        case 192000:
+            audio_param->sample_rate = FS_192K; 
+            break;
+        case 176400:
+            audio_param->sample_rate = FS_176K4; 
+            break;
+        case 96000:
+            audio_param->sample_rate = FS_96K; 
+            break;
+        case 88200:
+            audio_param->sample_rate = FS_88K2; 
+            break;
+        case 48000:
+            audio_param->sample_rate = FS_48K; 
+            break;
+        case 44100:
+            audio_param->sample_rate = FS_44K1; 
+            break;
+        case 32000:
+            audio_param->sample_rate = FS_32K; 
+            break;
+        default:
+            printk("HDMI: unknown audio frequence\n");
+            break;
+    }
+    
     switch (cmd){
     case AOUT_EVENT_IEC_60958_PCM:
         audio_param->type = CT_PCM;
         audio_param->channel_num = CC_2CH;
         audio_param->sample_size = SS_16BITS; 
     
-        switch (substream->runtime->rate) {
-            case 192000:
-                audio_param->sample_rate = FS_192K; 
-                break;
-            case 176400:
-                audio_param->sample_rate = FS_176K4; 
-                break;
-            case 96000:
-                audio_param->sample_rate = FS_96K; 
-                break;
-            case 88200:
-                audio_param->sample_rate = FS_88K2; 
-                break;
-            case 48000:
-                audio_param->sample_rate = FS_48K; 
-                break;
-            case 44100:
-                audio_param->sample_rate = FS_44K1; 
-                break;
-            case 32000:
-                audio_param->sample_rate = FS_32K; 
-                break;
-            default:
-                break;
-        }
         hdmi_print(1, "HDMI: aout notify rate %d\n", substream->runtime->rate);
         hdmi_print(1, "HDMI: aout notify format PCM\n");
         break;
@@ -768,7 +774,9 @@ static int hdmitx_notify_callback_a(struct notifier_block *block, unsigned long 
         audio_param->type = CT_DOLBY_D;
         audio_param->channel_num = CC_2CH;
         audio_param->sample_size = SS_16BITS; 
+        //audio_param->sample_rate = FS_48K;//192K;      // FS_48K;       //
         hdmi_print(1, "HDMI: aout notify format Dobly Digital +\n");
+        printk("audio sample_rate: %d\n", substream->runtime->rate);
         break;
     case AOUT_EVENT_RAWDATA_DTS_HD:
         audio_param->type = CT_DTS_HD;
@@ -880,6 +888,10 @@ static void
 #endif
 hdmi_task_handle(void *data) 
 {
+#ifdef CONFIG_AML_HDMI_TX_HDCP
+    extern void restart_edid_hdcp(void);
+    static int edid_hdcp_reset_flag = 0;
+#endif
     extern void hdmitx_edid_ram_buffer_clear(hdmitx_dev_t*);
     hdmitx_dev_t* hdmitx_device = (hdmitx_dev_t*)data;
     hdmitx_init_parameters(&hdmitx_device->hdmi_info);
@@ -967,6 +979,12 @@ hdmi_task_handle(void *data)
         /* authentication process */
 #ifdef CONFIG_AML_HDMI_TX_HDCP
         if(hdmitx_device->cur_VIC != HDMI_Unkown){
+            {
+                if(edid_hdcp_reset_flag){
+                    edid_hdcp_reset_flag = 0;
+                    restart_edid_hdcp();
+                }
+            }
             if(hdmitx_device->auth_process_timer>0){
                 hdmitx_device->auth_process_timer--;
             }
@@ -984,6 +1002,9 @@ hdmi_task_handle(void *data)
                     hdmitx_device->HWOp.Cntl(hdmitx_device, HDMITX_OUTPUT_ENABLE, hdmi_output_on);
                 }
             }
+        }
+        else{
+            edid_hdcp_reset_flag = 1;
         }
 #endif        
         /**/    

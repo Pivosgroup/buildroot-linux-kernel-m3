@@ -267,6 +267,7 @@ extern int nr_hfilt_en;
 #define DI_LOG_BUFFER_STATE     0x20
 #define DI_LOG_TIMESTAMP        0x100
 #define DI_LOG_PRECISE_TIMESTAMP        0x200
+#define DI_LOG_QUEUE        0x40
 
 extern unsigned int di_log_flag;
 

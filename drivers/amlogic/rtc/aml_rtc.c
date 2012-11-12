@@ -287,10 +287,10 @@ static unsigned int ser_access_read(unsigned long addr)
 	int s_nrdy_cnt = 0;
 
 	RTC_DBG(RTC_DBG_VAL, "aml_rtc --ser_access_read_1\n");
-	if(check_osc_clk() < 0){
+	/*if(check_osc_clk() < 0){
 		RTC_DBG(RTC_DBG_VAL, "aml_rtc -- the osc clk does not work\n");
 		return val;
-	}
+	}*/
 
 	RTC_DBG(RTC_DBG_VAL, "aml_rtc -- ser_access_read_2\n");
 	while(rtc_comm_init()<0){

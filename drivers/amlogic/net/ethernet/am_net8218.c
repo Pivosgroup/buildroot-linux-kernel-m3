@@ -1228,7 +1228,7 @@ static int netdev_close(struct net_device *dev)
 	IO_WRITE32(0, (np->base_addr + ETH_DMA_6_Operation_Mode));
 	IO_WRITE32(0, np->base_addr + ETH_DMA_7_Interrupt_Enable);
 	val = IO_READ32((np->base_addr + ETH_DMA_5_Status));
-	while ((val & (7 << 17)) || (val & (5 << 20))) { /*DMA not finished?*/
+	while ((val & (7 << 17)) || (val & (7 << 20))) { /*DMA not finished?*/
 		printk(KERN_ERR "ERROR! MDA is not stoped,val=%lx!\n", val);
 		msleep(1);//waiting all dma is finished!!
 		val = IO_READ32((np->base_addr + ETH_DMA_5_Status));
@@ -1558,78 +1558,61 @@ static void set_multicast_list(struct net_device *dev)
 {
 	struct am_net_private *np = netdev_priv(dev);
 	u32  tmp;
-	static  u32  dev_flags=0xefefefef;
-	static  u32  dev_hash[2]={0,0};
-
-	if(dev->flags != dev_flags)//not always change
-	{
-		if ((dev->flags & IFF_PROMISC)) {
-			tmp=IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
-			tmp|=1;
-			IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//promisc module
-			printk("ether enter promisc module\n");
-		}
-		else
-		{
-			tmp=IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
-			tmp&=~1;
-			IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//live promisc
-			printk("ether leave promisc module\n");
-		}
-		if ((dev->flags & IFF_ALLMULTI) ) {
-			tmp=IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
-			tmp|=(1<<4);
-			IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//all muticast
-			printk("ether enter all multicast module\n");
-		}
-		else
-		{
-			tmp=IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
-			tmp&=(1<<4);
-			IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//live all muticast
-			printk("ether leave all muticast module\n");
-		}
-		dev_flags=dev->flags;
+	if ((dev->flags & IFF_PROMISC)) {
+		tmp = IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
+		tmp |= 1;
+		IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);
+		printk("ether enter promiscuous mode\n");
+	} else {
+		tmp = IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
+		tmp &= ~1;
+		IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);
+		printk("ether leave promiscuous mode\n");
 	}
-	if (dev->mc_count > 0)
-	{
-		int cnt=dev->mc_count;
+	if ((dev->flags & IFF_ALLMULTI)) {
+		tmp = IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
+		tmp |= (1 << 4);
+		IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);
+		printk("ether enter all multicast mode\n");
+	} else {
+		tmp = IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
+		tmp &= ~(1 << 4);
+		IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);
+		printk("ether leave all muticast mode\n");
+	}
+
+	if (dev->mc_count > 0) {
+		int cnt = dev->mc_count;
 		u32 hash[2];
 		struct dev_mc_list	*addr_list;
 		u32 hash_id;
 		char * addr;
-		hash[0]=0;
-		hash[1]=0;
-		//printk("changed the Multicast,mcount=%d\n",dev->mc_count);
+		hash[0] = 0;
+		hash[1] = 0;
+		printk("changed the Multicast,mcount=%d\n", dev->mc_count);
 		for (addr_list = dev->mc_list; cnt && addr_list != NULL; addr_list = addr_list->next, cnt--) {
-			addr=addr_list->dmi_addr;
-			hash_id=phy_mc_hash(addr);
-			///*
-			//printk("add mac address:%02x:%02x:%02x:%02x:%02x:%02x,bit=%d\n",
-			//	addr[0],addr[1],addr[2],addr[3],addr[4],addr[5],
-			//	hash_id);
-			//*/
-			//set_bit(hash_id,hash);
-			if(hash_id>31)
-				hash[1]|=1<<(hash_id-32);
-			else
-				hash[0]|=1<<hash_id;
+			addr = addr_list->dmi_addr;
+			hash_id = phy_mc_hash(addr);
+			printk("add mac address:%02x:%02x:%02x:%02x:%02x:%02x,bit=%d\n",
+			       addr[0], addr[1], addr[2], addr[3], addr[4], addr[5],
+			       hash_id);
+
+			if (hash_id > 31) {
+				hash[1] |= 1 << (hash_id - 32);
+			} else {
+				hash[0] |= 1 << hash_id;
+			}
 		}
-		
-		if((dev_hash[0]==hash[0]) && (dev_hash[1]==hash[1])) return;
-		dev_hash[0]=hash[0] ;
-		dev_hash[1]=hash[1];
-		printk("set hash low=%x,high=%x\n",hash[0],hash[1]);
+		printk("set hash low=%x,high=%x\n", hash[0], hash[1]);
 		IO_WRITE32(hash[1], np->base_addr + ETH_MAC_2_Hash_Table_High);
 		IO_WRITE32(hash[0], np->base_addr + ETH_MAC_3_Hash_Table_Low);
-		tmp=IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
-		tmp= (1<<2) | 	//hash filter 
-			0;
-		//printk("changed the filter setting to :%x\n",tmp);
+		tmp = IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
+		tmp |= (1 << 2) | 	//hash filter
+		       0;
+		printk("changed the filter setting to :%x\n", tmp);
 		IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//hash muticast
 	}
 }
-
 
 static const struct net_device_ops am_netdev_ops = {
 	.ndo_open			= netdev_open,

@@ -16,6 +16,11 @@
 #include <linux/spinlock.h>
 #include <linux/interrupt.h>
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+#include <linux/earlysuspend.h>
+#endif
+
+
 #include "../../media/dvb/dvb-core/dvbdev.h"
 #include "../../media/dvb/dvb-core/demux.h"
 #include "../../media/dvb/dvb-core/dvb_demux.h"
@@ -47,9 +52,13 @@ typedef enum {
 	AM_TS_SRC_TS0,
 	AM_TS_SRC_TS1,
 	AM_TS_SRC_TS2,	
-	AM_TS_SRC_S2P0,
-	AM_TS_SRC_S2P1,
-	AM_TS_SRC_HIU
+	AM_TS_SRC_S_TS0,
+	AM_TS_SRC_S_TS1,
+	AM_TS_SRC_S_TS2,
+	AM_TS_SRC_HIU,
+	AM_TS_SRC_DMX0,
+	AM_TS_SRC_DMX1,
+	AM_TS_SRC_DMX2
 } aml_ts_source_t;
 
 struct aml_sec_buf {
@@ -105,6 +114,7 @@ struct aml_dmx {
 	struct tasklet_struct     dmx_tasklet;
 	struct tasklet_struct     dvr_tasklet;
 	unsigned long        sec_pages;
+	unsigned long        sec_pages_map;
 	int                  sec_total_len;
 	struct aml_sec_buf   sec_buf[SEC_BUF_COUNT];
 	unsigned long        pes_pages;
@@ -119,6 +129,11 @@ struct aml_dmx {
 	int                  vid_chan;
 	int                  sub_chan;
 	u32                  section_busy[SEC_BUF_BUSY_SIZE];
+	struct dvb_frontend *fe;
+	int                  int_check_count;
+	u32                  int_check_time;
+	int                  in_tune;
+	int                  error_check;
 };
 
 
@@ -127,6 +142,9 @@ struct aml_fe {
 	struct dvb_frontend *fe;
 	void               *cfg;
 	struct platform_device *pdev;
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	struct early_suspend es;
+#endif /*CONFIG_HAS_EARLYSUSPEND*/
 	struct class class;
 };
 
@@ -169,6 +187,8 @@ extern int aml_dmx_hw_stop_feed(struct dvb_demux_feed *dvbdmxfeed);
 extern int aml_dmx_hw_set_source(struct dmx_demux* demux, dmx_source_t src);
 extern int aml_stb_hw_set_source(struct aml_dvb *dvb, dmx_source_t src);
 extern int aml_dsc_hw_set_source(struct aml_dvb *dvb, dmx_source_t src);
+extern int aml_dmx_set_skipbyte(struct aml_dvb *dvb, int skipbyte);
+extern int aml_dmx_set_demux(struct aml_dvb *dvb, int id);
 
 extern int  dmx_alloc_chan(struct aml_dmx *dmx, int type, int pes_type, int pid);
 extern void dmx_free_chan(struct aml_dmx *dmx, int cid);
@@ -183,8 +203,19 @@ extern int aml_asyncfifo_hw_init(struct aml_asyncfifo *afifo);
 extern int aml_asyncfifo_hw_deinit(struct aml_asyncfifo *afifo);
 extern int aml_asyncfifo_hw_set_source(struct aml_asyncfifo *afifo, aml_dmx_id_t src);
 
+/*Get the Audio & Video PTS*/
+extern u32 aml_dmx_get_video_pts(struct aml_dvb *dvb);
+extern u32 aml_dmx_get_audio_pts(struct aml_dvb *dvb);
+
 /*Get the DVB device*/
 extern struct aml_dvb* aml_get_dvb_device(void);
+
+/*Demod interface*/
+extern void aml_dmx_register_frontend(aml_ts_source_t src, struct dvb_frontend *fe);
+extern void aml_dmx_before_retune(aml_ts_source_t src, struct dvb_frontend *fe);
+extern void aml_dmx_after_retune(aml_ts_source_t src, struct dvb_frontend *fe);
+extern void aml_dmx_start_error_check(aml_ts_source_t src, struct dvb_frontend *fe);
+extern int  aml_dmx_stop_error_check(aml_ts_source_t src, struct dvb_frontend *fe);
 
 #endif
 

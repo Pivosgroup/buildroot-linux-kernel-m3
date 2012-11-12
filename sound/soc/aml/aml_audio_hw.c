@@ -16,6 +16,8 @@
 #define AIU_958_chstat1	AIU_958_CHSTAT_L1
 #endif
 
+#define OVERCLOCK 1
+
 unsigned ENABLE_IEC958 = 1;
 unsigned IEC958_MODE   = AIU_958_MODE_PCM16;
 unsigned I2S_MODE      = AIU_I2S_MODE_PCM16;
@@ -69,34 +71,46 @@ EXPORT_SYMBOL(IEC958_mode_codec);
 */                      
 int audio_clock_config_table[][11][2]=
 {
+  // 128*Fs
+  //
 	/*{M, N, OD, XD-1*/
 	{
 	//24M
-		{(71 <<  0) |(4   <<  9) | (1   << 14), (26-1)},//32K	
-		{(143 <<  0) |(8   <<  9) | (1   << 14), (19-1)},//44.1K	
-		{(128 <<  0) |(5   <<  9) | (1   << 14), (25-1)},//48K	
-		{(128 <<  0) |(5   <<  9) | (0   << 14), (25-1)},//96K	
-		{(213 <<  0) |(8   <<  9) | (0   << 14), (13-1)},//192K	 
-		{(71 <<  0) |(8   <<  9) | (1   << 14), (52-1)},// 8K
-		{(143 <<  0) |(8   <<  9) | (1   << 14), (76-1)},// 11025
-		{(32 <<  0) |(5   <<  9) | (1   << 14), (25-1)},// 12K
-		{(71 <<  0) |(8   <<  9) | (1   << 14), (26-1)},// 16K
-		{(143 <<  0) |(8   <<  9) | (1   << 14), (38-1)},// 22050
-		{(64 <<  0) |(5   <<  9) | (1   << 14), (25-1)}   // 24K
+        {(64<<0) | (3<<9) | (0<<14) , (125-1)}, // 32K, 4.096M
+#if OVERCLOCK==0
+        {(147<<0) | (5<<9) | (0<<14) , (125-1)}, // 44.1K, 5.6448M
+        {(32<<0) | (1<<9) | (0<<14) , (125-1)}, // 48K, 6.144M
+#else
+        {(143<<0) | (8<<9) | (0<<14) , (19-1)}, // 44.1K, 5.6448M*4=22.5792M
+        {(128<<0) | (5<<9) | (0<<14) , (25-1)}, // 48K, 6.144M*4=24.576M
+#endif
+        {(128<<0) | (5<<9) | (1<<14) , (25-1)}, // 96K, 12.288M
+        {(128<<0) | (5<<9) | (0<<14) , (25-1)}, //192K, 24.576M
+        {(64<<0) | (3<<9) | (1<<14) , (250-1)}, // 8K, 1.024M
+        {(147<<0) | (5<<9) | (1<<14) , (250-1)}, //11.025K,1.4112M
+        {(32<<0) | (1<<9) | (1<<14) , (250-1)}, // 12K, 1.536M
+        {(64<<0) | (3<<9) | (1<<14) , (125-1)}, // 16K, 2.048M
+        {(147<<0) | (5<<9) | (1<<14) , (125-1)}, //22.050K, 2.8224M
+        {(32<<0) | (1<<9) | (1<<14) , (125-1)}, // 24K, 3.072M
 	},
 	{
 	//25M
-		{(19 <<  0) |(1   <<  9) | (1   << 14), (29-1)},//32K	
-		{(28 <<  0) |(1   <<  9) | (1   << 14), (31-1)},//44.1K	
-		{(173 <<  0) |(8   <<  9) | (1   << 14), (22-1)},//48K	
-		{(173 <<  0) |(8   <<  9) | (1   << 14), (11-1)},//96K	
-		{(118 <<  0) |(5   <<  9) | (1   << 14), (6-1)},//192K	  
-		{(19 <<  0) |(4   <<  9) | (1   << 14), (29-1)},// 8K
-		{(7 <<  0) |(1   <<  9) | (1   << 14), (31-1)},// 11025
-		{(173 <<  0) |(8   <<  9) | (1   << 14), (88-1)},// 12K
-		{(19 <<  0) |(2   <<  9) | (1   << 14), (29-1)},// 16K
-		{(14 <<  0) |(1   <<  9) | (1   << 14), (31-1)},// 22050
-		{(173 <<  0) |(8   <<  9) | (1   << 14), (44-1)}// 24K
+        {(29<<0) | (1<<9) | (0<<14) , (177-1)}, // 32K, 4.096M
+#if OVERCLOCK==0
+        {(21<<0) | (1<<9) | (0<<14) , (93-1)}, // 44.1K, 5.6448M
+        {(29<<0) | (1<<9) | (1<<14) , (59-1)}, // 48K, 6.144M
+#else
+        {(28<<0) | (1<<9) | (0<<14) , (31-1)}, // 44.1K, 5.6448M*4=22.5792M
+        {(173<<0) | (8<<9) | (1<<14) , (11-1)}, // 48K, 6.144M*4=24.576M
+#endif
+        {(29<<0) | (1<<9) | (0<<14) , (59-1)}, // 96K, 12.288M
+        {(173<<0) | (8<<9) | (1<<14) , (11-1)}, //192K, 24.576M
+        {(58<<0) | (3<<9) | (1<<14) , (236-1)}, // 8K, 1.024M
+        {(162<<0) | (7<<9) | (1<<14) , (205-1)}, //11.025K,1.4112M
+        {(29<<0) | (1<<9) | (1<<14) , (236-1)}, // 12K, 1.536M
+        {(29<<0) | (1<<9) | (1<<14) , (177-1)}, // 16K, 2.048M
+        {(162<<0) | (7<<9) | (0<<14) , (205-1)}, //22.050K, 2.8224M
+        {(29<<0) | (1<<9) | (1<<14) , (118-1)}, // 24K, 3.072M
 	}
 };
 
@@ -149,6 +163,10 @@ void audio_set_958outbuf(u32 addr, u32 size,int flag)
 {
     if (ENABLE_IEC958) {
         WRITE_MPEG_REG(AIU_MEM_IEC958_START_PTR, addr & 0xffffffc0);
+	if(READ_MPEG_REG(AIU_MEM_IEC958_START_PTR) == READ_MPEG_REG(AIU_MEM_I2S_START_PTR)){
+		WRITE_MPEG_REG(AIU_MEM_IEC958_RD_PTR, READ_MPEG_REG(AIU_MEM_I2S_RD_PTR));
+	}
+	else
         WRITE_MPEG_REG(AIU_MEM_IEC958_RD_PTR, addr & 0xffffffc0);
         if(flag == 0){
           WRITE_MPEG_REG(AIU_MEM_IEC958_END_PTR, (addr & 0xffffffc0) + (size & 0xffffffc0) - 64);    // this is for 16bit 2 channel
@@ -305,18 +323,21 @@ void audio_set_i2s_mode(u32 mode)
 
 }
 
+/**
+ *  if normal clock, i2s clock is twice of 958 clock, so the divisor for i2s is 8, but 4 for 958
+ *  if over clock, the devisor for i2s is 8, but for 958 should be 1, because 958 should be 4 times speed according to i2s
+ *  This is dolby digital plus's spec
+ * */
+
 void audio_util_set_dac_format(unsigned format)
 {
-    //WRITE_MPEG_REG(AIU_CLK_CTRL_MORE,	 0x0000);	 // i2s_divisor_more does not take effect    
-	WRITE_MPEG_REG(AIU_CLK_CTRL_MORE,	 0x0003);	 // i2s_divisor_more divided by 4
-	
+    WRITE_MPEG_REG(AIU_CLK_CTRL_MORE,	 0x0000);	 // i2s_divisor_more divided by 4
 	WRITE_MPEG_REG(AIU_CLK_CTRL,		 (0 << 12) | // 958 divisor more, if true, divided by 2, 4, 6, 8.
 							(1 <<  8) | // alrclk skew: 1=alrclk transitions on the cycle before msb is sent
 							(1 <<  6) | // invert aoclk
                                                         (1 <<  7) | // invert lrclk
-							//(1 <<  4) | // 958 divisor: 0=no div; 1=div by 2; 2=div by 3; 3=div by 4.
-							//(2 <<  2) | // i2s divisor: 0=no div; 1=div by 2; 2=div by 4; 3=div by 8.
-							(0 <<  2) | // i2s divisor: 0=no div; 1=div by 2; 2=div by 4; 3=div by 8.
+							(3 <<  4) | // 958 divisor: 0=no div; 1=div by 2; 2=div by 3; 3=div by 4.
+							(3 <<  2) | // i2s divisor: 0=no div; 1=div by 2; 2=div by 4; 3=div by 8.
 							(1 <<  1) |  
 							(1 <<  0)); // enable I2S clock
     if (format == AUDIO_ALGOUT_DAC_FORMAT_DSP) {

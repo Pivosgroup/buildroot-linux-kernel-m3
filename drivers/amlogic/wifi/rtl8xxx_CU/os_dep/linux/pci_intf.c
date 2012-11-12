@@ -1773,6 +1773,10 @@ _func_exit_;
 
 	DBG_8192C("+rtw_dev_remove\n");
 
+#if defined(CONFIG_HAS_EARLYSUSPEND ) || defined(CONFIG_ANDROID_POWER)
+	rtw_unregister_early_suspend(&padapter->pwrctrlpriv);
+#endif
+
 	LeaveAllPowerSaveMode(padapter);
 
 #ifdef RTK_DMP_PLATFORM    
@@ -1859,7 +1863,8 @@ static int __init rtw_drv_entry(void)
 	int ret = 0;
 
 	RT_TRACE(_module_hci_intfs_c_,_drv_err_,("+rtw_drv_entry\n"));
-	DBG_8192C("rtw driver version=%s\n", DRIVERVERSION);
+	DBG_871X("rtw driver version=%s \n", DRIVERVERSION);
+	DBG_871X("Build at: %s %s\n", __DATE__, __TIME__);
 	drvpriv.drv_registered = _TRUE;
 	ret = pci_register_driver(&drvpriv.rtw_pci_drv);
 	if (ret) {

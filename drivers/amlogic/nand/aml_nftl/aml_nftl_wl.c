@@ -316,8 +316,8 @@ static void add_gc(struct aml_nftl_wl_t* aml_nftl_wl, addr_blk_t gc_blk_addr)
 	struct gc_blk_list *gc_add_list, *gc_cur_list, *gc_prev_list = NULL;
 	struct list_head *l, *n;
 
-	//if (gc_blk_addr < NFTL_FAT_TABLE_NUM)
-	//	return;
+	if (gc_blk_addr < NFTL_FAT_TABLE_NUM)
+		return;
 
 	if (!list_empty(&aml_nftl_wl->gc_blk_list)) {
 		list_for_each_safe(l, n, &aml_nftl_wl->gc_blk_list) {

@@ -164,6 +164,33 @@ static int inline smc_can_write(smc_dev_t *smc)
 	return ret;
 }
 
+static int smc_hw_set_param(smc_dev_t *smc)
+{
+	unsigned long v=0;
+	SMCCARD_HW_Reg0_t *reg0;
+	SMC_ANSWER_TO_RST_t *reg1;
+	SMCCARD_HW_Reg2_t *reg2;
+	SMC_INTERRUPT_Reg_t *reg_int;
+	SMCCARD_HW_Reg5_t *reg5;
+	SMCCARD_HW_Reg6_t *reg6;
+	unsigned long freq_cpu = get_mpeg_clk()/1000;
+
+	v = SMC_READ_REG(REG0);
+	reg0 = (SMCCARD_HW_Reg0_t*)&v;
+	reg0->etu_divider = ETU_DIVIDER_CLOCK_HZ*smc->param.f/(smc->param.d*smc->param.freq)-1;
+	SMC_WRITE_REG(REG0, v);
+	
+	v = SMC_READ_REG(REG6);
+	reg6 = (SMCCARD_HW_Reg6_t*)&v;
+	reg6->N_parameter = smc->param.n;
+	reg6->cwi_value = smc->param.cwi;
+	reg6->bgt = smc->param.bgt;
+	reg6->bwi = smc->param.bwi;
+	SMC_WRITE_REG(REG6, v);
+	
+	return 0;
+}
+
 static int smc_hw_setup(smc_dev_t *smc)
 {
 	unsigned long v=0;
@@ -891,7 +918,7 @@ static int smc_ioctl(struct inode * inode, struct file *filp, unsigned int cmd, 
 			if(ret) return ret;
 			
 			copy_from_user(&smc->param, (void*)arg, sizeof(struct am_smc_param));
-			ret = smc_hw_setup(smc);
+			ret = smc_hw_set_param(smc);
 			
 			mutex_unlock(&smc->lock);
 		}

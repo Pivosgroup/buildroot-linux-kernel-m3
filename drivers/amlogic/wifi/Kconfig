@@ -105,6 +105,14 @@ config RTL8XXX_SU_USB_WIFI
 	  This module adds support for wireless USB dongle based on
 	  Realtek 8712 8188 8191 8192SU chipset.
 
+config RALINK_3070_USB_WIFI
+	tristate "Ralink 3070 Wireless USB Dongle support"
+	default n
+	depends on USB
+	---help---
+	  This module adds support for wireless USB dongle based on
+	  Ralink 3070 chipset.
+	  
 config RTL8XXX_CU_USB_WIFI
 	tristate "Realtek CU series (8192 8188CU) Wireless USB Dongle support"
 	default n
@@ -118,6 +126,14 @@ config RTL8XXX_CU_EXT_POWER_CTRL
 	depends on RTL8XXX_CU_USB_WIFI
 	---help---
 	  This config adds support for controlling power of Realtek 8xxxCU series,need define function extern_usb_wifi_power() in bsp first.
+
+config ATH6KL_USB_WIFI	
+	tristate "Atheros ath6kl Wireless USB Dongle support"	
+	default n	
+	depends on USB&&CFG80211&&(CFG80211 = "m")
+	---help---	  
+	  This module adds support for wireless USB dongle based on	  
+	  Atheros ath6kl chipset.
 	  
 config SDIO_ATHEROS_6302_WIFI
 	tristate "ATHEROS 6302 wireless cards support"
@@ -361,6 +377,8 @@ config BCM4329_OOB_INTR_ONLY
 	default n
 	---help---
 	   Use out of band interrupt for all interrupts(including SDIO interrupts).
+	   
+source "drivers/amlogic/wifi/broadcm_40181/Kconfig"
 
 config SDIO_NRX600
         tristate "NANO NRX600 wireless card support"

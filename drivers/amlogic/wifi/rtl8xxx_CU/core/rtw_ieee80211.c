@@ -643,32 +643,45 @@ u8 rtw_is_wps_ie(u8 *ie_ptr, uint *wps_ielen)
 	return match;
 }
 
+/**
+ * rtw_get_wps_ie - Search WPS IE from a series of IEs
+ * @in_ie: Address of IEs to search
+ * @in_len: Length limit from in_ie
+ * @wps_ie: If not NULL and WPS IE is found, WPS IE will be copied to the buf starting from wps_ie
+ * @wps_ielen: If not NULL and WPS IE is found, will set to the length of the entire WPS IE
+ *
+ * Returns: The address of the WPS IE found, or NULL
+ */
 u8 *rtw_get_wps_ie(u8 *in_ie, uint in_len, u8 *wps_ie, uint *wps_ielen)
 {
-	//int match;	
-	uint cnt;	
+	uint cnt;
 	u8 *wpsie_ptr=NULL;
 	u8 eid, wps_oui[4]={0x0,0x50,0xf2,0x04};
 
-	cnt=_FIXED_IE_LENGTH_;	
-	//match=_FALSE;
+	if(wps_ielen)
+		*wps_ielen = 0;
+
+	if(!in_ie || in_len<=0)
+		return wpsie_ptr;
+
+	cnt = 0;
+
 	while(cnt<in_len)
 	{
 		eid = in_ie[cnt];
 
 		if((eid==_WPA_IE_ID_)&&(_rtw_memcmp(&in_ie[cnt+2], wps_oui, 4)==_TRUE))
 		{
-			if(wps_ie)
-			_rtw_memcpy(wps_ie, &in_ie[cnt], in_ie[cnt+1]+2);
-			
 			wpsie_ptr = &in_ie[cnt];
+
+			if(wps_ie)
+				_rtw_memcpy(wps_ie, &in_ie[cnt], in_ie[cnt+1]+2);
 			
 			if(wps_ielen)
 				*wps_ielen = in_ie[cnt+1]+2;
 			
 			cnt+=in_ie[cnt+1]+2;
 
-			//match = _TRUE;
 			break;
 		}
 		else
@@ -678,9 +691,99 @@ u8 *rtw_get_wps_ie(u8 *in_ie, uint in_len, u8 *wps_ie, uint *wps_ielen)
 
 	}	
 
-	//return match;
 	return wpsie_ptr;
+}
 
+/**
+ * rtw_get_wps_attr - Search a specific WPS attribute from a given WPS IE
+ * @wps_ie: Address of WPS IE to search
+ * @wps_ielen: Length limit from wps_ie
+ * @target_attr_id: The attribute ID of WPS attribute to search
+ * @buf_attr: If not NULL and the WPS attribute is found, WPS attribute will be copied to the buf starting from buf_attr
+ * @len_attr: If not NULL and the WPS attribute is found, will set to the length of the entire WPS attribute
+ *
+ * Returns: the address of the specific WPS attribute found, or NULL
+ */
+u8 *rtw_get_wps_attr(u8 *wps_ie, uint wps_ielen, u16 target_attr_id ,u8 *buf_attr, u32 *len_attr)
+{
+	u8 *attr_ptr = NULL;
+	u8 * target_attr_ptr = NULL;
+	u8 wps_oui[4]={0x00,0x50,0xF2,0x04};
+
+	if(len_attr)
+		*len_attr = 0;
+
+	if ( ( wps_ie[0] != _VENDOR_SPECIFIC_IE_ ) ||
+		( _rtw_memcmp( wps_ie + 2, wps_oui , 4 ) != _TRUE ) )
+	{
+		return attr_ptr;
+	}
+
+	// 6 = 1(Element ID) + 1(Length) + 4(WPS OUI)
+	attr_ptr = wps_ie + 6; //goto first attr
+	
+	while(attr_ptr - wps_ie < wps_ielen)
+	{
+		// 4 = 2(Attribute ID) + 2(Length)
+		u16 attr_id = RTW_GET_BE16(attr_ptr);
+		u16 attr_data_len = RTW_GET_BE16(attr_ptr + 2);
+		u16 attr_len = attr_data_len + 4;
+		
+		//DBG_871X("%s attr_ptr:%p, id:%u, length:%u\n", __FUNCTION__, attr_ptr, attr_id, attr_data_len);
+		if( attr_id == target_attr_id )
+		{
+			target_attr_ptr = attr_ptr;
+		
+			if(buf_attr)
+				_rtw_memcpy(buf_attr, attr_ptr, attr_len);
+			
+			if(len_attr)
+				*len_attr = attr_len;
+			
+			break;
+		}
+		else
+		{
+			attr_ptr += attr_len; //goto next
+		}		
+		
+	}	
+
+	return target_attr_ptr;
+}
+
+/**
+ * rtw_get_wps_attr_content - Search a specific WPS attribute content from a given WPS IE
+ * @wps_ie: Address of WPS IE to search
+ * @wps_ielen: Length limit from wps_ie
+ * @target_attr_id: The attribute ID of WPS attribute to search
+ * @buf_content: If not NULL and the WPS attribute is found, WPS attribute content will be copied to the buf starting from buf_content
+ * @len_content: If not NULL and the WPS attribute is found, will set to the length of the WPS attribute content
+ *
+ * Returns: the address of the specific WPS attribute content found, or NULL
+ */
+u8 *rtw_get_wps_attr_content(u8 *wps_ie, uint wps_ielen, u16 target_attr_id ,u8 *buf_content, uint *len_content)
+{
+	u8 *attr_ptr;
+	u32 attr_len;
+
+	if(len_content)
+		*len_content = 0;
+	
+	attr_ptr = rtw_get_wps_attr(wps_ie, wps_ielen, target_attr_id, NULL, &attr_len);
+
+	if(attr_ptr && attr_len)
+	{
+		if(buf_content)
+			_rtw_memcpy(buf_content, attr_ptr+4, attr_len-4);
+
+		if(len_content)
+			*len_content = attr_len-4;
+
+		return attr_ptr+4;
+	}
+
+	return NULL;
 }
 
 static int rtw_ieee802_11_parse_vendor_specific(u8 *pos, uint elen,
@@ -915,7 +1018,7 @@ ParseRes rtw_ieee802_11_parse_elems(u8 *start, uint len,
 	
 }
 
-static u8 key_char2num(u8 ch)
+u8 key_char2num(u8 ch)
 {
     if((ch>='0')&&(ch<='9'))
         return ch - '0';
@@ -932,7 +1035,7 @@ u8 str_2char2num(u8 hch, u8 lch)
     return ((key_char2num(hch) * 10 ) + key_char2num(lch));
 }
 
-u8 key_2char2num_cu(u8 hch, u8 lch)
+u8 key_2char2num(u8 hch, u8 lch)
 {
     return ((key_char2num(hch) << 4) | key_char2num(lch));
 }
@@ -949,7 +1052,7 @@ void rtw_macaddr_cfg(u8 *mac_addr)
 
 		for( jj = 0, kk = 0; jj < ETH_ALEN; jj++, kk += 3 )
 		{
-			mac[jj] = key_2char2num_cu(rtw_initmac[kk], rtw_initmac[kk+ 1]);
+			mac[jj] = key_2char2num(rtw_initmac[kk], rtw_initmac[kk+ 1]);
 		}
 		_rtw_memcpy(mac_addr, mac, ETH_ALEN);
 	}
@@ -977,46 +1080,109 @@ void rtw_macaddr_cfg(u8 *mac_addr)
 	DBG_8192C("rtw_macaddr_cfg MAC Address  = "MAC_FMT"\n", MAC_ARG(mac_addr));
 }
 
-#ifdef CONFIG_P2P
-//	Added by Albert 20100910
-//	The input buffer in_ie should be pointer to the address of any information element of management frame.
-//	The p2p_ie buffer will contain "whole" the P2P IE, include the Element ID, Length, P2P OUI and P2P Attributes.
-//	The p2p_ielen will be the length of p2p_ie buffer.
-//	The return value will be the offset for the next IE.
+void dump_ies(u8 *buf, u32 buf_len) {
+	u8* pos = (u8*)buf;
+	u8 id, len;
+	
+	while(pos-buf<=buf_len){
+		id = *pos;
+		len = *(pos+1);
 
-int rtw_get_p2p_ie(u8 *in_ie, uint in_len, u8 *p2p_ie, uint *p2p_ielen)
+		DBG_871X("%s ID:%u, LEN:%u\n", __FUNCTION__, id, len);
+		#ifdef CONFIG_P2P
+		dump_p2p_ie(pos, len);
+		#endif
+		dump_wps_ie(pos, len);
+
+		pos+=(2+len);
+	}	
+}
+
+void dump_wps_ie(u8 *ie, u32 ie_len) {
+	u8* pos = (u8*)ie;
+	u16 id;
+	u16 len;
+
+	u8 *wps_ie;
+	uint wps_ielen;
+	
+	wps_ie = rtw_get_wps_ie(ie, ie_len, NULL, &wps_ielen);
+	if(wps_ie != ie || wps_ielen == 0)
+		return;
+
+	pos+=6;
+	while(pos-ie < ie_len){
+		id = RTW_GET_BE16(pos);
+		len = RTW_GET_BE16(pos + 2);
+
+		DBG_871X("%s ID:0x%04x, LEN:%u\n", __FUNCTION__, id, len);
+
+		pos+=(4+len);
+	}	
+}
+
+#ifdef CONFIG_P2P
+void dump_p2p_ie(u8 *ie, u32 ie_len) {
+	u8* pos = (u8*)ie;
+	u8 id;
+	u16 len;
+
+	u8 *p2p_ie;
+	uint p2p_ielen;
+	
+	p2p_ie = rtw_get_p2p_ie(ie, ie_len, NULL, &p2p_ielen);
+	if(p2p_ie != ie || p2p_ielen == 0)
+		return;
+
+	pos+=6;
+	while(pos-ie < ie_len){
+		id = *pos;
+		len = RTW_GET_LE16(pos+1);
+
+		DBG_871X("%s ID:%u, LEN:%u\n", __FUNCTION__, id, len);
+
+		pos+=(3+len);
+	}	
+}
+
+/**
+ * rtw_get_p2p_ie - Search P2P IE from a series of IEs
+ * @in_ie: Address of IEs to search
+ * @in_len: Length limit from in_ie
+ * @p2p_ie: If not NULL and P2P IE is found, P2P IE will be copied to the buf starting from p2p_ie
+ * @p2p_ielen: If not NULL and P2P IE is found, will set to the length of the entire P2P IE
+ *
+ * Returns: The address of the P2P IE found, or NULL
+ */
+u8 *rtw_get_p2p_ie(u8 *in_ie, uint in_len, u8 *p2p_ie, uint *p2p_ielen)
 {
-	int match;
-	uint cnt = 0;	
+	uint cnt = 0;
+	u8 *p2p_ie_ptr;
 	u8 eid, p2p_oui[4]={0x50,0x6F,0x9A,0x09};
 
+	if ( p2p_ielen != NULL )
+		*p2p_ielen = 0;
 
-	match=_FALSE;
 	while(cnt<in_len)
 	{
 		eid = in_ie[cnt];
 		
 		if( ( eid == _VENDOR_SPECIFIC_IE_ ) && ( _rtw_memcmp( &in_ie[cnt+2], p2p_oui, 4) == _TRUE ) )
 		{
+			p2p_ie_ptr = in_ie + cnt;
+		
 			if ( p2p_ie != NULL )
 			{
 				_rtw_memcpy( p2p_ie, &in_ie[ cnt ], in_ie[ cnt + 1 ] + 2 );
-				if ( p2p_ielen != NULL )
-				{
-					*p2p_ielen = in_ie[ cnt + 1 ] + 2;
-				}
 			}
-			else
+
+			if ( p2p_ielen != NULL )
 			{
-				if ( p2p_ielen != NULL )
-				{
-					*p2p_ielen = 0;
-				}
+				*p2p_ielen = in_ie[ cnt + 1 ] + 2;
 			}
 			
-			cnt += in_ie[ cnt + 1 ] + 2;
+			return p2p_ie_ptr;
 
-			match = _TRUE;
 			break;
 		}
 		else
@@ -1026,63 +1192,100 @@ int rtw_get_p2p_ie(u8 *in_ie, uint in_len, u8 *p2p_ie, uint *p2p_ielen)
 		
 	}	
 
-	if ( match == _TRUE )
-	{
-		match = cnt;
-	}
-	
-	return match;
+	return NULL;
 
 }
 
-//	attr_content: The output buffer, contains the "body field" of P2P attribute.
-//	attr_contentlen: The data length of the "body field" of P2P attribute.
-int rtw_get_p2p_attr_content(u8 *p2p_ie, uint p2p_ielen, u8 target_attr_id ,u8 *attr_content, uint *attr_contentlen)
+/**
+ * rtw_get_p2p_attr - Search a specific P2P attribute from a given P2P IE
+ * @p2p_ie: Address of P2P IE to search
+ * @p2p_ielen: Length limit from p2p_ie
+ * @target_attr_id: The attribute ID of P2P attribute to search
+ * @buf_attr: If not NULL and the P2P attribute is found, P2P attribute will be copied to the buf starting from buf_attr
+ * @len_attr: If not NULL and the P2P attribute is found, will set to the length of the entire P2P attribute
+ *
+ * Returns: the address of the specific WPS attribute found, or NULL
+ */
+u8 *rtw_get_p2p_attr(u8 *p2p_ie, uint p2p_ielen, u8 target_attr_id ,u8 *buf_attr, u32 *len_attr)
 {
-	int match;
-	uint cnt = 0;	
-	u8 attr_id, p2p_oui[4]={0x50,0x6F,0x9A,0x09};
+	u8 *attr_ptr = NULL;
+	u8 *target_attr_ptr = NULL;
+	u8 p2p_oui[4]={0x50,0x6F,0x9A,0x09};
 
+	if(len_attr)
+		*len_attr = 0;
 
-	match=_FALSE;
-
-	if ( ( p2p_ie[ 0 ] != _VENDOR_SPECIFIC_IE_ ) ||
+	if ( ( p2p_ie[0] != _VENDOR_SPECIFIC_IE_ ) ||
 		( _rtw_memcmp( p2p_ie + 2, p2p_oui , 4 ) != _TRUE ) )
 	{
-		return( match );
+		return attr_ptr;
 	}
 
-	//	1 ( P2P IE ) + 1 ( Length ) + 3 ( OUI ) + 1 ( OUI Type )
-	cnt = 6;
-	while( cnt < p2p_ielen )
+	// 6 = 1(Element ID) + 1(Length) + 3 (OUI) + 1(OUI Type)
+	attr_ptr = p2p_ie + 6; //goto first attr
+	
+	while(attr_ptr - p2p_ie < p2p_ielen)
 	{
-		//u16	attrlen = le16_to_cpu(*(u16*)(p2p_ie + cnt + 1 ));
-		u16 attrlen = RTW_GET_LE16(p2p_ie + cnt + 1);
+		// 3 = 1(Attribute ID) + 2(Length)
+		u8 attr_id = *attr_ptr;
+		u16 attr_data_len = RTW_GET_LE16(attr_ptr + 1);
+		u16 attr_len = attr_data_len + 3;
 		
-		attr_id = p2p_ie[cnt];
+		//DBG_871X("%s attr_ptr:%p, id:%u, length:%u\n", __FUNCTION__, attr_ptr, attr_id, attr_data_len);
 		if( attr_id == target_attr_id )
 		{
-			//	3 -> 1 byte for attribute ID field, 2 bytes for length field
-			if(attr_content)
-				_rtw_memcpy( attr_content, &p2p_ie[ cnt + 3 ], attrlen );
+			target_attr_ptr = attr_ptr;
+		
+			if(buf_attr)
+				_rtw_memcpy(buf_attr, attr_ptr, attr_len);
 			
-			if(attr_contentlen)
-				*attr_contentlen = attrlen;
+			if(len_attr)
+				*len_attr = attr_len;
 			
-			cnt += attrlen + 3;
-
-			match = _TRUE;
 			break;
 		}
 		else
 		{
-			cnt += attrlen + 3; //goto next	
+			attr_ptr += attr_len; //goto next
 		}		
 		
 	}	
 
-	return match;
+	return target_attr_ptr;
+}
 
+/**
+ * rtw_get_p2p_attr_content - Search a specific P2P attribute content from a given P2P IE
+ * @p2p_ie: Address of P2P IE to search
+ * @p2p_ielen: Length limit from p2p_ie
+ * @target_attr_id: The attribute ID of P2P attribute to search
+ * @buf_content: If not NULL and the P2P attribute is found, P2P attribute content will be copied to the buf starting from buf_content
+ * @len_content: If not NULL and the P2P attribute is found, will set to the length of the P2P attribute content
+ *
+ * Returns: the address of the specific P2P attribute content found, or NULL
+ */
+u8 *rtw_get_p2p_attr_content(u8 *p2p_ie, uint p2p_ielen, u8 target_attr_id ,u8 *buf_content, uint *len_content)
+{
+	u8 *attr_ptr;
+	u32 attr_len;
+
+	if(len_content)
+		*len_content = 0;
+	
+	attr_ptr = rtw_get_p2p_attr(p2p_ie, p2p_ielen, target_attr_id, NULL, &attr_len);
+
+	if(attr_ptr && attr_len)
+	{
+		if(buf_content)
+			_rtw_memcpy(buf_content, attr_ptr+3, attr_len-3);
+
+		if(len_content)
+			*len_content = attr_len-3;
+
+		return attr_ptr+3;
+	}
+
+	return NULL;
 }
 
 u32 rtw_set_p2p_attr_content(u8 *pbuf, u8 attr_id, u16 attr_len, u8 *pdata_attr)
@@ -1102,101 +1305,80 @@ u32 rtw_set_p2p_attr_content(u8 *pbuf, u8 attr_id, u16 attr_len, u8 *pdata_attr)
 	return a_len;
 }
 
-//	Noted by Albert 20100910
-//	1. WPS uses the TLV format to store the attribute contents.
-//	T: Type, 2bytes length
-//	L: Length, 2bytes length
-//	V: Value, variable length
-//	2. WPS uses the big endian to store the WPS attribute contents.
-
-//	attr_content: The output buffer, contains the "value part" of WPS attribute field.
-//	attr_contentlen: The data length of the "value part" of WPS attribute field.
-
-int rtw_get_wps_attr_content(u8 *wps_ie, uint wps_ielen, u16 target_attr_id ,u8 *attr_content, uint *attr_contentlen)
+static uint rtw_p2p_attr_remove(u8 *ie, uint ielen_ori, u8 attr_id)
 {
-	int match;
-	uint cnt = 0;	
-	u8 wps_oui[4]={0x00,0x50,0xF2,0x04};
-	u16	attr_id;
+	u8 *target_attr;
+	u32 target_attr_len;
+	uint ielen = ielen_ori;
+	int index=0;
 
+	while(1) {
+		target_attr=rtw_get_p2p_attr(ie, ielen, attr_id, NULL, &target_attr_len);
+		if(target_attr && target_attr_len)
+		{
+			u8 *next_attr = target_attr+target_attr_len;
+			uint remain_len = ielen-(next_attr-ie);
+			//dump_ies(ie, ielen);
+			#if 0
+			DBG_871X("[%d] ie:%p, ielen:%u\n"
+				"target_attr:%p, target_attr_len:%u\n"
+				"next_attr:%p, remain_len:%u\n"
+				, index++
+				, ie, ielen
+				, target_attr, target_attr_len
+				, next_attr, remain_len
+			);
+			#endif
 
-	match=_FALSE;
-
-	if ( ( wps_ie[ 0 ] != _VENDOR_SPECIFIC_IE_ ) ||
-		( _rtw_memcmp( wps_ie + 2, wps_oui , 4 ) != _TRUE ) )
-	{
-		return( match );
+			_rtw_memset(target_attr, 0, target_attr_len);
+			_rtw_memcpy(target_attr, next_attr, remain_len);
+			_rtw_memset(target_attr+remain_len, 0, target_attr_len);
+			*(ie+1) -= target_attr_len;
+			ielen-=target_attr_len;
+		}
+		else
+		{
+			//if(index>0)
+			//	dump_ies(ie, ielen);
+			break;
+		}
 	}
 
-	//	1 ( WPS IE ) + 1 ( Length ) + 4 ( WPS OUI )
-	cnt = 6;
-	while( cnt < wps_ielen )
-	{
-		//	2 -> the length of WPS attribute type field.
-		//u16	attrlen = be16_to_cpu(*(u16*)(wps_ie + cnt + 2 ));
-		u16	attrlen = RTW_GET_BE16(wps_ie + cnt + 2);
-		
-		//attr_id = be16_to_cpu( *(u16*) ( wps_ie + cnt ) );
-		attr_id = RTW_GET_BE16(wps_ie + cnt);
-		if( attr_id == target_attr_id )
-		{
-			//	3 -> 1 byte for attribute ID field, 2 bytes for length field
-			_rtw_memcpy( attr_content, &wps_ie[ cnt + 4 ], attrlen );
-			
-			*attr_contentlen = attrlen;
-			
-			cnt += attrlen + 4;
-
-			match = _TRUE;
-			break;
-		}
-		else
-		{
-			cnt += attrlen + 4; //goto next	
-		}		
-		
-	}	
-
-	return match;
-
+	return ielen;
 }
 
-//	Commented by Albert 20110520
-//	This function is only used by P2P
-int rtw_get_wps_ie_p2p(u8 *in_ie, uint in_len, u8 *wps_ie, uint *wps_ielen)
+void rtw_WLAN_BSSID_EX_remove_p2p_attr(WLAN_BSSID_EX *bss_ex, u8 attr_id)
 {
-	int match;
-	uint cnt = 0;
-	u8 eid, wps_oui[4]={0x0,0x50,0xf2,0x04};
-
-	match=_FALSE;
-	while(cnt<in_len)
+	u8 *p2p_ie;
+	uint p2p_ielen, p2p_ielen_ori;
+	int cnt;
+	
+	if( (p2p_ie=rtw_get_p2p_ie(bss_ex->IEs+_FIXED_IE_LENGTH_, bss_ex->IELength-_FIXED_IE_LENGTH_, NULL, &p2p_ielen_ori)) ) 
 	{
-		eid = in_ie[cnt];
-		
-		if((eid==_WPA_IE_ID_)&&(_rtw_memcmp(&in_ie[cnt+2], wps_oui, 4)==_TRUE))
-		{
-			if ( wps_ie != NULL )
-			{
-				_rtw_memcpy(wps_ie, &in_ie[cnt], in_ie[cnt+1]+2);
-			}
-			
-			*wps_ielen = in_ie[cnt+1]+2;
-			
-			cnt+=in_ie[cnt+1]+2;
-
-			match = _TRUE;
-			break;
+		#if 0
+		if(rtw_get_p2p_attr(p2p_ie, p2p_ielen_ori, attr_id, NULL, NULL)) {
+			DBG_871X("rtw_get_p2p_attr: GOT P2P_ATTR:%u!!!!!!!!\n", attr_id);
+			dump_ies(bss_ex->IEs+_FIXED_IE_LENGTH_, bss_ex->IELength-_FIXED_IE_LENGTH_);
 		}
-		else
-		{
-			cnt+=in_ie[cnt+1]+2; //goto next	
-		}		
-		
-	}	
+		#endif
 
-	return match;
+		p2p_ielen=rtw_p2p_attr_remove(p2p_ie, p2p_ielen_ori, attr_id);
+		if(p2p_ielen != p2p_ielen_ori) {
+			
+			u8 *next_ie_ori = p2p_ie+p2p_ielen_ori;
+			u8 *next_ie = p2p_ie+p2p_ielen;
+			uint remain_len = bss_ex->IELength-(next_ie_ori-bss_ex->IEs);
 
+			_rtw_memcpy(next_ie, next_ie_ori, remain_len);
+			_rtw_memset(next_ie+remain_len, 0, p2p_ielen_ori-p2p_ielen);
+			bss_ex->IELength -= p2p_ielen_ori-p2p_ielen;
+
+			#if 0
+			DBG_871X("remove P2P_ATTR:%u!\n", attr_id);
+			dump_ies(bss_ex->IEs+_FIXED_IE_LENGTH_, bss_ex->IELength-_FIXED_IE_LENGTH_);
+			#endif
+		}
+	}
 }
 
 #ifdef CONFIG_WFD
@@ -1272,27 +1454,26 @@ int rtw_get_wfd_attr_content(u8 *wfd_ie, uint wfd_ielen, u8 target_attr_id ,u8 *
 	cnt = 6;
 	while( cnt < wfd_ielen )
 	{
-		//u16	attrlen = le16_to_cpu(*(u16*)(p2p_ie + cnt + 1 ));
-		u16 attrlen = RTW_GET_LE16(wfd_ie + cnt + 1);
+		u16 attrlen = RTW_GET_BE16(wfd_ie + cnt + 1);
 		
 		attr_id = wfd_ie[cnt];
 		if( attr_id == target_attr_id )
 		{
-			//	2 -> 1 byte for attribute ID field, 1 bytes for length field
+			//	3 -> 1 byte for attribute ID field, 2 bytes for length field
 			if(attr_content)
-			_rtw_memcpy( attr_content, &wfd_ie[ cnt + 2 ], attrlen );
+				_rtw_memcpy( attr_content, &wfd_ie[ cnt + 3 ], attrlen );
 			
 			if(attr_contentlen)
 			*attr_contentlen = attrlen;
 			
-			cnt += attrlen + 2;
+			cnt += attrlen + 3;
 
 			match = _TRUE;
 			break;
 		}
 		else
 		{
-			cnt += attrlen + 2; //goto next	
+			cnt += attrlen + 3; //goto next	
 		}		
 		
 	}	
@@ -1300,8 +1481,6 @@ int rtw_get_wfd_attr_content(u8 *wfd_ie, uint wfd_ielen, u8 target_attr_id ,u8 *
 	return match;
 
 }
-
-
 #endif // CONFIG_WFD
 #endif // CONFIG_P2P
 

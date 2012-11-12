@@ -83,7 +83,7 @@ static const  reg_t tvregs_720p[] = {
 
     {ENCP_VIDEO_FILT_CTRL,       0x0052,},
     {VENC_DVI_SETTING,           0x2029,},
-    {ENCP_VIDEO_MODE,            0x0040,},
+    {ENCP_VIDEO_MODE,            0x4040,},
     {ENCP_VIDEO_MODE_ADV,        0x0019,},
     {ENCP_VIDEO_YFP1_HTIME,      648,   },
     {ENCP_VIDEO_YFP2_HTIME,      3207,  },
@@ -186,7 +186,7 @@ static const  reg_t tvregs_720p_50hz[] = {
 
 
     {VENC_VIDEO_PROG_MODE,       0x100, },
-    {ENCP_VIDEO_MODE,            0x0040,},  //Enable Hsync and equalization pulse switch in center
+    {ENCP_VIDEO_MODE,            0x4040,},  //Enable Hsync and equalization pulse switch in center
     {ENCP_VIDEO_MODE_ADV,        0x0019,},//bit6:swap PbPr; bit4:YPBPR gain as HDTV type;
                                                  //bit3:Data input from VFIFO;bit[2}0]:repreat pixel a time
 
@@ -331,7 +331,7 @@ static const reg_t tvregs_480p[] = {
 #endif
     {ENCP_VIDEO_FILT_CTRL,       0x2052,},
     {VENC_DVI_SETTING,           0x21,  },
-    {ENCP_VIDEO_MODE,            0,     },
+    {ENCP_VIDEO_MODE,            0x4000,     },
     {ENCP_VIDEO_MODE_ADV,        9,     },
     {ENCP_VIDEO_YFP1_HTIME,      244,   },
     {ENCP_VIDEO_YFP2_HTIME,      1630,  },
@@ -495,7 +495,7 @@ static const reg_t tvregs_576p[] = {
     //{HHI_VID_CLK_CNTL,        	 0x0561,},
     {ENCP_VIDEO_FILT_CTRL,       0x52,  },
     {VENC_DVI_SETTING,           0x21,  },
-    {ENCP_VIDEO_MODE,            0,     },
+    {ENCP_VIDEO_MODE,            0x4000,     },
     {ENCP_VIDEO_MODE_ADV,        9,     },
     {ENCP_VIDEO_YFP1_HTIME,      235,   },
     {ENCP_VIDEO_YFP2_HTIME,      1674,  },
@@ -581,7 +581,7 @@ static const reg_t tvregs_1080i[] = {
     {ENCP_VIDEO_YFP2_HTIME,      4355,  },
     {VENC_VIDEO_PROG_MODE,       0x100, },
     {ENCP_VIDEO_OFLD_VOAV_OFST,  0x11   },
-    {ENCP_VIDEO_MODE,            0x1ffc,},
+    {ENCP_VIDEO_MODE,            0x5ffc,},
     {ENCP_VIDEO_MODE_ADV,        0x0019,},
     {ENCP_VIDEO_SYNC_MODE,       0x207, },
     {VENC_SYNC_ROUTE,            0,     },
@@ -660,7 +660,7 @@ static const reg_t tvregs_1080i_50hz[] = {
                                                         //bit[11:8]: Odd field VSO  offset end,
                                                         //bit[7:4]: Odd field VAVON offset begin,
                                                         //bit[3:0]: Odd field VAVON offset end,
-    {ENCP_VIDEO_MODE,            0x1ffc,},//Enable Hsync and equalization pulse switch in center
+    {ENCP_VIDEO_MODE,            0x5ffc,},//Enable Hsync and equalization pulse switch in center
     {ENCP_VIDEO_MODE_ADV,        0x0019,}, //bit6:swap PbPr; bit4:YPBPR gain as HDTV type;
                                                  //bit3:Data input from VFIFO;bit[2}0]:repreat pixel a time
     {ENCP_VIDEO_SYNC_MODE,       0x7, }, //bit[15:8] -- adjust the vsync vertical position
@@ -693,7 +693,7 @@ static const reg_t tvregs_1080p[] = {
 #endif
     {ENCP_VIDEO_FILT_CTRL,       0x1052,},
     {VENC_DVI_SETTING,           0x0001,},
-    {ENCP_VIDEO_MODE,            0x0040,},
+    {ENCP_VIDEO_MODE,            0x4040,},
     {ENCP_VIDEO_MODE_ADV,        0x0018,},
     {ENCP_VIDEO_YFP1_HTIME,      140,   },
     {ENCP_VIDEO_YFP2_HTIME,      2060,  },
@@ -705,8 +705,8 @@ static const reg_t tvregs_1080p[] = {
     {ENCP_VIDEO_VSPULS_END,      2059,  },
     {ENCP_VIDEO_VSPULS_BLINE,    0,     },
     {ENCP_VIDEO_VSPULS_ELINE,    4,     },//35
-    {ENCP_VIDEO_HAVON_BEGIN,     148,   },
-    {ENCP_VIDEO_HAVON_END,       2067,  },
+    {ENCP_VIDEO_HAVON_BEGIN,     188,   },
+    {ENCP_VIDEO_HAVON_END,       2107,  },
     {ENCP_VIDEO_VAVON_BLINE,     41,    },
     {ENCP_VIDEO_VAVON_ELINE,     1120,  },
     {ENCP_VIDEO_HSO_BEGIN,       44,    },
@@ -792,7 +792,7 @@ static const reg_t tvregs_1080p_50hz[] = {
     {ENCP_VIDEO_YFP1_HTIME,      271,   },
     {ENCP_VIDEO_YFP2_HTIME,      2190,  },
     {VENC_VIDEO_PROG_MODE,       0x100, },
-    {ENCP_VIDEO_MODE,            0x0040,},
+    {ENCP_VIDEO_MODE,            0x4040,},
     {ENCP_VIDEO_MODE_ADV,        0x0018,},
 
     {ENCP_VIDEO_SYNC_MODE,       0x7, }, //bit[15:8] -- adjust the vsync vertical position

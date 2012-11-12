@@ -1021,7 +1021,7 @@ void SetPacketTx(PADAPTER padapter)
 	u8 *ptr, *pkt_start, *pkt_end;
 	u32 pkt_size;
 	struct tx_desc *desc;
-	struct ieee80211_hdr *hdr;
+	struct rtw_ieee80211_hdr *hdr;
 	u8 payload;
 	s32 bmcast;
 	struct pkt_attrib *pattrib;
@@ -1110,7 +1110,7 @@ void SetPacketTx(PADAPTER padapter)
 	desc->txdw5 |= cpu_to_le32(0x0001FF00); // DATA/RTS Rate Fallback Limit
 
 	//3 4. make wlan header, make_wlanhdr()
-	hdr = (struct ieee80211_hdr *)pkt_start;
+	hdr = (struct rtw_ieee80211_hdr *)pkt_start;
 	SetFrameSubType(&hdr->frame_ctl, pattrib->subtype);
 	_rtw_memcpy(hdr->addr1, pattrib->dst, ETH_ALEN); // DA
 	_rtw_memcpy(hdr->addr2, pattrib->src, ETH_ALEN); // SA

@@ -15,6 +15,7 @@
 #include <sound/soc.h>
 #include <sound/soc-dapm.h>
 #include <sound/jack.h>
+#include <sound/aml_platform.h>
 
 #include <asm/mach-types.h>
 #include <mach/hardware.h>
@@ -27,6 +28,8 @@
 #define HP_DET 1
 
 
+static struct platform_device *aml_m3_snd_device;
+static struct platform_device *aml_m3_platform_device;
 #if HP_DET
 static struct snd_soc_jack hp_jack;
 
@@ -41,6 +44,7 @@ static struct snd_soc_jack_pin hp_jack_pins[] = {
 static struct timer_list timer;
 static int hp_detect_flag = 0;
 extern void mute_spk(struct snd_soc_codec* codec, int flag);
+extern void mute_headphone(struct snd_soc_codec* codec, int flag);
 extern int aml_m3_is_hp_pluged(void);
 static struct switch_dev sdev;
 #endif
@@ -77,6 +81,7 @@ static int aml_m3_set_bias_level(struct snd_soc_card *card,
 {
     int ret = 0;
     struct snd_soc_codec *codec = card->codec;
+	struct aml_audio_platform* pplatform = aml_m3_platform_device->dev.platform_data;
     // TODO
 
 #ifdef _AML_M3_HW_DEBUG_
@@ -143,7 +148,7 @@ extern void latch_(struct snd_soc_codec* codec);
 static void aml_m3_hp_detect_queue(struct work_struct* work)
 {
 	int level = 0x0;
-	u16 reg;
+	//u16 reg;
 	struct aml_m3_work_t* pwork = container_of(work,struct aml_m3_work_t, aml_m3_workqueue);
     struct snd_soc_codec* codec = (struct snd_soc_codec*)(pwork->data);
 
@@ -155,9 +160,10 @@ static void aml_m3_hp_detect_queue(struct work_struct* work)
 	if(level == 0x1 && hp_detect_flag!= 0x1){ // HP
 		printk("Headphone pluged in\n");
 		snd_soc_jack_report(&hp_jack, SND_JACK_HEADSET, SND_JACK_HEADSET);
-		reg = snd_soc_read(codec, ADAC_MUTE_CTRL_REG1);
-		reg &= ~0xc0;
-		snd_soc_write(codec, ADAC_MUTE_CTRL_REG1, reg); //unmute HP
+		//reg = snd_soc_read(codec, ADAC_MUTE_CTRL_REG1);
+		//reg &= ~0xc0;
+		//snd_soc_write(codec, ADAC_MUTE_CTRL_REG1, reg); //unmute HP
+		mute_headphone(codec, 0);  //unmute HP
     	mute_spk(codec, 1);
     	latch_(codec);
 		hp_detect_flag = level;
@@ -165,9 +171,10 @@ static void aml_m3_hp_detect_queue(struct work_struct* work)
 	}else if(level != hp_detect_flag){ // HDMI
 		printk("Headphone unpluged\n");
         snd_soc_jack_report(&hp_jack,0, SND_JACK_HEADSET);
-		reg = snd_soc_read(codec, ADAC_MUTE_CTRL_REG1);
-		reg |= 0xc0;
-		snd_soc_write(codec, ADAC_MUTE_CTRL_REG1, reg);//mute HP
+		//reg = snd_soc_read(codec, ADAC_MUTE_CTRL_REG1);
+		//reg |= 0xc0;
+		//snd_soc_write(codec, ADAC_MUTE_CTRL_REG1, reg);//mute HP
+		mute_headphone(codec,1);   //mute HP
 		mute_spk(codec, 0);
 		latch_(codec);
 		hp_detect_flag = level;
@@ -267,9 +274,6 @@ static struct snd_soc_device aml_m3_snd_devdata = {
 	.codec_dev = &soc_codec_dev_aml_m3,
 };
 
-static struct platform_device *aml_m3_snd_device;
-static struct platform_device *aml_m3_platform_device;
-
 static int aml_m3_audio_probe(struct platform_device *pdev)
 {
 		int ret;
@@ -293,6 +297,7 @@ printk("***Entered %s:%s\n", __FILE__,__func__);
 		
 		aml_m3_platform_device = platform_device_register_simple("aml_m3_codec",
 								-1, NULL, 0);
+		aml_m3_platform_device->dev.platform_data = pdev->dev.platform_data;
 #if HP_DET
 		sdev.name = "h2w";//for report headphone to android
 		ret = switch_dev_register(&sdev);

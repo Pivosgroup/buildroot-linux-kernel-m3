@@ -1,7 +1,7 @@
 /*
  * Video Frame Manager For Provider and Receiver
  *
- * Author: Bobby Yang <bo.yang@amlogic.com>
+ * Author: Rain Zhang <rain.zhang@amlogic.com>
  *
  *
  * Copyright (C) 2010 Amlogic Inc.
@@ -18,13 +18,18 @@ char* vf_get_provider_name(const char* receiver_name);
 
 char* vf_get_receiver_name(const char* provider_name);
 
-bool is_provider_active(const char* provider_name);
+void vf_update_active_map(void);
 
-bool is_receiver_active(const char* receiver_name);
+int provider_list(char* buf);
 
-void provider_list(void);
+int receiver_list(char* buf);
+
+struct vframe_provider_s * vf_get_provider_by_name(const char *provider_name);
 
 extern int vfm_mode;
+
+extern int vfm_debug_flag;
+
 
 #endif
 

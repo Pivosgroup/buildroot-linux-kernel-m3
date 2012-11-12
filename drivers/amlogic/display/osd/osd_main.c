@@ -296,7 +296,7 @@ osd_ioctl(struct fb_info *info, unsigned int cmd,
 		case FBIOGET_OSD_BLOCK_WINDOWS:
 		case FBIOGET_OSD_BLOCK_MODE:
 		case FBIOGET_OSD_FREE_SCALE_AXIS:
-		case	FBIOPUT_OSD_ENFORCE_PROGRESSIVE:
+		case FBIOPUT_OSD_ENFORCE_PROGRESSIVE:
 			break;
 		case FBIOPUT_OSD_BLOCK_MODE:
 			block_mode = (u32)argp;
@@ -874,7 +874,7 @@ static ssize_t store_scale_width(struct device *device, struct device_attribute 
 }
 
 static ssize_t show_scale_width(struct device *device, struct device_attribute *attr,
-			 char *buf)
+			 const char *buf)
 {
 	struct fb_info *fb_info = dev_get_drvdata(device);
 	unsigned int free_scale_width=0;
@@ -894,7 +894,7 @@ static ssize_t store_scale_height(struct device *device, struct device_attribute
 	return count;
 }
 static ssize_t show_scale_height(struct device *device, struct device_attribute *attr,
-			 char *buf)
+			 const char *buf)
 {
 	struct fb_info *fb_info = dev_get_drvdata(device);
 	unsigned int free_scale_height=0;
@@ -1188,15 +1188,12 @@ static void osd_late_resume(struct early_suspend *h)
 #if defined(CONFIG_MACH_MESON3_REFF16) || defined(CONFIG_MACH_MESON3_STV_MBX_MC) //add by steven
 int  __init  get_resolution(char *str)
 {
-    int status = 0;
-
     if(strncmp("480", str, 3) == 0)
     {
 			mydef_var[0].xres=mydef_var[1].xres=720;
 			mydef_var[0].yres=mydef_var[1].yres=480;	
 			mydef_var[0].xres_virtual=mydef_var[1].xres_virtual=720;
 			mydef_var[0].yres_virtual=mydef_var[1].yres_virtual=960;
-      status = 1;
     }
     else if(strncmp("576", str, 3) == 0)
     {
@@ -1204,7 +1201,6 @@ int  __init  get_resolution(char *str)
 			mydef_var[0].yres=mydef_var[1].yres=576;	
 			mydef_var[0].xres_virtual=mydef_var[1].xres_virtual=720;
 			mydef_var[0].yres_virtual=mydef_var[1].yres_virtual=1152;
-      status = 1;
     }
     else if(strncmp("720", str, 3) == 0)
     {
@@ -1212,7 +1208,6 @@ int  __init  get_resolution(char *str)
 			mydef_var[0].yres=mydef_var[1].yres=720;	
 			mydef_var[0].xres_virtual=mydef_var[1].xres_virtual=1280;
 			mydef_var[0].yres_virtual=mydef_var[1].yres_virtual=1440;
-      status = 1;
     }
     else if(strncmp("1080", str, 4) == 0)
     {
@@ -1220,11 +1215,9 @@ int  __init  get_resolution(char *str)
 			mydef_var[0].yres=mydef_var[1].yres=1080;	
 			mydef_var[0].xres_virtual=mydef_var[1].xres_virtual=1920;
 			mydef_var[0].yres_virtual=mydef_var[1].yres_virtual=2160;
-      status = 1;
     }
     printk("***osd size: %d, %d, %d, %d...\n", mydef_var[0].xres, mydef_var[0].yres, mydef_var[0].xres_virtual, mydef_var[0].yres_virtual);
 
-    return status;
 }
 __setup("androidboot.resolution=", get_resolution) ;
 #endif

@@ -902,6 +902,8 @@ static inline void hci_conn_complete_evt(struct hci_dev *hdev, struct sk_buff *s
 			cp.handle = ev->handle;
 			hci_send_cmd(hdev, HCI_OP_READ_REMOTE_FEATURES,
 							sizeof(cp), &cp);
+            /* force host to be master role */
+            hci_conn_switch_role(conn, 0x00);
 		}
 
 		/* Set packet type for incoming connection */

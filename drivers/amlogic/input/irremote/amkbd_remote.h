@@ -4,6 +4,8 @@
 #include <linux/fiq_bridge.h>
 
 //remote config  ioctl  cmd
+#define   REMOTE_IOC_UNFCODE_CONFIG              _IOW_BAD('I',12,sizeof(short))
+#define   REMOTE_IOC_INFCODE_CONFIG              _IOW_BAD('I',13,sizeof(short))
 #define   REMOTE_IOC_RESET_KEY_MAPPING	    _IOW_BAD('I',3,sizeof(short))
 #define   REMOTE_IOC_SET_KEY_MAPPING		    _IOW_BAD('I',4,sizeof(short))
 #define   REMOTE_IOC_SET_MOUSE_MAPPING	    _IOW_BAD('I',5,sizeof(short))
@@ -13,6 +15,8 @@
 #define   REMOTE_IOC_SET_REPEAT_ENABLE		_IOW_BAD('I',8,sizeof(short))
 #define	REMOTE_IOC_SET_DEBUG_ENABLE			_IOW_BAD('I',9,sizeof(short)) 
 #define	REMOTE_IOC_SET_MODE					_IOW_BAD('I',10,sizeof(short)) 
+#define	REMOTE_IOC_SET_MOUSE_SPEED			_IOW_BAD('I',11,sizeof(short)) 
+#define	REMOTE_IOC_SET_REPEAT_KEY_MAPPING       _IOW_BAD('I',20,sizeof(short))
 
 #define   REMOTE_IOC_SET_RELEASE_DELAY		_IOW_BAD('I',99,sizeof(short))
 #define   REMOTE_IOC_SET_CUSTOMCODE   			_IOW_BAD('I',100,sizeof(short))
@@ -46,6 +50,17 @@
 #define   REMOTE_IOC_GET_REG_FRAME_DATA		_IOR_BAD('I',127,sizeof(short))
 #define   REMOTE_IOC_GET_REG_FRAME_STATUS	_IOR_BAD('I',128,sizeof(short))
 
+#define   REMOTE_IOC_SET_TW_BIT2_TIME			_IOW_BAD('I',129,sizeof(short))
+#define   REMOTE_IOC_SET_TW_BIT3_TIME			_IOW_BAD('I',130,sizeof(short))
+#define   REMOTE_IOC_SET_FN_KEY_SCANCODE     _IOW_BAD('I', 131, sizeof(short)) 
+#define   REMOTE_IOC_SET_LEFT_KEY_SCANCODE   _IOW_BAD('I', 132, sizeof(short))
+#define   REMOTE_IOC_SET_RIGHT_KEY_SCANCODE  _IOW_BAD('I', 133, sizeof(short))
+#define   REMOTE_IOC_SET_UP_KEY_SCANCODE     _IOW_BAD('I', 134, sizeof(short))
+#define   REMOTE_IOC_SET_DOWN_KEY_SCANCODE   _IOW_BAD('I', 135, sizeof(short))
+#define   REMOTE_IOC_SET_OK_KEY_SCANCODE     _IOW_BAD('I', 136, sizeof(short))
+#define   REMOTE_IOC_SET_PAGEUP_KEY_SCANCODE _IOW_BAD('I', 137, sizeof(short))
+#define   REMOTE_IOC_SET_PAGEDOWN_KEY_SCANCODE _IOW_BAD('I', 138, sizeof(short))
+
 #define   	REMOTE_HW_DECODER_STATUS_MASK			(0xf<<4)
 #define   	REMOTE_HW_DECODER_STATUS_OK			(0<<4)
 #define	REMOTE_HW_DECODER_STATUS_TIMEOUT		(1<<4)
@@ -55,16 +70,19 @@
 #define	REMOTE_HW_PATTERN_MASK					(0xf<<4)
 #define	REMOTE_HW_NEC_PATTERN					(0x0<<4)
 #define	REMOTE_HW_TOSHIBA_PATTERN				(0x1<<4)
-
+#define REMOTE_SW_RC6_PATTERN                   (0x2<<4)
+#define REMOTE_SW_RC5_PATTERN                   (0x3<<4)
 #define   REMOTE_WORK_MODE_SW 				(0)
 #define   REMOTE_WORK_MODE_HW					(1)
 #define   REMOTE_WORK_MODE_FIQ				(2)
 #define   REMOTE_WORK_MODE_INV				(3)
-#define   REMOTE_WORK_MODE_MASK 				(3)
+#define   REMOTE_WORK_MODE_MASK 				(7)
+#define   REMOTE_WORK_MODE_FIQ_RCMM				(4)
 
 #define   REMOTE_TOSHIBA_HW		(REMOTE_HW_TOSHIBA_PATTERN|REMOTE_WORK_MODE_HW)
 #define   REMOTE_NEC_HW				(REMOTE_HW_NEC_PATTERN|REMOTE_WORK_MODE_HW)
-
+#define REMOTE_WORK_MODE_RC6       (REMOTE_SW_RC6_PATTERN|REMOTE_WORK_MODE_FIQ)
+#define REMOTE_WORK_MODE_RC5       (REMOTE_SW_RC5_PATTERN|REMOTE_WORK_MODE_FIQ)
 
 #define REMOTE_STATUS_WAIT       0
 #define REMOTE_STATUS_LEADER    1
@@ -88,7 +106,7 @@ struct kp {
 	unsigned int repeate_flag;
 	unsigned int repeat_enable;
 	unsigned int debounce;
-	unsigned int custom_code;
+	unsigned int custom_code[2];
 	unsigned int release_delay;
 	unsigned int debug_enable;
 //sw
@@ -100,7 +118,7 @@ struct kp {
 	unsigned int 	bit_count;
 	unsigned int   bit_num;
 	unsigned int	last_jiffies;
-	unsigned int 	time_window[8];
+	unsigned int 	time_window[12];
 	int			last_pulse_width;
 	int			repeat_time_count;
 //config 	
@@ -114,7 +132,13 @@ struct kp {
 
 extern type_printk input_dbg;
 extern irqreturn_t remote_bridge_isr(int irq, void *dev_id);
-
+extern irqreturn_t remote_rc5_bridge_isr(int irq, void *dev_id);
+extern irqreturn_t remote_rc6_bridge_isr(int irq, void *dev_id);
+extern int register_fiq_bridge_handle(bridge_item_t * c_item);
+extern int unregister_fiq_bridge_handle(bridge_item_t * c_item);
+extern int fiq_bridge_pulse_trigger(bridge_item_t * c_item);
+void kp_rc6_reprot_key(unsigned long data);
+void kp_rc5_reprot_key(unsigned long data);
 void kp_sw_reprot_key(unsigned long data);
 void kp_send_key(struct input_dev *dev, unsigned int scancode, unsigned int type);
 

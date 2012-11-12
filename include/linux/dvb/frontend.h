@@ -410,4 +410,17 @@ struct dtv_properties {
 
 #define FE_DISHNETWORK_SEND_LEGACY_CMD _IO('o', 80) /* unsigned int */
 
+#define FE_SET_DELAY               _IO('o', 100)
+#if 1//for avl6211 blind scan
+#define FE_SET_BLINDSCAN				_IOW('o', 84, struct dvbsx_blindscanpara)
+#define FE_GET_BLINDSCANSTATUS		_IOR('o', 85, struct dvbsx_blindscaninfo)
+#define FE_SET_BLINDSCANCANCEl		_IO('o', 86)
+#define FE_READ_BLINDSCANCHANNELINFO  _IOR('o', 87, struct dvb_frontend_parameters)
+#define FE_SET_BLINDSCANRESET		_IO('o', 88)
+
+
+
+#endif
+
+
 #endif /*_DVBFRONTEND_H_*/

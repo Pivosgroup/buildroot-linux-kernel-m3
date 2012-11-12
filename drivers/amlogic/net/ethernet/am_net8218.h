@@ -3,7 +3,8 @@
 #include <mach/am_regs.h>
 #include <mach/am_eth_reg.h>
 #include <linux/skbuff.h>
-	/*  */
+	/* 
+ */
 
 #define  DMA_USE_SKB_BUF
 //#define DMA_USE_MALLOC_ADDR
@@ -39,7 +40,8 @@
 #define PKT_BUF_SZ		1536	/* Size of each temporary Rx buffer. */
 
 #define TX_TIMEOUT 		(HZ * 200 / 1000)
-
+
+
 #define ANOR_INTR_EN 1<<15
 #define TX_STOP_EN 1<<1
 #define TX_JABBER_TIMEOUT 1<<3
@@ -60,8 +62,10 @@ enum mii_reg_bits {
 		MDIO_ShiftClk = 0x10000, MDIO_DataIn = 0x80000, MDIO_DataOut = 0x20000,
 		MDIO_EnbOutput = 0x40000, MDIO_EnbIn = 0x00000,
 };
-enum DmaDescriptorLength /* length word of DMA descriptor */ 
-{ 
+
+enum DmaDescriptorLength /* length word of DMA descriptor */ 
+{ 
+
 		DescTxIntEnable = 0x80000000, /* Tx - interrupt on completion                         */ 
 		DescTxLast = 0x40000000, /* Tx - Last segment of the frame                       */ 
 		DescTxFirst = 0x20000000, /* Tx - First segment of the frame                      */ 
@@ -70,16 +74,19 @@ enum mii_reg_bits {
 		DescChain = 0x01000000, /* Second buffer address is chain address               */ 
 		DescTxDisablePadd = 0x00800000, /* disable padding, added by - reyaz */ 
 		DescSize2Mask = 0x003FF800, /* Buffer 2 size                                        */ 
-		DescSize2Shift = 11, DescSize1Mask = 0x000007FF, /* Buffer 1 size                                        */ 
+		DescSize2Shift = 11, 
+DescSize1Mask = 0x000007FF, /* Buffer 1 size                                        */ 
 		DescSize1Shift = 0, 
 };
 enum DmaDescriptorStatus /* status word of DMA descriptor */ 
-{ 		
+{ 
+		
 		DescOwnByDma = 0x80000000, /* Descriptor is owned by DMA engine  */ 
 		// CHANGED: Added on 07/29
 		DescDAFilterFail = 0x40000000, /* Rx - DA Filter Fail for the received frame        E  */ 
 		DescFrameLengthMask = 0x3FFF0000, /* Receive descriptor frame length */ 
-		DescFrameLengthShift = 16, DescError = 0x00008000, /* Error summary bit  - OR of the following bits:    v  */ 
+		DescFrameLengthShift = 16, 
+DescError = 0x00008000, /* Error summary bit  - OR of the following bits:    v  */ 
 		DescRxTruncated = 0x00004000, /* Rx - no more descriptors for receive frame        E  */ 
 		// CHANGED: Added on 07/29
 		DescSAFilterFail = 0x00002000, /* Rx - SA Filter Fail for the received frame        E  */ 
@@ -108,7 +115,8 @@ enum DmaDescriptorStatus /* status word of DMA descriptor */
 		DescTxExcCollisions = 0x00000100, /* Tx - transmission aborted after 16 collisions     E  */ 
 		DescTxVLANFrame = 0x00000080, /* Tx - VLAN-type frame                                 */ 
 		DescTxCollMask = 0x00000078, /* Tx - Collision count                                 */ 
-		DescTxCollShift = 3, DescTxExcDeferral = 0x00000004, /* Tx - excessive deferral                           E  */ 
+		DescTxCollShift = 3, 
+DescTxExcDeferral = 0x00000004, /* Tx - excessive deferral                           E  */ 
 		DescTxUnderflow = 0x00000002, /* Tx - late data arrival from the memory            E  */ 
 		DescTxDeferred = 0x00000001, /* Tx - frame transmision deferred                      */ 
 };
@@ -174,6 +182,8 @@ struct am_net_private {
 		struct mii_if_info mii_if;
 		unsigned long base_addr;
 };
-
-#endif				/*  */
+
+
+#endif				/* 
+ */
     

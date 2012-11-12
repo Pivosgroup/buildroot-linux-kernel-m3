@@ -11,12 +11,54 @@ config AM_DVB
 	help
 		Select to enable AMLogic DVB driver.
 
+config AMLOGIC_S_TS0
+	bool "Serial TS0"
+	default n
+	depends on AM_DVB
+	help
+		TS0 in serial mode.
+
+config AMLOGIC_S_TS1
+	bool "Serial TS1"
+	default n
+	depends on AM_DVB
+	help
+		TS1 in serial mode.
+
+config AMLOGIC_S_TS2
+	bool "Serial TS2"
+	default n
+	depends on AM_DVB
+	help
+		TS0 in serial mode.
+
 config AM_GX1001
 	tristate "GX1001 demod driver"
 	default n
 	depends on AM_DVB
 	help
 		Select to enable GX1001 demod driver.
+		
+config AM_MXL101
+	tristate "MXL101 demod driver"
+	default n
+	depends on AM_DVB
+	help
+		Select to enable MXL101 demod driver.
+		
+config AM_AVL6211
+	tristate "AVL6211 demod driver"
+	default n
+	depends on AM_DVB
+	help
+		Select to enable AVL6211 demod driver.		
+		
+config AM_ITE9173
+	tristate "ITE9173 demod driver"
+	default n
+	depends on AM_DVB
+	help
+		Select to enable ITE9173 demod driver.	
 
 endmenu
 

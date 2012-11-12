@@ -141,8 +141,11 @@ static void init_viuin_dec_parameter(fmt_info_t fmt_info)
 	amviuin_dec_info.para.fmt_info.frame_rate=fmt_info.frame_rate;
     switch(fmt_info.fmt)
     {
-		case TVIN_SIG_FMT_MAX+1:
-		case 0xFFFF:     //default camera
+        case TVIN_SIG_FMT_NULL:
+            amviuin_dec_info.active_pixel = 0;
+            amviuin_dec_info.active_line = 0;               
+            break;
+        default:     
             amviuin_dec_info.active_pixel = fmt_info.h_active;
             amviuin_dec_info.active_line = fmt_info.v_active;
 			amviuin_dec_info.para.fmt_info.h_active = fmt_info.h_active;
@@ -150,11 +153,6 @@ static void init_viuin_dec_parameter(fmt_info_t fmt_info)
             amviuin_dec_info.para.fmt_info.hsync_phase = fmt_info.hsync_phase;
             amviuin_dec_info.para.fmt_info.vsync_phase = fmt_info.vsync_phase;
             pr_dbg("%dx%d input mode is selected for camera, \n",fmt_info.h_active,fmt_info.v_active);
-            break;
-        case TVIN_SIG_FMT_NULL:
-        default:     
-            amviuin_dec_info.active_pixel = 0;
-            amviuin_dec_info.active_line = 0;               
             break;
     }
 
@@ -164,8 +162,10 @@ static void init_viuin_dec_parameter(fmt_info_t fmt_info)
 static int viu_in_canvas_init(unsigned int mem_start, unsigned int mem_size)
 {
     int i, canvas_start_index ;
-    unsigned int canvas_width  = 1600 << 1;
-    unsigned int canvas_height = 1200;
+    //unsigned int canvas_width  = 1600 << 1;
+    //unsigned int canvas_height = 1200;
+    unsigned int canvas_width  = 1920 << 1;
+    unsigned int canvas_height = 1080;
     unsigned decbuf_start = mem_start + VIUIN_ANCI_DATA_SIZE;
     amviuin_dec_info.decbuf_size   = 0x400000;
 
@@ -263,22 +263,54 @@ static void stop_amvdec_viu_in(void)
     return;
 }
 
+int get_vout_type(void);
+
+static unsigned char throw_frame(void)
+{
+    if(amviuin_dec_info.para.fmt_info.fmt == VMODE_1080I ||
+       amviuin_dec_info.para.fmt_info.fmt == VMODE_1080I_50HZ){
+        unsigned char field_status;
+#if 1
+        field_status = READ_CBUS_REG_BITS(VDIN_COM_STATUS0, 0, 1);
+#else
+        field_status = (get_vout_type()==1)?1:0;
+#endif        
+        if (field_status == 1){
+            return 1;
+        }
+    }
+    return 0;
+}    
+
 static void viu_send_buff_to_display_fifo(vframe_t * info)
 {
-    if(amviuin_dec_info.para.fmt_info.fmt==TVIN_SIG_FMT_MAX+1)
-        info->duration = 960000/amviuin_dec_info.para.fmt_info.frame_rate;
-    else
-        info->duration = tvin_fmt_tbl[amviuin_dec_info.para.fmt_info.fmt].duration;
+    unsigned char field_status = 0;
+    info->duration = 960000/amviuin_dec_info.para.fmt_info.frame_rate;
 
-    //info->duration = tvin_fmt_tbl[amviuin_dec_info.para.fmt].duration;
-    info->type = VIDTYPE_VIU_SINGLE_PLANE | VIDTYPE_VIU_422 | VIDTYPE_VIU_FIELD | VIDTYPE_PROGRESSIVE ;
+    if(amviuin_dec_info.para.fmt_info.fmt == VMODE_1080I ||
+       amviuin_dec_info.para.fmt_info.fmt == VMODE_1080I_50HZ){
+        field_status = READ_CBUS_REG_BITS(VDIN_COM_STATUS0, 0, 1);
+
+		if(throw_frame()){
+            info->type = VIDTYPE_VIU_SINGLE_PLANE | VIDTYPE_VIU_422 | VIDTYPE_VIU_FIELD | VIDTYPE_INTERLACE_BOTTOM ;
+		}
+        else{
+        	if (field_status == 1){
+            	info->type = VIDTYPE_VIU_SINGLE_PLANE | VIDTYPE_VIU_422 | VIDTYPE_VIU_FIELD | VIDTYPE_INTERLACE_BOTTOM ;
+        	}
+        	else{
+        	    info->type = VIDTYPE_VIU_SINGLE_PLANE | VIDTYPE_VIU_422 | VIDTYPE_VIU_FIELD | VIDTYPE_INTERLACE_TOP ;
+        	}
+		}
+    }
+    else{    
+    	info->type = VIDTYPE_VIU_SINGLE_PLANE | VIDTYPE_VIU_422 | VIDTYPE_VIU_FIELD | VIDTYPE_PROGRESSIVE ;
+    }
     info->width= amviuin_dec_info.active_pixel;
     info->height = amviuin_dec_info.active_line;
-    if(amviuin_dec_info.para.fmt_info.fmt==TVIN_SIG_FMT_MAX+1)
-        info->duration = 960000/amviuin_dec_info.para.fmt_info.frame_rate;
-    else
-        info->duration = tvin_fmt_tbl[amviuin_dec_info.para.fmt_info.fmt].duration;
-    //info->duration = tvin_fmt_tbl[amviuin_dec_info.para.fmt].duration;
+ 
+    info->duration = 960000/amviuin_dec_info.para.fmt_info.frame_rate;
+
     info->canvas0Addr = info->canvas1Addr = viu_index2canvas(amviuin_dec_info.wr_canvas_index);
 }
 
@@ -304,6 +336,9 @@ static void viu_wr_vdin_canvas(int index)
 
 static void viu_in_dec_run(vframe_t * info)
 {
+	if(throw_frame()){
+	    return;
+	}
 	if (amviuin_dec_info.wr_canvas_index == 0xff) {
 		viu_wr_vdin_canvas(0);
 		amviuin_dec_info.wr_canvas_index = 0;

@@ -190,6 +190,18 @@ struct group_id_info{
 	u8					ssid[ WLAN_SSID_MAXLEN ];	//	The SSID of this P2P group
 };
 
+#ifdef CONFIG_IOCTL_CFG80211
+struct cfg80211_wifidirect_info{
+	_timer					remain_on_ch_timer;
+	u8						restore_channel;
+	struct ieee80211_channel	remain_on_ch_channel;
+	enum nl80211_channel_type	remain_on_ch_type;
+	u64						remain_on_ch_cookie;
+	struct net_device 			*remain_on_ch_dev;
+	
+};
+#endif //CONFIG_IOCTL_CFG80211
+
 struct wifidirect_info{
 	_adapter*				padapter;
 	_timer					find_phase_timer;
@@ -251,6 +263,29 @@ struct wifidirect_info{
 	u32						noa_start_time[P2P_MAX_NOA_NUM]; // schedule expressed in terms of the lower 4 bytes of the TSF timer.
 };
 
+struct tdls_ss_record{	//signal strength record
+	u8		macaddr[ETH_ALEN];
+	u8		signal_strength;
+	u8		is_tdls_sta;	// _TRUE: direct link sta, _FALSE: else
+};
+
+struct tdls_info{
+	u8					ap_prohibited;
+	uint					setup_state;
+	u8					sta_cnt;
+	u8					sta_maximum;	// 1:tdls sta is equal (NUM_STA-1), reach max direct link number; 0: else;
+	struct tdls_ss_record	ss_record;
+	u8					cam_entry_to_write;	//cam entry that is empty to write
+	u8					cam_entry_to_clear;	//cam entry that is trying to clear, using in direct link teardown
+	u8					ch_sensing;
+	u8					cur_channel;
+	u8					candidate_ch;
+	u8					collect_pkt_num[MAX_CHANNEL_NUM];
+	_lock				cmd_lock;
+	_lock				hdl_lock;
+	_lock				timer_lock;
+	u8					watchdog_count;
+};
 
 struct mlme_priv {
 
@@ -313,7 +348,7 @@ struct mlme_priv {
 
  	u8 	key_mask; //use for ips to set wep key after ips_leave
 	u8	ChannelPlan;
-	u8 	scan_mode; // active: 1, passive: 0
+	RT_SCAN_TYPE scan_mode; // active: 1, passive: 0
 
 
 	u8 probereq_wpsie[MAX_WPS_IE_LEN];//added in probe req	
@@ -349,18 +384,44 @@ struct mlme_priv {
 #endif /* CONFIG_80211N_HT */	
 
 	u8 *wps_beacon_ie;	
+	u8 *wps_probe_req_ie;
 	u8 *wps_probe_resp_ie;
-	u8 *wps_assoc_resp_ie;
+	u8 *wps_assoc_resp_ie; // for CONFIG_IOCTL_CFG80211, this IE could include p2p ie
+
 	u32 wps_beacon_ie_len;
+	u32 wps_probe_req_ie_len;
 	u32 wps_probe_resp_ie_len;
 	u32 wps_assoc_resp_ie_len;
+	
+	u8 *p2p_beacon_ie;
+	u8 *p2p_probe_req_ie;
+	u8 *p2p_probe_resp_ie;	
+	u8 *p2p_go_probe_resp_ie; //for GO	
+	u8 *p2p_assoc_req_ie;
 
+	u32 p2p_beacon_ie_len;
+	u32 p2p_probe_req_ie_len;
+	u32 p2p_probe_resp_ie_len;
+	u32 p2p_go_probe_resp_ie_len; //for GO
+	u32 p2p_assoc_req_ie_len;
+/*
+#if defined(CONFIG_P2P) && defined(CONFIG_IOCTL_CFG80211)
+	//u8 *wps_p2p_beacon_ie;
+	u8 *p2p_beacon_ie;
+	u8 *wps_p2p_probe_resp_ie;
+	u8 *wps_p2p_assoc_resp_ie;
+	//u32 wps_p2p_beacon_ie_len;
+	u32 p2p_beacon_ie_len;
+	u32 wps_p2p_probe_resp_ie_len;
+	u32 wps_p2p_assoc_resp_ie_len;
+#endif
+*/
 	
 	_lock	bcn_update_lock;
 	u8		update_bcn;
 	
 	
-#endif	
+#endif //#if defined (CONFIG_AP_MODE) && defined (CONFIG_NATIVEAP_MLME)
 
 #ifdef RTK_DMP_PLATFORM
 	// DMP kobject_hotplug function  signal need in passive level
@@ -528,6 +589,7 @@ extern struct wlan_network* rtw_get_oldest_wlan_network(_queue *scanned_queue);
 extern void rtw_free_assoc_resources(_adapter* adapter, int lock_scanned_queue);
 extern void rtw_indicate_disconnect(_adapter* adapter);
 extern void rtw_indicate_connect(_adapter* adapter);
+void rtw_indicate_scan_done( _adapter *padapter, bool aborted);
 
 extern int rtw_restruct_sec_ie(_adapter *adapter,u8 *in_ie,u8 *out_ie,uint in_len);
 extern int rtw_restruct_wmm_ie(_adapter *adapter, u8 *in_ie, u8 *out_ie, uint in_len, uint initial_out_len);
@@ -548,6 +610,8 @@ void rtw_set_scan_deny(struct mlme_priv *mlmepriv, u32 ms);
 
 
 extern int _rtw_init_mlme_priv(_adapter *padapter);
+
+void rtw_free_mlme_priv_ie_data(struct mlme_priv *pmlmepriv);
 
 extern void _rtw_free_mlme_priv(struct mlme_priv *pmlmepriv);
 
@@ -589,5 +653,11 @@ void rtw_roaming(_adapter *padapter, struct wlan_network *tgt_network);
 void _rtw_roaming(_adapter *padapter, struct wlan_network *tgt_network);
 #endif
 
+
+#ifdef CONFIG_INTEL_PROXIM
+void rtw_proxim_enable(_adapter *padapter);
+void rtw_proxim_disable(_adapter *padapter);
+void rtw_proxim_send_packet(_adapter *padapter,u8 *pbuf,u16 len,u8 hw_rate);
+#endif //CONFIG_INTEL_PROXIM
 #endif //__RTL871X_MLME_H_
 

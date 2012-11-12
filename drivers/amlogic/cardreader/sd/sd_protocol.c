@@ -5698,7 +5698,7 @@ int sd_mmc_switch_function(SD_MMC_Card_Info_t *sd_mmc_info)
 		        	sdio_config = 0;
 		        	config_reg = (void *)&sdio_config;
 		        	sdio_config = READ_CBUS_REG(SDIO_CONFIG);
-		        	config_reg->cmd_clk_divide =2;
+		        	config_reg->cmd_clk_divide =3;
 		        	WRITE_CBUS_REG(SDIO_CONFIG, sdio_config);
 				}
 

@@ -88,6 +88,7 @@ struct ts_platform_data{
 	int (*init_irq)(void);
 	int (*get_irq_level)(void);
 	void (*power)(int on);
+	void (*enable)(int en);
 	int (*Ac_is_connect)(void);
 	int screen_max_x;
 	int screen_max_y;

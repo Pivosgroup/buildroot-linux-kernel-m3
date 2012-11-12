@@ -18,6 +18,7 @@
 #include <linux/mm.h>
 #include <linux/dma-mapping.h>
 #include <mach/am_regs.h>
+#include <linux/amports/dsp_register.h>
 
 #include "spdif_module.h"
 
@@ -74,6 +75,7 @@ static int audio_spdif_release(struct inode *inode, struct file *file)
     audio_output_iec958_enable(0);  
     device_opened--;		
     module_put(THIS_MODULE);
+	IEC958_mode_codec = 0;
     return 0;
 }
 static int audio_spdif_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long args)
@@ -85,23 +87,28 @@ static int audio_spdif_ioctl(struct inode *inode, struct file *file, unsigned in
 		case AUDIO_SPDIF_GET_958_BUF_RD_OFFSET:
 			*val = READ_MPEG_REG(AIU_MEM_IEC958_RD_PTR) -READ_MPEG_REG(AIU_MEM_IEC958_START_PTR);
 			break;
-		case AUDIO_SPDIF_GET_958_BUF_SIZE:
+		case AUDIO_SPDIF_GET_958_BUF_SIZE:
+
 			*val = READ_MPEG_REG(AIU_MEM_IEC958_END_PTR) -READ_MPEG_REG(AIU_MEM_IEC958_START_PTR)+64;//iec958_info.iec958_buffer_size;
 			break;
-		case AUDIO_SPDIF_GET_958_ENABLE_STATUS:
+		case AUDIO_SPDIF_GET_958_ENABLE_STATUS:
+
 			*val = if_audio_output_iec958_enable();
 			break;	
-		case AUDIO_SPDIF_GET_I2S_ENABLE_STATUS:
+		case AUDIO_SPDIF_GET_I2S_ENABLE_STATUS:
+
 			*val = if_audio_output_i2s_enable();
 			break;	
 		case AUDIO_SPDIF_SET_958_ENABLE:
 		//	IEC958_mode_raw = 1;
-			IEC958_mode_codec = 2;
 			//audio_enable_ouput(1);
 			audio_output_iec958_enable(args);
 			break;
 		case AUDIO_SPDIF_SET_958_INIT_PREPARE:
+			IEC958_mode_codec = 3; //dts pcm raw
+			DSP_WD(DSP_IEC958_INIT_READY_INFO, 0x12345678);
 			aml_alsa_hw_reprepare();
+			DSP_WD(DSP_IEC958_INIT_READY_INFO, 0);
 			break;
 		case AUDIO_SPDIF_SET_958_WR_OFFSET:
 			iec958_wr_offset = *val;

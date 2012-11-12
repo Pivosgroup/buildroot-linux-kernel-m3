@@ -310,6 +310,7 @@ int proc_get_ap_info(char *page, char **start,
 	struct net_device *dev = data;
 	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
 	struct mlme_priv *pmlmepriv = &(padapter->mlmepriv);
+	struct mlme_ext_priv *pmlmeext = &padapter->mlmeextpriv;
 	struct wlan_network *cur_network = &(pmlmepriv->cur_network);
 	struct sta_priv *pstapriv = &padapter->stapriv;
 	int len = 0;
@@ -320,7 +321,9 @@ int proc_get_ap_info(char *page, char **start,
 		int i;
 		struct recv_reorder_ctrl *preorder_ctrl;
 					
+		len += snprintf(page + len, count - len, "SSID=%s\n", cur_network->network.Ssid.Ssid);		
 		len += snprintf(page + len, count - len, "sta's macaddr:" MAC_FMT "\n", MAC_ARG(psta->hwaddr));
+		len += snprintf(page + len, count - len, "cur_channel=%d, cur_bwmode=%d, cur_ch_offset=%d\n", pmlmeext->cur_channel, pmlmeext->cur_bwmode, pmlmeext->cur_ch_offset);		
 		len += snprintf(page + len, count - len, "rtsen=%d, cts2slef=%d\n", psta->rtsen, psta->cts2self);
 		len += snprintf(page + len, count - len, "qos_en=%d, ht_en=%d, init_rate=%d\n", psta->qos_option, psta->htpriv.ht_option, psta->init_rate);	
 		len += snprintf(page + len, count - len, "state=0x%x, aid=%d, macid=%d, raid=%d\n", psta->state, psta->aid, psta->mac_id, psta->raid);	
@@ -449,6 +452,54 @@ int proc_set_rx_signal(struct file *file, const char *buffer,
 	return count;
 	
 }
+
+int proc_get_rssi_disp(char *page, char **start,
+			  off_t offset, int count,
+			  int *eof, void *data)
+{
+	*eof = 1;
+	return 0;
+}
+
+int proc_set_rssi_disp(struct file *file, const char *buffer,
+		unsigned long count, void *data)
+{
+	struct net_device *dev = (struct net_device *)data;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	char tmp[32];
+	u32 enable=0;
+
+	if (count < 1)
+	{
+		DBG_8192C("argument size is less than 1\n");
+		return -EFAULT;
+	}	
+
+	if (buffer && !copy_from_user(tmp, buffer, sizeof(tmp))) {		
+
+		int num = sscanf(tmp, "%x", &enable);
+
+		if (num !=  1) {
+			DBG_8192C("invalid set_rssi_disp parameter!\n");
+			return count;
+		}
+		
+		if(enable)
+		{			
+			DBG_8192C("Turn On Rx RSSI Display Function\n");
+			padapter->bRxRSSIDisplay = enable ;			
+		}
+		else
+		{
+			DBG_8192C("Turn Off Rx RSSI Display Function\n");
+			padapter->bRxRSSIDisplay = 0 ;
+		}
+	
+	}
+	
+	return count;
+	
+}	
 
 		
 #ifdef CONFIG_AP_MODE

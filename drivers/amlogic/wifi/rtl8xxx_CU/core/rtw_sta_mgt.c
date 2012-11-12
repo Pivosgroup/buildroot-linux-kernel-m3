@@ -68,6 +68,8 @@ _func_enter_;
 	
 	psta->capability = 0;
 
+	psta->bpairwise_key_installed = _FALSE;
+
 
 #ifdef CONFIG_NATIVEAP_MLME
 	psta->nonerp_set = 0;
@@ -140,7 +142,8 @@ _func_enter_;
 	pstapriv->auth_to = 3; // 3*2 = 6 sec 
 	pstapriv->assoc_to = 3;
 	//pstapriv->expire_to = 900;// 900*2 = 1800 sec = 30 min, expire after no any traffic.
-	pstapriv->expire_to = 30;// 30*2 = 60 sec = 1 min, expire after no any traffic.
+	//pstapriv->expire_to = 30;// 30*2 = 60 sec = 1 min, expire after no any traffic.
+	pstapriv->expire_to = 60;// 60*2 = 120 sec = 2 min, expire after no any traffic.
 	
 	pstapriv->max_num_sta = NUM_STA;
 	
@@ -328,12 +331,11 @@ _func_enter_;
 #ifdef CONFIG_TDLS
 		psta->padapter = pstapriv->padapter;
 		init_TPK_timer(pstapriv->padapter, psta);
-		_init_workitem(&psta->option_workitem, TDLS_option_workitem_callback, psta);
 		init_ch_switch_timer(pstapriv->padapter, psta);
 		init_base_ch_timer(pstapriv->padapter, psta);
-		_init_workitem(&psta->base_ch_workitem, base_channel_workitem_callback, psta);
 		init_off_ch_timer(pstapriv->padapter, psta);
-		_init_workitem(&psta->off_ch_workitem, off_channel_workitem_callback, psta);
+		init_handshake_timer(pstapriv->padapter, psta);
+		init_tdls_alive_timer(pstapriv->padapter, psta);
 #endif
 
 		//for A-MPDU Rx reordering buffer control
@@ -459,6 +461,8 @@ _func_enter_;
 	_cancel_timer_ex(&psta->option_timer);
 	_cancel_timer_ex(&psta->base_ch_timer);
 	_cancel_timer_ex(&psta->off_ch_timer);
+	_cancel_timer_ex(&psta->alive_timer1);
+	_cancel_timer_ex(&psta->alive_timer2);
 #endif
 
 	//for A-MPDU Rx reordering buffer control, cancel reordering_ctrl_timer
@@ -500,9 +504,11 @@ _func_enter_;
 
 #ifdef CONFIG_AP_MODE
 
+/*
 	_enter_critical_bh(&pstapriv->asoc_list_lock, &irqL0);
 	rtw_list_delete(&psta->asoc_list);	
 	_exit_critical_bh(&pstapriv->asoc_list_lock, &irqL0);
+*/
 
 	_enter_critical_bh(&pstapriv->auth_list_lock, &irqL0);
 	rtw_list_delete(&psta->auth_list);
@@ -526,7 +532,7 @@ _func_enter_;
 	pstapriv->sta_dz_bitmap &=~BIT(psta->aid);
 	pstapriv->tim_bitmap &=~BIT(psta->aid);	
 
-	rtw_indicate_sta_disassoc_event(padapter, psta);
+	//rtw_indicate_sta_disassoc_event(padapter, psta);
 
 	if (pstapriv->sta_aid[psta->aid - 1] == psta)
 	{

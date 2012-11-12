@@ -26,6 +26,12 @@
 
 #include "hdmi_tx_module.h"
 #include "hdmi_info_global.h"
+#ifdef CONFIG_ARCH_MESON
+#include "m1/hdmi_tx_reg.h"
+#endif
+#ifdef CONFIG_ARCH_MESON3
+#include "m3/hdmi_tx_reg.h"
+#endif
 
 #undef PCM_USE_INFOFRAME
 
@@ -147,11 +153,16 @@ static void hdmi_tx_construct_aud_packet(Hdmi_tx_audio_para_t* audio_param, unsi
     else if(audio_param->type == CT_DOLBY_D){
         printk("HDMI Audio Type: Dobly Digital +\n");
         if(AUD_DB){
-            AUD_DB[0] = (CT_DOLBY_D<<4)|(CC_REFER_TO_STREAM) ;
+            AUD_DB[0] = (FS_REFER_TO_STREAM<<4)|(CC_REFER_TO_STREAM) ;
             AUD_DB[1] = (FS_REFER_TO_STREAM<<2)|SS_REFER_TO_STREAM;
             AUD_DB[3] = 0; //CA, 2 channel
             AUD_DB[4] = 0;//DM_INH<<7|LSV<<3
         }
+        if(CHAN_STAT_BUF){
+            CHAN_STAT_BUF[0] = CHAN_STAT_BUF[24+0]= 0x2;
+            CHAN_STAT_BUF[3] = CHAN_STAT_BUF[24+3]= 0x1e;
+            CHAN_STAT_BUF[4] = CHAN_STAT_BUF[24+4]= 0x1;
+        }            
     }
     else if(audio_param->type == CT_DTS_HD){
         printk("HDMI Audio Type: DTS-HD\n");
@@ -192,15 +203,15 @@ static void hdmi_tx_construct_aud_packet(Hdmi_tx_audio_para_t* audio_param, unsi
     else
 #endif        
     {
-        if(AUD_DB){
-            AUD_DB[0] = (audio_param->type<<4)|audio_param->channel_num ; 
-            AUD_DB[1] = (audio_param->sample_rate<<2)|audio_param->sample_size;
-            AUD_DB[3] = 0; //CA, 2 channel
-            AUD_DB[4] = 0;//DM_INH<<7|LSV<<3
-        }
-        if(CHAN_STAT_BUF){
-            CHAN_STAT_BUF[3]=CHAN_STAT_BUF[24+3]=channel_status_freq[audio_param->sample_rate];
-        }
+//        if(AUD_DB){
+//            AUD_DB[0] = (audio_param->type<<4)|audio_param->channel_num ; 
+//            AUD_DB[1] = (audio_param->sample_rate<<2)|audio_param->sample_size;
+//            AUD_DB[3] = 0; //CA, 2 channel
+//            AUD_DB[4] = 0;//DM_INH<<7|LSV<<3
+//        }
+//        if(CHAN_STAT_BUF){
+//            CHAN_STAT_BUF[3]=CHAN_STAT_BUF[24+3]=channel_status_freq[audio_param->sample_rate];
+//        }
     }
 }
 
@@ -213,7 +224,6 @@ int hdmitx_set_audio(hdmitx_dev_t* hdmitx_device, Hdmi_tx_audio_para_t* audio_pa
     for(i=0;i<(24*2);i++) CHAN_STAT_BUF[i]=0;
     if(hdmitx_device->HWOp.SetAudMode(hdmitx_device, audio_param)>=0){
         hdmi_tx_construct_aud_packet(audio_param, AUD_DB, CHAN_STAT_BUF);
-    
         hdmitx_device->HWOp.SetAudioInfoFrame(AUD_DB, CHAN_STAT_BUF);
         ret = 0;
     }

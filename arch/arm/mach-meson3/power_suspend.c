@@ -47,27 +47,34 @@
 
 void disable_watchdog(void)
 {
+#ifdef CONFIG_SUSPEND_WATCHDOG
 	//printk(KERN_INFO "** disable watchdog\n");
 	WRITE_MPEG_REG(WATCHDOG_RESET, 0);
 	CLEAR_MPEG_REG_MASK(WATCHDOG_TC,(1 << WATCHDOG_ENABLE_BIT));
+#endif
 }
-EXPORT_SYSMBOL(disable_watchdog);
+EXPORT_SYMBOL(disable_watchdog);
 
 void enable_watchdog(void)
 {
+#ifdef CONFIG_SUSPEND_WATCHDOG
 	//printk(KERN_INFO "** enable watchdog\n");
 	WRITE_MPEG_REG(WATCHDOG_RESET, 0);
 	WRITE_MPEG_REG(WATCHDOG_TC, 1 << WATCHDOG_ENABLE_BIT | 0xFFFFF);//about 10sec
+#endif
 }
-EXPORT_SYSMBOL(enable_watchdog);
+EXPORT_SYMBOL(enable_watchdog);
 
 void reset_watchdog(void)
 {
+#ifdef CONFIG_SUSPEND_WATCHDOG
 	//printk(KERN_INFO "** reset watchdog\n");
 	WRITE_MPEG_REG(WATCHDOG_RESET, 0);	
+#endif
 }
-EXPORT_SYSMBOL(reset_watchdog);
+EXPORT_SYMBOL(reset_watchdog);
 
+#ifdef CONFIG_AML_SUSPEND
 int meson_power_suspend()
 {
 	static int test_flag = 0;
@@ -78,7 +85,9 @@ int meson_power_suspend()
 
 	flush_cache_all();
 
+#ifdef CONFIG_AML_SUSPEND
 	addr = phys_to_virt(PHYS_OFFSET + CONFIG_AML_SUSPEND_FIRMWARE_BASE);
+#endif
 	addr += entry_offset;
 	pwrtest_entry = (void (*)(unsigned,unsigned,unsigned,unsigned))addr;
 	if(test_flag != 1234){
@@ -96,3 +105,4 @@ int meson_power_suspend()
 #endif
 	return 0;
 }
+#endif

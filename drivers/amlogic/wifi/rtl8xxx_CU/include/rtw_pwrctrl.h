@@ -233,6 +233,12 @@ struct	pwrctrl_priv {
 	u8		bInternalAutoSuspend;
 	u8		bInSuspend;
 	u8		bSupportRemoteWakeup;	
+	u8		wowlan_mode;
+	u8		wowlan_pattern;
+	u8		wowlan_magic;
+	u8		wowlan_unicast;
+	u8		wowlan_pattern_idx;
+	u32		wowlan_pattern_context[8][5];
 	_timer 	pwr_state_check_timer;
 	int		pwr_state_check_interval;
 	u8		pwr_state_check_cnts;
@@ -265,7 +271,10 @@ struct	pwrctrl_priv {
 	android_early_suspend_t early_suspend;
 	u8 do_late_resume;
 	#endif
-	
+
+	#ifdef CONFIG_INTEL_PROXIM
+	u8	stored_power_mgnt;
+	#endif
 };
 
 #define rtw_get_ips_mode_req(pwrctrlpriv) \
@@ -328,5 +337,7 @@ void rtw_unregister_early_suspend(struct pwrctrl_priv *pwrpriv);
 #endif //CONFIG_HAS_EARLYSUSPEND || CONFIG_ANDROID_POWER
 
 u8 rtw_interface_ps_func(_adapter *padapter,HAL_INTF_PS_FUNC efunc_id,u8* val);
+int _rtw_pwr_wakeup(_adapter *padapter, const char *caller);
+#define rtw_pwr_wakeup(adapter) _rtw_pwr_wakeup(adapter, __FUNCTION__)
 
 #endif  //__RTL871X_PWRCTRL_H_

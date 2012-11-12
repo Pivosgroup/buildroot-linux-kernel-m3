@@ -245,21 +245,32 @@ int tvoutc_setmode2(tvmode_t mode)
 	{
 		case TVMODE_480I:
 		case TVMODE_480CVBS:
-		case TVMODE_480P:
 		case TVMODE_576I:
 		case TVMODE_576CVBS:
+        WRITE_CBUS_REG_BITS(VPU_VIU_VENC_MUX_CTRL, 1, 2, 2); //reg0x271a, select ENCT to VIU2
+        /*set VID2 for EncI*/
+        WRITE_MPEG_REG(HHI_VIID_PLL_CNTL, 0x20224); //reg 0x1047
+        WRITE_MPEG_REG(HHI_VIID_DIVIDER_CNTL, 0x18803); //reg 0x104c, //VID2_PLL_CLK: 216MHz
+        WRITE_CBUS_REG_BITS(HHI_VIID_CLK_DIV, 0x3, 0, 8); //0x104a, =>54MHz
+        WRITE_MPEG_REG(HHI_VIID_CLK_CNTL, 0xc001f); //reg 0x104b, select vid_pll2_clk for vi2_clk_div?
+        WRITE_CBUS_REG_BITS(HHI_VID_CLK_DIV, 0x9, 28, 4); //reg 0x1059, select v2_clk_div2 for cts_enci_clk , 27MHz
+        WRITE_CBUS_REG_BITS(HHI_VIID_CLK_DIV, 0x9, 24, 4); //0x104a, select v2_clk_div2 for cts_vdac_clk[1] (DAC3)
+        break;
+		case TVMODE_480P:
 		case TVMODE_576P:
-        //WRITE_MPEG_REG(HHI_VIID_CLK_DIV, (READ_MPEG_REG(HHI_VIID_CLK_DIV)&(~(0xff)))|0x3); // reg 0x104a
+        WRITE_CBUS_REG_BITS(VPU_VIU_VENC_MUX_CTRL, 2, 2, 2); //reg0x271a, select ENCP to VIU2
 			  break;
 		case TVMODE_720P:
 		case TVMODE_720P_50HZ:
+        WRITE_CBUS_REG_BITS(VPU_VIU_VENC_MUX_CTRL, 2, 2, 2); //reg0x271a, select ENCP to VIU2
+		    break;
 		case TVMODE_1080I:
 		case TVMODE_1080I_50HZ:
-        //WRITE_MPEG_REG(HHI_VIID_CLK_DIV, (READ_MPEG_REG(HHI_VIID_CLK_DIV)&(~(0xff)))|0x0); // reg 0x104a
+        WRITE_CBUS_REG_BITS(VPU_VIU_VENC_MUX_CTRL, 2, 2, 2); //reg0x271a, select ENCP to VIU2
         break;		    
 		case TVMODE_1080P:
 		case TVMODE_1080P_50HZ:
-        //WRITE_MPEG_REG(HHI_VIID_CLK_DIV, (READ_MPEG_REG(HHI_VIID_CLK_DIV)&(~(0xff)))|0x1); // reg 0x104a
+        WRITE_CBUS_REG_BITS(VPU_VIU_VENC_MUX_CTRL, 2, 2, 2); //reg0x271a, select ENCP to VIU2
         break;		    
 		default:
 			printk(KERN_ERR "unsupport tv mode,video clk is not set!!\n");	
@@ -267,7 +278,6 @@ int tvoutc_setmode2(tvmode_t mode)
     
         //WRITE_MPEG_REG(HHI_VIID_CLK_CNTL, 0x8001f); //reg 0x104b, select vid_pll_clk as source of v2_clk_divN
         //WRITE_MPEG_REG(HHI_VID_CLK_DIV, (READ_MPEG_REG(HHI_VID_CLK_DIV)&(~(0xff<<24)))|(0x88<<24)); // reg 0x1059, select cts_encp_clk and cts_enci_clk from v2_clk_div1
-        WRITE_CBUS_REG_BITS(VPU_VIU_VENC_MUX_CTRL, 2, 2, 2); //reg0x271a, select ENCP to VIU2
 
     
     WRITE_MPEG_REG(VPP2_POSTBLEND_H_SIZE, tvinfoTab[mode].xres);

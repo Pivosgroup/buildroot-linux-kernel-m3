@@ -59,6 +59,7 @@
 
 #include "../hdmi_info_global.h"
 #include "../hdmi_tx_module.h"
+#include "../hdmi_tx_cec.h"
 #include "hdmi_tx_reg.h"
 #include "tvenc_conf.h"
 //#define XTAL_24MHZ
@@ -77,8 +78,6 @@ static void hdmi_audio_init(unsigned char spdif_flag);
 static void hdmitx_dump_tvenc_reg(int cur_VIC, int printk_flag);
 static void hdmi_suspend(void);
 static void hdmi_wakeup(void);
-
-#define CEC0_LOG_ADDR 0x4
 
 //#define HPD_DELAY_CHECK
 //#define CEC_SUPPORT
@@ -137,7 +136,7 @@ static unsigned delay_flag = 0;
 //static unsigned char i2s_to_spdif_flag=1; //i2s clock in avos is div by 4 from amclk by audio driver, so use spdif
 //#else
 static unsigned serial_reg_val=0x1; //0x22;
-static unsigned char i2s_to_spdif_flag=0;
+static unsigned char i2s_to_spdif_flag=1;
 //#endif
 static unsigned color_depth_f=0;
 static unsigned color_space_f=0;
@@ -924,7 +923,7 @@ static void unmux_hpd(void)
 //    Wr(PERIPHS_PIN_MUX_1, Rd(PERIPHS_PIN_MUX_1)&(~(1 <<22))); //use hpd as gpio
 //#endif        
 //    Wr(PREG_PAD_GPIO2_EN_N, Rd(PREG_PAD_GPIO2_EN_N)|(1<<0)); //GPIOA_0 as input
-    Wr(PERIPHS_PIN_MUX_1, Rd(PERIPHS_PIN_MUX_1)&~(1 << 22));
+    Wr(PERIPHS_PIN_MUX_1, Rd(PERIPHS_PIN_MUX_1)&(~(1 << 22)));
     //GPIOC_10 0x2012[10]
     Wr(PREG_PAD_GPIO2_EN_N, Rd(PREG_PAD_GPIO2_EN_N)|(1<<10)); //GPIOC_10 as input
 }    
@@ -1087,8 +1086,15 @@ void hdmi_hw_set_powermode( int power_mode, int vic)
             hdmi_wr_reg(0x010, 0x2);
             switch(vic)
             {
+                case HDMI_640x480p60:
                 case HDMI_480p60:
                 case HDMI_480p60_16x9:
+                case HDMI_480i60:
+                case HDMI_480i60_16x9:
+                case HDMI_576p50:
+                case HDMI_576p50_16x9:
+                case HDMI_576i50:
+                case HDMI_576i50_16x9:
                     hdmi_wr_reg(TX_SYS1_AFE_TEST, 0x7f);    //0x17
                     hdmi_wr_reg(TX_CORE_CALIB_VALUE,0x5);   //0xf7
                     hdmi_wr_reg(TX_SYS1_AFE_RESET, 0x1);    //0x16
@@ -1096,6 +1102,9 @@ void hdmi_hw_set_powermode( int power_mode, int vic)
                     hdmi_wr_reg(TX_SYS1_BIAS, 0x0);         //0x15
                     break;
                 case HDMI_720p60:
+                case HDMI_720p50:
+                case HDMI_1080i60:
+                case HDMI_1080i50:
                     hdmi_wr_reg(TX_SYS1_AFE_TEST, 0x7f);    //0x17
                     hdmi_wr_reg(TX_CORE_CALIB_VALUE,0x3);   //0xf7
                     hdmi_wr_reg(TX_SYS1_AFE_RESET, 0x1);    //0x16
@@ -1103,6 +1112,7 @@ void hdmi_hw_set_powermode( int power_mode, int vic)
                     hdmi_wr_reg(TX_SYS1_BIAS, 0x3);         //0x15
                     break;
                 case HDMI_1080p60:
+                case HDMI_1080p50:
                     hdmi_wr_reg(TX_SYS1_AFE_TEST, 0x7f);    //0x17
                     hdmi_wr_reg(TX_CORE_CALIB_VALUE,0x3);   //0xf7
                     hdmi_wr_reg(TX_SYS1_AFE_RESET, 0x1);    //0x16
@@ -1110,6 +1120,11 @@ void hdmi_hw_set_powermode( int power_mode, int vic)
                     hdmi_wr_reg(TX_SYS1_BIAS, 0x3);         //0x15 Slew
                     break;
                 default:
+                    hdmi_wr_reg(TX_SYS1_AFE_TEST, 0x7f);    //0x17
+                    hdmi_wr_reg(TX_CORE_CALIB_VALUE,0x3);   //0xf7
+                    hdmi_wr_reg(TX_SYS1_AFE_RESET, 0x1);    //0x16
+                    hdmi_wr_reg(TX_SYS1_BANDGAP, 0x0);      //0x14
+                    hdmi_wr_reg(TX_SYS1_BIAS, 0x3);         //0x15
                     break;
             }
 #ifdef MORE_LOW_P
@@ -1216,7 +1231,14 @@ void hdmi_hw_init(hdmitx_dev_t* hdmitx_device)
                                (1 << 24))); // pm_hdmi_i2c_scl_en
 #endif                               
 #endif
-
+    if(hdmitx_device->cec_func_flag){
+#if defined CONFIG_ARCH_MESON
+        Wr(PERIPHS_PIN_MUX_0, Rd(PERIPHS_PIN_MUX_0)|(1<<2));   // pm_hdmi_cec_en
+#endif
+#if defined CONFIG_ARCH_MESON3
+        Wr(PERIPHS_PIN_MUX_1, Rd(PERIPHS_PIN_MUX_1)|(1<<25));   // pm_hdmi_cec_en
+#endif
+    }
     // Enable these interrupts: [2] tx_edit_int_rise [1] tx_hpd_int_fall [0] tx_hpd_int_rise
     hdmi_wr_reg(OTHER_BASE_ADDR + HDMI_OTHER_INTR_MASKN, 0x7);
     // HPD glitch filter
@@ -1286,7 +1308,7 @@ void hdmi_hw_init(hdmitx_dev_t* hdmitx_device)
     //tmp_add_data[7:0]   = 0xa ; // time_divider[7:0] for DDC I2C bus clock
     //tmp_add_data = 0xa; //800k
     //tmp_add_data = 0x3f; //190k
-    tmp_add_data = 0x18; //100k     // hdmi system clock change to XTAL 24MHz
+    tmp_add_data = 0x18 - 1; //100k     // hdmi system clock change to XTAL 24MHz
     hdmi_wr_reg(TX_HDCP_CONFIG3, tmp_add_data);
 
     //tmp_add_data[15:8] = 0;
@@ -1324,6 +1346,9 @@ void hdmi_hw_init(hdmitx_dev_t* hdmitx_device)
         delay_us(10);
 #endif        
     /**/
+    /*cec config*/
+    cec_init(hdmitx_device);
+    cec_set_pending(TV_CEC_PENDING_OFF);
 }    
 
 static void hdmi_hw_reset(Hdmi_tx_video_para_t *param)
@@ -1603,7 +1628,7 @@ static void hdmi_hw_reset(Hdmi_tx_video_para_t *param)
     
     //tmp_add_data = 0xa; //800k
     //tmp_add_data = 0x3f; //190k
-    tmp_add_data = 0x18; //100k     // hdmi system clock change to XTAL 24MHz
+    tmp_add_data = 0x18 - 1; //100k     // hdmi system clock change to XTAL 24MHz
     hdmi_wr_reg(TX_HDCP_CONFIG3, tmp_add_data);
 
     //tmp_add_data[15:8] = 0;
@@ -1864,25 +1889,27 @@ static void enable_audio_spdif(void)
     
     printk("Enable audio spdif to HDMI\n");
     
-        Wr( AIU_958_MISC, 0x204a ); // // Program the IEC958 Module in the AIU
-        Wr( AIU_958_FORCE_LEFT, 0x0000 );
-        Wr( AIU_958_CTRL, 0x0240 );
+//        Wr( AIU_958_MISC, 0x204a ); // // Program the IEC958 Module in the AIU
+//        Wr( AIU_958_FORCE_LEFT, 0x0000 );
+//        Wr( AIU_958_CTRL, 0x0240 );
 
     /* enable audio*/        
         hdmi_wr_reg(TX_AUDIO_I2S,   0x0 );  // Address  0x5A=0x0    TX_AUDIO_I2S
 
         hdmi_wr_reg(TX_AUDIO_SPDIF, 1); // TX AUDIO SPDIF Enable
-
-        Wr(AIU_CLK_CTRL,        Rd(AIU_CLK_CTRL) | 2); // enable iec958 clock which is audio_master_clk
-        Wr( AIU_958_BPF, 0x0100 ); // Set the PCM frame size to 256 bytes
-        Wr( AIU_958_DCU_FF_CTRL, 0x0001 );
         
-        Wr(AIU_I2S_MISC, Rd(AIU_I2S_MISC)|0x18); //i2s_to_958 directly
+        hdmi_wr_reg_bits(TX_SYS4_CK_INV_AUDIO, 1, 7, 1);        //tx_audio_master_clk_invert
 
-#ifdef AML_A3
-    //hdmi 958 clk  = amclk/128/2;
-        Wr(AIU_CLK_CTRL, (Rd(AIU_CLK_CTRL)&(~(0x3<<4))&(~(1<<12)))|(0x1<<4));
-#endif
+        //Wr(AIU_CLK_CTRL,        Rd(AIU_CLK_CTRL) | 2); // enable iec958 clock which is audio_master_clk
+//        Wr( AIU_958_BPF, 0x0100 ); // Set the PCM frame size to 256 bytes
+//        Wr( AIU_958_DCU_FF_CTRL, 0x0001 );
+//        
+//        Wr(AIU_I2S_MISC, Rd(AIU_I2S_MISC)|0x18); //i2s_to_958 directly
+//
+//#ifdef AML_A3
+//    //hdmi 958 clk  = amclk/128/2;
+//        Wr(AIU_CLK_CTRL, (Rd(AIU_CLK_CTRL)&(~(0x3<<4))&(~(1<<12)))|(0x1<<4));
+//#endif
 }
 
 static void enable_audio_i2s(void)
@@ -1890,11 +1917,11 @@ static void enable_audio_i2s(void)
     printk("Enable audio i2s to HDMI\n");
     hdmi_wr_reg(TX_AUDIO_I2S,   0x1 );  // Address  0x5A=0x0    TX_AUDIO_I2S
     hdmi_wr_reg(TX_AUDIO_SPDIF, 0); // TX AUDIO SPDIF Enable
-    Wr(AIU_CLK_CTRL,        Rd(AIU_CLK_CTRL) | 3); // enable iec958 clock which is audio_master_clk
-    Wr(AIU_CLK_CTRL, (Rd(AIU_CLK_CTRL)&(~(0x3 << 4)))|(1<<4));
+    //Wr(AIU_CLK_CTRL,        Rd(AIU_CLK_CTRL) | 3); // enable iec958 clock which is audio_master_clk
+    //Wr(AIU_CLK_CTRL, (Rd(AIU_CLK_CTRL)&(~(0x3 << 4)))|(1<<4));
 #ifdef AML_A3
     //hdmi 958 clk  = amclk/128/2;
-        Wr(AIU_CLK_CTRL, (Rd(AIU_CLK_CTRL)&(~(0x3<<4))&(~(1<<12)))|(0x1<<4));
+//        Wr(AIU_CLK_CTRL, (Rd(AIU_CLK_CTRL)&(~(0x3<<4))&(~(1<<12)))|(0x1<<4));
 #endif
 
 }    
@@ -1956,11 +1983,11 @@ static void check_chip_type(void)
 #endif		
 }
 
-#if 0
+#ifdef CONFIG_AML_HDMI_TX_HDCP
 // Only applicable if external HPD is on and stable.
 // This function generates an HDMI TX internal sys_trigger pulse that will
 // restart EDID and then HDCP transfer on DDC channel.
-static void restart_edid_hdcp (void)
+extern void restart_edid_hdcp (void)
 {
     // Force clear HDMI TX internal sys_trigger
     hdmi_wr_reg(TX_HDCP_EDID_CONFIG, hdmi_rd_reg(TX_HDCP_EDID_CONFIG) & ~(1<<6)); // Release sys_trigger_config
@@ -2267,7 +2294,6 @@ static void hdmitx_m3_setaudioinfoframe(unsigned char* AUD_DB, unsigned char* CH
     }
 }
 
-
 //------------------------------------------------------------------------------
 // set_hdmi_audio_source(unsigned int src)
 //
@@ -2329,6 +2355,7 @@ static void set_hdmi_audio_source(unsigned int src)
     data32 |= src   << 4;   // [5:4]    hdmi_data_sel: 00=disable hdmi i2s input; 01=Select pcm data; 10=Select AIU I2S data; 11=Not allowed.
     data32 |= src   << 0;   // [1:0]    hdmi_clk_sel: 00=Disable hdmi audio clock input; 01=Select pcm clock; 10=Select AIU aoclk; 11=Not allowed.
     Wr(AIU_HDMI_CLK_DATA_CTRL, data32);
+    Wr(AIU_HDMI_CLK_DATA_CTRL, 0x2);
 
     // Wait until data change is settled
     i = 0;
@@ -2344,12 +2371,14 @@ static void set_hdmi_audio_source(unsigned int src)
 static int hdmitx_m3_set_audmode(struct hdmi_tx_dev_s* hdmitx_device, Hdmi_tx_audio_para_t* audio_param)
 {
     unsigned int audio_N_para = 6272;
-    unsigned int audio_N_tolerance = 1;
+    unsigned int audio_N_tolerance = 3;
 //    unsigned int audio_CTS = 30000;
 
     hdmi_print(0,"HDMI DEBUG [%s] hdmitx_device->cur_VIC=[%d]\n", __FUNCTION__, hdmitx_device->cur_VIC);
     
 //Refer to HDMI SPEC V1.4 Page 137
+    printk("current VIC: %d\n", hdmitx_device->cur_VIC);
+    printk("audio sample rate: %d\n", audio_param->sample_rate);
     switch(hdmitx_device->cur_VIC)
     {
         //TMDS Clock:27MHz
@@ -2364,8 +2393,10 @@ static int hdmitx_m3_set_audmode(struct hdmi_tx_dev_s* hdmitx_device, Hdmi_tx_au
             switch(audio_param->sample_rate)
             {
                 case FS_32K:
+                    audio_N_para = 4096;
+                    break;
                 case FS_44K1:
-                    audio_N_para = 6272;
+                    audio_N_para = 6272*4;
                     break;
                 case FS_88K2:
                     audio_N_para = 12544;
@@ -2374,7 +2405,7 @@ static int hdmitx_m3_set_audmode(struct hdmi_tx_dev_s* hdmitx_device, Hdmi_tx_au
                     audio_N_para = 25088;
                     break;
                 case FS_48K:
-                    audio_N_para = 6144*2;  // not default 6144, otherwise HDMI CTS 7-29 ACR fail
+                    audio_N_para = 6144*4;
                     break;
                 case FS_96K:
                     audio_N_para = 12288;
@@ -2485,7 +2516,7 @@ static int hdmitx_m3_set_audmode(struct hdmi_tx_dev_s* hdmitx_device, Hdmi_tx_au
                     audio_N_para = 11648;
                     break;
                 case FS_44K1:
-                    audio_N_para = 8918;
+                    audio_N_para = 6272*2;
                     break;
                 case FS_88K2:
                     audio_N_para = 17836;
@@ -2494,7 +2525,7 @@ static int hdmitx_m3_set_audmode(struct hdmi_tx_dev_s* hdmitx_device, Hdmi_tx_au
                     audio_N_para = 35672;
                     break;
                 case FS_48K:
-                    audio_N_para = 5824;
+                    audio_N_para = 6144*2;
                     break;
                 case FS_96K:
                     audio_N_para = 11648;
@@ -2508,23 +2539,8 @@ static int hdmitx_m3_set_audmode(struct hdmi_tx_dev_s* hdmitx_device, Hdmi_tx_au
             break;
         default:
             break;
-    }
-    hdmi_wr_reg(TX_SYS1_ACR_N_0, (audio_N_para&0xff)); // N[7:0]
-    hdmi_wr_reg(TX_SYS1_ACR_N_1, (audio_N_para>>8)&0xff); // N[15:8]
-    hdmi_wr_reg(TX_SYS1_ACR_N_2, (audio_N_tolerance<<4)|((audio_N_para>>16)&0xf)); // N[19:16]
-    hdmi_wr_reg(TX_AUDIO_CONTROL,   hdmi_rd_reg(TX_AUDIO_CONTROL)|0x1); 
+    }    
 
-    hdmi_wr_reg(TX_SYS0_ACR_CTS_0, 0);      //audio_CTS & 0xff);
-    hdmi_wr_reg(TX_SYS0_ACR_CTS_1, 0);      //(audio_CTS>>8) & 0xff);
-    hdmi_wr_reg(TX_SYS0_ACR_CTS_2, 0);      //(1<<5)|(1<<4)|((audio_CTS>>16)&0xf));
-    
-    set_hdmi_audio_source(i2s_to_spdif_flag ? 1 : 2);
-    
-    if(i2s_to_spdif_flag)
-        enable_audio_spdif();
-    else
-        enable_audio_i2s();
-        
     //TODO. Different audio type, maybe have different settings
     switch(audio_param->type){
         case CT_PCM:
@@ -2545,7 +2561,8 @@ static int hdmitx_m3_set_audmode(struct hdmi_tx_dev_s* hdmitx_device, Hdmi_tx_au
             break;
         case CT_ONE_BIT_AUDIO:
             break;
-        case CT_DOLBY_D:
+	case CT_DOLBY_D:
+	    audio_N_para *= 4;   
             break;
         case CT_DTS_HD:
             break;
@@ -2558,7 +2575,23 @@ static int hdmitx_m3_set_audmode(struct hdmi_tx_dev_s* hdmitx_device, Hdmi_tx_au
         default:
             break;
     }
+
+    hdmi_wr_reg(TX_SYS1_ACR_N_0, (audio_N_para&0xff)); // N[7:0]
+    hdmi_wr_reg(TX_SYS1_ACR_N_1, (audio_N_para>>8)&0xff); // N[15:8]
+    hdmi_wr_reg(TX_SYS1_ACR_N_2, (audio_N_tolerance<<4)|((audio_N_para>>16)&0xf)); // N[19:16]
+    hdmi_wr_reg(TX_AUDIO_CONTROL,   hdmi_rd_reg(TX_AUDIO_CONTROL)|0x1); 
+
+    hdmi_wr_reg(TX_SYS0_ACR_CTS_0, 0);      //audio_CTS & 0xff);
+    hdmi_wr_reg(TX_SYS0_ACR_CTS_1, 0);      //(audio_CTS>>8) & 0xff);
+    hdmi_wr_reg(TX_SYS0_ACR_CTS_2, 0);      //(1<<5)|(1<<4)|((audio_CTS>>16)&0xf));
     
+    set_hdmi_audio_source(i2s_to_spdif_flag ? 1 : 2);
+    
+    if(i2s_to_spdif_flag)
+        enable_audio_spdif();
+    else
+        enable_audio_i2s();
+   
     return 0;
 }    
     
@@ -2740,7 +2773,7 @@ static int hdmitx_m3_cntl(hdmitx_dev_t* hdmitx_device, int cmd, unsigned argv)
         if(unmux_hpd_flag){
             hdmi_print(1,"power off hdmi, unmux hpd\n");
             phy_pll_off();
-            digital_clk_off(7); //off sys clk
+            digital_clk_off(4); //off sys clk
             unmux_hpd();
         }
         else{
@@ -2925,11 +2958,11 @@ static void hdmitx_m3_debug(hdmitx_dev_t* hdmitx_device, const char* buf)
     else if(strncmp(tmpbuf, "hdmiaudio", 9)==0){
         value=simple_strtoul(tmpbuf+9, NULL, 16);
         if(value == 1){
-            hdmi_audio_off_flag = 1;
+            hdmi_audio_off_flag = 0;
             hdmi_audio_init(i2s_to_spdif_flag);
         }
         else if(value == 0){
-            hdmi_audio_off_flag = 0;
+            hdmi_audio_off_flag = 1;
             hdmi_wr_reg(TX_AUDIO_PACK, 0x00); // disable audio sample packets
         }
         return;

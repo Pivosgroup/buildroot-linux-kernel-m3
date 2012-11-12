@@ -7,9 +7,6 @@
 /dev/urandom              0666   root       root
 /dev/ashmem               0666   root       root
 /dev/binder               0666   root       root
-/dev/dvb*                 0666   root       root
-/dev/irtouch              0666   root       root
-/dev/ttyUSB0              0666   root       root
 
 # logger should be world writable (for logging) but not readable
 /dev/log/*                0662   root       log
@@ -26,18 +23,14 @@
 /dev/android_adb          0660   adb        adb
 /dev/android_adb_enable   0660   adb        adb
 /dev/ttyMSM0              0600   bluetooth  bluetooth
-/dev/ttyHS0               0600   bluetooth  bluetooth
-/dev/uinput               0666   system     bluetooth
+/dev/uinput               0660   system     bluetooth
 /dev/alarm                0664   system     radio
 /dev/tty0                 0660   root       system
 /dev/graphics/*           0666   root       graphics
 /dev/msm_hw3dm            0660   system     graphics
-/dev/input/*              0664   root       input
+/dev/input/*              0660   root       input
 /dev/eac                  0660   root       audio
 /dev/cam                  0660   root       camera
-/dev/video0               0660   root       camera
-/dev/video1               0660   root       camera
-/dev/video2               0660   root       camera
 /dev/pmem                 0660   system     graphics
 /dev/pmem_adsp*           0660   system     audio
 /dev/pmem_camera*         0660   system     camera
@@ -70,20 +63,19 @@
 /dev/snd/dsp1             0660   system     audio
 /dev/snd/mixer            0660   system     audio
 /dev/smd0                 0640   radio      radio
-/dev/qemu_trace           0666   system     system
 /dev/qmi                  0640   radio      radio
 /dev/qmi0                 0640   radio      radio
 /dev/qmi1                 0640   radio      radio
 /dev/qmi2                 0640   radio      radio
-/dev/bus/usb/*            0660   root       usb
+/dev/bus/usb/*            0666   system     usb
 /dev/mtp_usb              0660   root       mtp
 /dev/usb_accessory        0660   root       usb
 /dev/tun                  0660   system     vpn
+/dev/block/vold/*         0666   system     system
 
 # CDMA radio interface MUX
 /dev/ts0710mux*           0640   radio      radio
 /dev/ppp                  0660   radio      vpn
-/dev/tun                  0640   vpn        vpn
 
 # sysfs properties
 /sys/devices/virtual/input/input*   enable      0660  root   input
@@ -92,6 +84,7 @@
 
 # Amlogic AV streaming devices
 /dev/amvideo              0666   system     system
+/dev/ppmgr                0666   system     system
 /dev/amstream_sub         0666   system     system
 /dev/amstream_rm          0666   system     system
 /dev/amstream_mpps        0666   system     system
@@ -111,10 +104,10 @@
 # Mali
 /dev/ump                  0666   system     graphics
 /dev/mali                 0666   system     graphics
+
 #gps
 /dev/ttyS1                0666	 system     system
 /dev/ttya0                0666	 system     system
 /dev/ttya1                0666	 system     system
 /dev/ptya0                0666	 system     system
 /dev/ptya1                0666	 system     system
-/dev/gps_power         0666	 system     system

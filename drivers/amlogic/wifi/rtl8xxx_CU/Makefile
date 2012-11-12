@@ -5,11 +5,19 @@ EXTRA_CFLAGS += -O1
 #EXTRA_CFLAGS += -Werror
 #EXTRA_CFLAGS += -pedantic
 #EXTRA_CFLAGS += -Wshadow -Wpointer-arith -Wcast-qual -Wstrict-prototypes -Wmissing-prototypes 
-EXTRA_CFLAGS += -Wno-unused-variable -Wno-unused-value -Wno-unused-label -Wno-unused-parameter -Wno-uninitialized
-EXTRA_CFLAGS += -Wno-unused -Wno-unused-function
+
+EXTRA_CFLAGS += -Wno-unused-variable 
+EXTRA_CFLAGS += -Wno-unused-value 
+EXTRA_CFLAGS += -Wno-unused-label 
+EXTRA_CFLAGS += -Wno-unused-parameter
+EXTRA_CFLAGS += -Wno-unused-function
+EXTRA_CFLAGS += -Wno-unused
+
+EXTRA_CFLAGS += -Wno-uninitialized
+
 EXTRA_CFLAGS += -I$(src)/include
 
-#CONFIG_AUTOCFG_CP = y
+CONFIG_AUTOCFG_CP = n
 
 CONFIG_RTL8192C = y
 CONFIG_RTL8192D = n
@@ -25,8 +33,9 @@ CONFIG_HW_PWRP_DETECTION		=	n
 CONFIG_WIFI_TEST						=	n
 CONFIG_BT_COEXISTENCE				= n
 CONFIG_RTL8192CU_REDEFINE_1X1 =n
+CONFIG_WAKE_ON_WLAN				=	n
 
-CONFIG_PLATFORM_I386_PC		=	n
+CONFIG_PLATFORM_I386_PC = n
 CONFIG_PLATFORM_TI_AM3517 = n
 CONFIG_PLATFORM_ANDROID_X86 = n
 CONFIG_PLATFORM_ARM_S3C2K4 = n
@@ -35,15 +44,17 @@ CONFIG_PLATFORM_ARM_S3C6K4 = n
 CONFIG_PLATFORM_MIPS_RMI = n
 CONFIG_PLATFORM_RTD2880B = n
 CONFIG_PLATFORM_MIPS_AR9132 = n
-CONFIG_PLATFORM_RTK_DMP		=	n
+CONFIG_PLATFORM_RTK_DMP = n
 CONFIG_PLATFORM_MIPS_PLM = n
 CONFIG_PLATFORM_MSTAR389 = n
 CONFIG_PLATFORM_MT53XX = n
-CONFIG_PLATFORM_ARM_MX51_241H	=	n
+CONFIG_PLATFORM_ARM_MX51_241H = n
 CONFIG_PLATFORM_ACTIONS_ATJ227X = n
 CONFIG_PLATFORM_ARM_TEGRA3 = n
 CONFIG_PLATFORM_ARM_TCC8900 = n
+CONFIG_PLATFORM_ARM_TCC8920 = n
 CONFIG_PLATFORM_ARM_RK2818 = n
+CONFIG_PLATFORM_ARM_TI_PANDA = n
 CONFIG_PLATFORM_MIPS_JZ4760 = n
 CONFIG_PLATFORM_DMP_PHILIPS = n
 CONFIG_PLATFORM_TI_DM365	=	n
@@ -52,7 +63,7 @@ CONFIG_PLATFORM_MSTAR_TITANIA12 = n
 CONFIG_PLATFORM_ARM_ANDROID_AML8726M	=	y
 CONFIG_DRVEXT_MODULE	=	n
 
-#export TopDIR ?= $(shell pwd)
+export TopDIR ?= $(shell pwd)
 
 
 ifeq ($(CONFIG_RTL8712), y)
@@ -78,6 +89,9 @@ endif
 ifeq ($(CONFIG_USB_HCI), y)
 MODULE_NAME = 8192cu
 FW_FILES := hal/$(RTL871X)/usb/Hal8192CUHWImg.o
+ifneq ($(CONFIG_WAKE_ON_WLAN), n)
+FW_FILES += hal/$(RTL871X)/usb/Hal8192CUHWImg_wowlan.o
+endif
 endif
 ifeq ($(CONFIG_PCI_HCI), y)
 MODULE_NAME = 8192ce
@@ -119,7 +133,8 @@ _OS_INTFS_FILES :=	os_dep/osdep_service.o \
 			os_dep/linux/ioctl_linux.o \
 			os_dep/linux/xmit_linux.o \
 			os_dep/linux/mlme_linux.o \
-			os_dep/linux/recv_linux.o
+			os_dep/linux/recv_linux.o \
+			os_dep/linux/rtw_android.o
 
 _HAL_INTFS_FILES := hal/$(RTL871X)/hal_init.o \
 		    hal/$(RTL871X)/sdio_halinit.o \
@@ -139,7 +154,9 @@ _OS_INTFS_FILES :=	os_dep/osdep_service.o \
 			os_dep/linux/ioctl_linux.o \
 			os_dep/linux/xmit_linux.o \
 			os_dep/linux/mlme_linux.o \
-			os_dep/linux/recv_linux.o
+			os_dep/linux/recv_linux.o	\
+			os_dep/linux/ioctl_cfg80211.o \
+			os_dep/linux/rtw_android.o
 
 _HAL_INTFS_FILES :=	hal/hal_init.o \
                         hal/$(RTL871X)/$(RTL871X)_hal_init.o \
@@ -170,7 +187,8 @@ _OS_INTFS_FILES :=	os_dep/osdep_service.o \
 			os_dep/linux/ioctl_linux.o \
 			os_dep/linux/xmit_linux.o \
 			os_dep/linux/mlme_linux.o \
-			os_dep/linux/recv_linux.o
+			os_dep/linux/recv_linux.o \
+			os_dep/linux/rtw_android.o
 
 _HAL_INTFS_FILES :=	hal/hal_init.o \
                         hal/$(RTL871X)/$(RTL871X)_hal_init.o \
@@ -190,9 +208,9 @@ _HAL_INTFS_FILES += $(CHIP_FILES)
 
 endif
 
-#ifeq ($(CONFIG_AUTOCFG_CP), y)
-#$(shell cp $(TopDIR)/autoconf_$(RTL871X)_$(HCI_NAME)_linux.h $(TopDIR)/include/autoconf.h)
-#endif
+ifeq ($(CONFIG_AUTOCFG_CP), y)
+$(shell cp $(TopDIR)/autoconf_$(RTL871X)_$(HCI_NAME)_linux.h $(TopDIR)/include/autoconf.h)
+endif
 
 
 ifeq ($(CONFIG_USB_HCI), y)
@@ -221,6 +239,10 @@ ifeq ($(CONFIG_RTL8192CU_REDEFINE_1X1), y)
 EXTRA_CFLAGS += -DRTL8192C_RECONFIG_TO_1T1R
 endif 
 
+ifeq ($(CONFIG_WAKE_ON_WLAN), y)
+EXTRA_CFLAGS += -DCONFIG_WAKE_ON_WLAN
+endif
+
 ifeq ($(CONFIG_PLATFORM_I386_PC), y)
 EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN
 SUBARCH := $(shell uname -m | sed -e s/i.86/i386/)
@@ -247,13 +269,13 @@ KVER:= 2.6.28.9
 KSRC:= /work/mstar/2.6.28.9/
 endif
 
-
 ifeq ($(CONFIG_PLATFORM_ANDROID_X86), y)
-EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN -DCONFIG_PLATFORM_ANDROID
+EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN
 SUBARCH := $(shell uname -m | sed -e s/i.86/i386/)
 ARCH := $(SUBARCH)
-CROSS_COMPILE ?= /work/android-x86/prebuilt/linux-x86/toolchain/i686-unknown-linux-gnu-4.5.2/bin/i686-unknown-linux-gnu-
-KSRC := /work/android-x86/out/target/product/eeepc/obj/kernel
+CROSS_COMPILE := /media/DATA-2/android-x86/ics-x86_20120130/prebuilt/linux-x86/toolchain/i686-unknown-linux-gnu-4.2.1/bin/i686-unknown-linux-gnu-
+KSRC := /media/DATA-2/android-x86/ics-x86_20120130/out/target/product/generic_x86/obj/kernel
+MODULE_NAME :=wlan
 endif
 
 ifeq ($(CONFIG_PLATFORM_ARM_PXA2XX), y)
@@ -383,11 +405,29 @@ KSRC ?=/media/DATA-1/telechips/SDK_2302_20110425/kernel
 MODULE_NAME := wlan
 endif
 
+ifeq ($(CONFIG_PLATFORM_ARM_TCC8920), y)
+EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN #-DCONFIG_MINIMAL_MEMORY_USAGE
+ARCH := arm
+CROSS_COMPILE ?= /media/DATA-1/telechips/SDK_2302_20110425/prebuilt/linux-x86/toolchain/arm-eabi-4.4.3/bin/arm-eabi-
+KSRC := /media/DATA-2/telechips/ics_sdk/kernel
+MODULE_NAME := wlan
+endif
+
 ifeq ($(CONFIG_PLATFORM_ARM_RK2818), y)
 EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN -DCONFIG_PLATFORM_ANDROID -DCONFIG_PLATFORM_ROCKCHIPS -DCONFIG_MINIMAL_MEMORY_USAGE
 ARCH := arm
 CROSS_COMPILE := /usr/src/release_fae_version/toolchain/arm-eabi-4.4.0/bin/arm-eabi-
 KSRC := /usr/src/release_fae_version/kernel25_A7_281x
+MODULE_NAME := wlan
+endif
+
+ifeq ($(CONFIG_PLATFORM_ARM_TI_PANDA), y)
+EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN #-DCONFIG_MINIMAL_MEMORY_USAGE
+ARCH := arm
+#CROSS_COMPILE := /media/DATA-1/aosp/ics-aosp_20111227/prebuilt/linux-x86/toolchain/arm-eabi-4.4.3/bin/arm-eabi-
+#KSRC := /media/DATA-1/aosp/android-omap-panda-3.0_20120104
+CROSS_COMPILE := /media/DATA-1/android-4.0/prebuilt/linux-x86/toolchain/arm-eabi-4.4.3/bin/arm-eabi-
+KSRC := /media/DATA-1/android-4.0/panda_kernel/omap
 MODULE_NAME := wlan
 endif
 
@@ -412,8 +452,7 @@ ifeq ($(CONFIG_PLATFORM_ARM_ANDROID_AML8726M), y)
 EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN
 ARCH ?= arm
 CROSS_COMPILE ?= arm-none-linux-gnueabi-
-KVER:= 2.6.34
-KSRC ?= /mnt/nfsroot/heming.lv/m1-kernel-android
+KVER:= 3.0.8
 endif
 
 ifeq ($(CONFIG_MP_INCLUDED), y)
@@ -458,7 +497,6 @@ $(MODULE_NAME)-$(CONFIG_MP_INCLUDED) += core/rtw_mp.o \
 
 obj-$(CONFIG_RTL8XXX_CU_USB_WIFI)	:= $(MODULE_NAME).o
 
-
 else
 
 export CONFIG_RTL8XXX_CU_USB_WIFI = m
@@ -470,7 +508,7 @@ modules:
 
 strip:
 	$(CROSS_COMPILE)strip $(MODULE_NAME).ko --strip-unneeded
-	
+
 install:
 	install -p -m 644 $(MODULE_NAME).ko  $(MODDESTDIR)
 	/sbin/depmod -a ${KVER}

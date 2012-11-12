@@ -115,6 +115,7 @@
 #define REG_GPIO_IO_SEL_2			0x0062 // RTL8723 WIFI/BT/GPS Multi-Function GPIO Select.
 #define REG_MULTI_FUNC_CTRL		0x0068 // RTL8723 WIFI/BT/GPS Multi-Function control source.
 #define REG_MCUFWDL				0x0080
+#define REG_WOWLAN_REASON			0x0081
 #define REG_HMEBOX_EXT_0			0x0088
 #define REG_HMEBOX_EXT_1			0x008A
 #define REG_HMEBOX_EXT_2			0x008C

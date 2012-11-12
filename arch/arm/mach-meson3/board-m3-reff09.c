@@ -682,6 +682,22 @@ void mute_spk(struct snd_soc_codec* codec, int flag)
 	}
 }
 
+#define APB_BASE 0x4000
+void mute_headphone(void* codec, int flag)
+{
+	int reg_val;
+#ifdef _AML_M3_HW_DEBUG_
+	printk("***Entered %s:%s\n", __FILE__,__func__);
+#endif
+	reg_val = READ_APB_REG(APB_BASE+(0x18<<2));
+    if(flag){
+		reg_val |= 0xc0;
+		WRITE_APB_REG((APB_BASE+(0x18<<2)), reg_val);			// mute headphone
+	}else{
+		reg_val &= ~0xc0;
+		WRITE_APB_REG((APB_BASE+(0x18<<2)), reg_val);			// unmute headphone
+	}
+}
 #endif
 
 #ifdef CONFIG_ITK_CAPACITIVE_TOUCHSCREEN

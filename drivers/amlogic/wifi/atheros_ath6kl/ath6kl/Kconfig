@@ -1,0 +1,33 @@
+config ATH6KL
+	tristate
+
+config ATH6KL_SDIO
+	tristate "Atheros ath6kl sdio support"
+	depends on MMC
+	depends on CFG80211
+	select ATH6KL
+	select WIRELESS_EXT
+	select WEXT_PRIV
+	---help---
+	  This module adds support for wireless adapters based on
+	  Atheros AR6003 chipset running over SDIO. If you choose to
+	  build it as a module, it will be called ath6kl. Pls note
+	  that AR6002 and AR6001 are not supported by this driver.
+
+config ATH6KL_USB
+	tristate "Atheros ath6kl usb support"
+	depends on CFG80211
+	select ATH6KL
+	select WIRELESS_EXT
+	select WEXT_PRIV
+	---help---
+	  This module adds support for wireless adapters based on
+	  Atheros AR6004/AR6006 chipset running over USB. If you choose to
+	  build it as a module, it will be called ath6kl_usb.
+
+config ATH6KL_DEBUG
+	bool "Atheros ath6kl debugging"
+	depends on ATH6KL
+	---help---
+	  Enables debug support
+

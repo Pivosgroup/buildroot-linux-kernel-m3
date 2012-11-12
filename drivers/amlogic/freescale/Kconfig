@@ -1,0 +1,18 @@
+#
+# Post Process Manager device configuration
+#
+
+menu "AMLOGIC free scale driver"
+
+config FREE_SCALE
+    tristate "AMLOGIC free scale driver"
+    default n
+	help
+	  Select to enable AMLOGIC free scale driver.
+config MIX_FREE_SCALE
+    tristate "AMLOGIC mix free scale"
+    depends on  FREE_SCALE
+    default n
+	help
+	  Select mix free scale mode.
+endmenu

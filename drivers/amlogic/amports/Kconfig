@@ -96,6 +96,16 @@ config AM_JPEGDEC
 	select AM_PTSSERVER
 	help
 	  Select to enable HW jpeg decoder.
+	  
+config AM_JPEGDEC_NO_SCALE
+    tristate "AMLOGIC HW jpeg decoder no scaler"
+    default n
+    select AM_VIDEO
+	select AM_PTSSERVER
+	help
+	  Select to enable HW jpeg decoder without scaler.
+	  It can decode jpeg more quickly than the general one.
+	  But the api of it is not compatible with the general one.
 
 config AM_TIMESYNC
 	bool "AMLOGIC Time sync driver"

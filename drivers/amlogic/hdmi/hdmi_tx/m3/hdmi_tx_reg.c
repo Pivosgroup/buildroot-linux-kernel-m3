@@ -62,28 +62,53 @@ unsigned long READ_APB_REG(unsigned long addr)
 
 // In order to prevent system hangup, add check_cts_hdmi_sys_clk_status() to check 
 // clock gate status . If status == 0, turn on gate first and then access HDMI port.
-static void check_cts_hdmi_sys_clk_status(void)
+static void cts_hdmi_sys_clk_check_status(unsigned *flag)
 {
-    int status;
-    status = (READ_MPEG_REG(HHI_HDMI_CLK_CNTL) & (1<<8)) | (READ_MPEG_REG(HHI_GCLK_MPEG2) | (1<<4));
+    unsigned status;
     
+    status = READ_MPEG_REG(HHI_HDMI_CLK_CNTL) & (1<<8);
     if(status == 0){
+        flag[0] = 1 << 8;
         // turn on clock gate
-        printk("HDMI System Clock is off, turn on now\n");
+        printk("HDMI System Clock is off, now turn on \n");
         WRITE_MPEG_REG(HHI_HDMI_CLK_CNTL, READ_MPEG_REG(HHI_HDMI_CLK_CNTL)|(1<<8));
+    }
+    
+    status = READ_MPEG_REG(HHI_GCLK_MPEG2) & (1<<4);
+    if(status == 0){
+        flag[1] = 1 << 4;
+        // turn on clock gate
+        printk("HDMI PCLK is off, now turn on \n");
         WRITE_MPEG_REG(HHI_GCLK_MPEG2, READ_MPEG_REG(HHI_GCLK_MPEG2)|(1<<4));
-        udelay(1);
+    }
+    
+    udelay(1);
+}
+
+static void cts_hdmi_sys_clk_restore_status(unsigned *flag)
+{
+    if(flag[0]){
+        printk("HDMI System Clock is on, now turn off \n");
+        WRITE_MPEG_REG(HHI_HDMI_CLK_CNTL, READ_MPEG_REG(HHI_HDMI_CLK_CNTL)&(~(1<<8)));
+    }
+    
+    if(flag[1]){
+        printk("HDMI PCLK is on, now turn off \n");
+        WRITE_MPEG_REG(HHI_GCLK_MPEG2, READ_MPEG_REG(HHI_GCLK_MPEG2)&(~(1<<4)));
     }
 }
 
 unsigned long hdmi_rd_reg(unsigned long addr)
 {
     unsigned long data;
-    check_cts_hdmi_sys_clk_status();
+    unsigned flag[2] = {0, 0};
+    
+    cts_hdmi_sys_clk_check_status(flag);
     WRITE_APB_REG(HDMI_ADDR_PORT, addr);
     WRITE_APB_REG(HDMI_ADDR_PORT, addr);
     
     data = READ_APB_REG(HDMI_DATA_PORT);
+    cts_hdmi_sys_clk_restore_status(flag);
     
     return (data);
 }
@@ -91,23 +116,27 @@ unsigned long hdmi_rd_reg(unsigned long addr)
 
 void hdmi_wr_only_reg(unsigned long addr, unsigned long data)
 {
-    check_cts_hdmi_sys_clk_status();
+    unsigned flag[2] = {0, 0};
+    cts_hdmi_sys_clk_check_status(flag);
     WRITE_APB_REG(HDMI_ADDR_PORT, addr);
     WRITE_APB_REG(HDMI_ADDR_PORT, addr);
     
     WRITE_APB_REG(HDMI_DATA_PORT, data);
+    cts_hdmi_sys_clk_restore_status(flag);
 }
 
 void hdmi_wr_reg(unsigned long addr, unsigned long data)
 {
     unsigned long rd_data;
+    unsigned flag[2] = {0, 0};
     
-    check_cts_hdmi_sys_clk_status();
+    cts_hdmi_sys_clk_check_status(flag);
     WRITE_APB_REG(HDMI_ADDR_PORT, addr);
     WRITE_APB_REG(HDMI_ADDR_PORT, addr);
     
     WRITE_APB_REG(HDMI_DATA_PORT, data);
     rd_data = hdmi_rd_reg (addr);
+    cts_hdmi_sys_clk_restore_status(flag);
     if (rd_data != data) 
     {
         //printk("hdmi_wr_reg(%x,%x) fails to write: %x\n",addr, data, rd_data);

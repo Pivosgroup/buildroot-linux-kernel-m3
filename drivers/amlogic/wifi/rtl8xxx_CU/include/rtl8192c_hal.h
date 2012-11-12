@@ -112,7 +112,7 @@
 #elif defined(CONFIG_USB_HCI)
 
 	#include "Hal8192CUHWImg.h"
-
+	#include "Hal8192CUHWImg_wowlan.h"
 	//2TODO: We should define 8192S firmware related macro settings here!!
 	#define RTL819X_DEFAULT_RF_TYPE			RF_1T2R
 	#define RTL819X_TOTAL_RF_PATH				2
@@ -121,7 +121,9 @@
 	#define RTL8192C_FW_TSMC_IMG				"rtl8192CU\\rtl8192cfwT.bin"
 	#define RTL8192C_FW_UMC_IMG				"rtl8192CU\\rtl8192cfwU.bin"
 	#define RTL8192C_FW_UMC_B_IMG				"rtl8192CU\\rtl8192cfwU_B.bin"
-
+	#define 	RTL8192C_FW_TSMC_WW_IMG			"rtl8192CU\\rtl8192cfwTww.bin"
+	#define 	RTL8192C_FW_UMC_WW_IMG			"rtl8192CU\\rtl8192cfwUww.bin"
+	#define 	RTL8192C_FW_UMC_B_WW_IMG		"rtl8192CU\\rtl8192cfwU_Bww.bin"
 	//#define RTL819X_FW_BOOT_IMG   				"rtl8192CU\\boot.img"
 	//#define RTL819X_FW_MAIN_IMG				"rtl8192CU\\main.img"
 	//#define RTL819X_FW_DATA_IMG				"rtl8192CU\\data.img"
@@ -161,6 +163,9 @@
 	#define Rtl819XFwTSMCImageArray			Rtl8192CUFwTSMCImgArray
 	#define Rtl819XFwUMCACutImageArray			Rtl8192CUFwUMCACutImgArray
 	#define Rtl819XFwUMCBCutImageArray			Rtl8192CUFwUMCBCutImgArray
+	#define Rtl8192C_FwTSMCWWImageArray		Rtl8192CUFwTSMCWWImgArray
+	#define Rtl8192C_FwUMCWWImageArray		Rtl8192CUFwUMCACutWWImgArray
+	#define Rtl8192C_FwUMCBCutWWImageArray	Rtl8192CUFwUMCBCutWWImgArray		
 
 	#define Rtl819XMAC_Array					Rtl8192CUMAC_2T_Array
 	#define Rtl819XAGCTAB_2TArray				Rtl8192CUAGCTAB_2TArray
@@ -185,7 +190,7 @@
 #endif
 
 #define DRVINFO_SZ	4 // unit is 8bytes
-#define PageNum_128(_Len)		(u32)(((_Len)>>7) + ((_Len)&0x7F ? 1:0))
+#define PageNum_128(_Len)		(u32)(((_Len)>>7) + ((_Len)&0x7F ? 1:0))
 
 #define FW_8192C_SIZE					16384+32//16k
 #define FW_8192C_START_ADDRESS		0x1000
@@ -207,6 +212,10 @@ typedef struct _RT_FIRMWARE{
 	FIRMWARE_SOURCE	eFWSource;
 	u8*			szFwBuffer;
 	u32			ulFwLength;
+#ifdef CONFIG_WOWLAN
+	u8*			szWoWLANFwBuffer;
+	u32			ulWoWLANFwLength;
+#endif	
 }RT_FIRMWARE, *PRT_FIRMWARE, RT_FIRMWARE_92C, *PRT_FIRMWARE_92C;
 
 //
@@ -861,7 +870,7 @@ typedef struct hal_data_8192cu HAL_DATA_TYPE, *PHAL_DATA_TYPE;
 #define INCLUDE_MULTI_FUNC_GPS(_Adapter)	(GET_HAL_DATA(_Adapter)->MultiFunc & RT_MULTI_FUNC_GPS)
 
 VOID rtl8192c_FirmwareSelfReset(IN PADAPTER Adapter);
-int FirmwareDownload92C(IN PADAPTER Adapter);
+int FirmwareDownload92C(IN PADAPTER Adapter,IN	BOOLEAN			bUsedWoWLANFw);
 VOID InitializeFirmwareVars92C(PADAPTER Adapter);
 u8 GetEEPROMSize8192C(PADAPTER Adapter);
 RT_CHANNEL_DOMAIN _HalMapChannelPlan8192C(PADAPTER Adapter, u8 HalChannelPlan);

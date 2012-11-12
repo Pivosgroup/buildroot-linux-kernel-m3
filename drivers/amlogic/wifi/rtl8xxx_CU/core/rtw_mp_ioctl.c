@@ -2694,7 +2694,7 @@ unsigned int mp_ioctl_xmit_packet_hdl(struct oid_par_priv *poid_par_priv)
 	unsigned char *pframe, *pmp_pkt;
 	struct ethhdr *pethhdr;
 	struct pkt_attrib *pattrib;
-	struct ieee80211_hdr *pwlanhdr;
+	struct rtw_ieee80211_hdr *pwlanhdr;
 	unsigned short *fctrl;
 	int llc_sz, payload_len;
 	struct mp_xmit_frame *pxframe=  NULL;
@@ -2741,7 +2741,7 @@ unsigned int mp_ioctl_xmit_packet_hdl(struct oid_par_priv *poid_par_priv)
 	memset(pxframe->mem, 0 , WLANHDR_OFFSET);
 	pframe = (u8 *)(pxframe->mem) + WLANHDR_OFFSET;
 
-	pwlanhdr = (struct ieee80211_hdr *)pframe;
+	pwlanhdr = (struct rtw_ieee80211_hdr *)pframe;
 
 	fctrl = &(pwlanhdr->frame_ctl);
 	*(fctrl) = 0;

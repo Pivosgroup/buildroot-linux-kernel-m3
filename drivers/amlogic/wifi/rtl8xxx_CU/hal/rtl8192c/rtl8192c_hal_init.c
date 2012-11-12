@@ -101,7 +101,7 @@ _FWDownloadEnable(
 		rtw_write8(Adapter, REG_MCUFWDL, tmp&0xfe);
 
 		// Reserved for fw extension.
-		rtw_write8(Adapter, REG_MCUFWDL+1, 0x00);
+		//rtw_write8(Adapter, REG_MCUFWDL+1, 0x00);
 	}
 }
 
@@ -311,6 +311,7 @@ static int _FWFreeToGo(
 {
 	u32			counter = 0;
 	u32			value32;
+	u8			value8;
 	u32	restarted = _FALSE;
 	
 	// polling CheckSum report
@@ -327,10 +328,10 @@ static int _FWFreeToGo(
 	//RT_TRACE(COMP_INIT, DBG_LOUD, ("Checksum report OK ! REG_MCUFWDL:0x%08x .\n",value32));
 
 
-	value32 = rtw_read32(Adapter, REG_MCUFWDL);
-	value32 |= MCUFWDL_RDY;
-	value32 &= ~WINTINI_RDY;
-	rtw_write32(Adapter, REG_MCUFWDL, value32);
+	value8 = rtw_read8(Adapter, REG_MCUFWDL);
+	value8 |= MCUFWDL_RDY;
+	value8 &= ~WINTINI_RDY;
+	rtw_write8(Adapter, REG_MCUFWDL, value8);
 	
 
 POLLING_FW_READY:	
@@ -417,7 +418,8 @@ u8	FwBuffer8192C[FW_8192C_SIZE];
 //
 //
 int FirmwareDownload92C(
-	IN	PADAPTER			Adapter
+	IN	PADAPTER			Adapter,
+	IN	BOOLEAN			bUsedWoWLANFw
 )
 {	
 	int	rtStatus = _SUCCESS;	
@@ -426,10 +428,21 @@ int FirmwareDownload92C(
 	s8 			R92CFwImageFileName_TSMC[] ={RTL8192C_FW_TSMC_IMG};
 	s8 			R92CFwImageFileName_UMC[] ={RTL8192C_FW_UMC_IMG};
 	s8 			R92CFwImageFileName_UMC_B[] ={RTL8192C_FW_UMC_B_IMG};
+#ifdef CONFIG_WOWLAN
+	s8 			R92CFwImageFileName_TSMC_WW[] ={RTL8192C_FW_TSMC_WW_IMG};
+	s8 			R92CFwImageFileName_UMC_WW[] ={RTL8192C_FW_UMC_WW_IMG};
+	s8 			R92CFwImageFileName_UMC_B_WW[] ={RTL8192C_FW_UMC_B_WW_IMG};
+#endif
+	
 	//s8 			R8723FwImageFileName_UMC[] ={RTL8723_FW_UMC_IMG};
 	u8*			FwImage = NULL;
 	u32			FwImageLen = 0;
 	char*		pFwImageFileName;	
+#ifdef CONFIG_WOWLAN
+	u8*			FwImageWoWLAN;
+	u32			FwImageWoWLANLen;
+	char*		pFwImageFileName_WoWLAN;
+#endif	
 	u8*			pucMappedFile = NULL;
 	//vivi, merge 92c and 92s into one driver, 20090817
 	//vivi modify this temply, consider it later!!!!!!!!
@@ -455,6 +468,11 @@ int FirmwareDownload92C(
 			pFwImageFileName = R92CFwImageFileName_UMC;
 			FwImage = Rtl819XFwUMCACutImageArray;
 			FwImageLen = UMCACutImgArrayLength;
+#ifdef CONFIG_WOWLAN
+			pFwImageFileName_WoWLAN = R92CFwImageFileName_UMC_WW;
+			FwImageWoWLAN= Rtl8192C_FwUMCWWImageArray;
+			FwImageWoWLANLen =UMCACutWWImgArrayLength ;
+#endif			
 			DBG_8192C(" ===> FirmwareDownload91C() fw:Rtl819XFwImageArray_UMC\n");
 		}
 		else if(IS_81xxC_VENDOR_UMC_B_CUT(pHalData->VersionID))
@@ -463,6 +481,12 @@ int FirmwareDownload92C(
 			pFwImageFileName = R92CFwImageFileName_UMC_B;
 			FwImage = Rtl819XFwUMCBCutImageArray;
 			FwImageLen = UMCBCutImgArrayLength;
+#ifdef CONFIG_WOWLAN
+			pFwImageFileName_WoWLAN = R92CFwImageFileName_UMC_B_WW;
+			FwImageWoWLAN= Rtl8192C_FwUMCBCutWWImageArray;
+			FwImageWoWLANLen =UMCBCutWWImgArrayLength ;
+#endif			
+			
 			DBG_8192C(" ===> FirmwareDownload91C() fw:Rtl819XFwImageArray_UMC_B\n");
 		}
 		else
@@ -470,6 +494,11 @@ int FirmwareDownload92C(
 			pFwImageFileName = R92CFwImageFileName_TSMC;
 			FwImage = Rtl819XFwTSMCImageArray;
 			FwImageLen = TSMCImgArrayLength;
+#ifdef CONFIG_WOWLAN
+			pFwImageFileName_WoWLAN = R92CFwImageFileName_TSMC_WW;
+			FwImageWoWLAN= Rtl8192C_FwTSMCWWImageArray;
+			FwImageWoWLANLen =TSMCWWImgArrayLength ;
+#endif			
 			DBG_8192C(" ===> FirmwareDownload91C() fw:Rtl819XFwImageArray_TSMC\n");
 		}
 	}
@@ -525,22 +554,41 @@ int FirmwareDownload92C(
 
 			pFirmware->szFwBuffer = FwImage;
 			pFirmware->ulFwLength = FwImageLen;
+#ifdef CONFIG_WOWLAN
+			{
+				pFirmware->szWoWLANFwBuffer=FwImageWoWLAN;
+				pFirmware->ulWoWLANFwLength = FwImageWoWLANLen;
+			}
+#endif
+			
 			break;
 	}
 
-	#ifdef DBG_FW_STORE_FILE_PATH //used to store firmware to file...
-	if(pFirmware->ulFwLength > 0)
-	{
-		rtw_store_to_file(DBG_FW_STORE_FILE_PATH, pFirmware->szFwBuffer, pFirmware->ulFwLength);
+#ifdef CONFIG_WOWLAN	
+	if(bUsedWoWLANFw)	{		
+		pFirmwareBuf = pFirmware->szWoWLANFwBuffer;		
+		FirmwareLen = pFirmware->ulWoWLANFwLength;		
+		pFwHdr = (PRT_8192C_FIRMWARE_HDR)pFirmware->szWoWLANFwBuffer;	
+	}	
+	else
+#endif	
+	{	
+		#ifdef DBG_FW_STORE_FILE_PATH //used to store firmware to file...
+		if(pFirmware->ulFwLength > 0)
+		{
+			rtw_store_to_file(DBG_FW_STORE_FILE_PATH, pFirmware->szFwBuffer, pFirmware->ulFwLength);
+		}
+		#endif
+
+
+
+
+		pFirmwareBuf = pFirmware->szFwBuffer;
+		FirmwareLen = pFirmware->ulFwLength;
+
+		// To Check Fw header. Added by tynli. 2009.12.04.
+		pFwHdr = (PRT_8192C_FIRMWARE_HDR)pFirmware->szFwBuffer;
 	}
-	#endif
-
-	pFirmwareBuf = pFirmware->szFwBuffer;
-	FirmwareLen = pFirmware->ulFwLength;
-
-	// To Check Fw header. Added by tynli. 2009.12.04.
-	pFwHdr = (PRT_8192C_FIRMWARE_HDR)pFirmware->szFwBuffer;
-
 	pHalData->FirmwareVersion =  le16_to_cpu(pFwHdr->Version); 
 	pHalData->FirmwareSubVersion = le16_to_cpu(pFwHdr->Subversion); 
 
@@ -622,6 +670,53 @@ InitializeFirmwareVars92C(
 	//Init H2C counter. by tynli. 2009.12.09.
 	pHalData->LastHMEBoxNum = 0;
 }
+
+
+//===========================================
+
+//
+// Description: Prepare some information to Fw for WoWLAN.
+//			(1) Download wowlan Fw.
+//			(2) Download RSVD page packets.
+//			(3) Enable AP offload if needed.
+//
+// 2011.04.12 by tynli.
+//
+VOID
+SetFwRelatedForWoWLAN8192CU(
+	IN	PADAPTER			padapter,
+	IN	u8			bHostIsGoingtoSleep
+)
+{	
+	int	status=_FAIL;
+	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(padapter);
+	u8	 bRecover = _FALSE;
+	
+	if(bHostIsGoingtoSleep)
+	{
+		//
+		// 1. Before WoWLAN we need to re-download WoWLAN Fw.
+		//
+		status = FirmwareDownload92C(padapter, bHostIsGoingtoSleep);
+		if(status != _SUCCESS)
+		{
+			DBG_8192C("ConfigFwRelatedForWoWLAN8192CU(): Re-Download Firmware failed!!\n");
+			return;
+		}
+		else
+		{
+			DBG_8192C("ConfigFwRelatedForWoWLAN8192CU(): Re-Download Firmware Success !!\n");
+		}
+
+		//
+		// 2. Re-Init the variables about Fw related setting.
+		//
+		InitializeFirmwareVars92C(padapter);
+
+		
+	}
+}
+
 
 #ifdef CONFIG_BT_COEXIST
 static void _update_bt_param(_adapter *padapter)

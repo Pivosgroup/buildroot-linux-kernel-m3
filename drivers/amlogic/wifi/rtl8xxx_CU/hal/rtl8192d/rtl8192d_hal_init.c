@@ -396,15 +396,24 @@ u8	FwBuffer8192D[FW_8192D_SIZE];
 //
 //
 int FirmwareDownload92D(
-	IN	PADAPTER			Adapter
+	IN	PADAPTER			Adapter,
+	IN	BOOLEAN			bUsedWoWLANFw
 )
 {	
 	int	rtStatus = _SUCCESS;	
 	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(Adapter);
 	s8 				R92DFwImageFileName[] ={RTL8192D_FW_IMG};
+#ifdef CONFIG_WOWLAN_92D
+	s8 			R92DFwImageFileName_WW[] ={RTL8192D_FW_IMG};
+#endif //CONFIG_WOWLAN_92D
 	u8*				FwImage;
 	u32				FwImageLen;
 	char*			pFwImageFileName;
+#ifdef CONFIG_WOWLAN_92D
+	u8*			FwImageWoWLAN;
+	u32			FwImageWoWLANLen;
+	char*		pFwImageFileName_WoWLAN;
+#endif //CONFIG_WOWLAN_92D
 	PRT_FIRMWARE_92D	pFirmware = NULL;
 	PRT_8192D_FIRMWARE_HDR		pFwHdr = NULL;
 	u8		*pFirmwareBuf;
@@ -427,7 +436,11 @@ int FirmwareDownload92D(
 	pFwImageFileName = R92DFwImageFileName;
 	FwImage = (u8 *)Rtl8192D_FwImageArray;
 	FwImageLen = Rtl8192D_FwImageArrayLength;
-
+#ifdef CONFIG_WOWLAN_92D
+	pFwImageFileName_WoWLAN = R92DFwImageFileName_UMC_WW;
+	FwImageWoWLAN= Rtl8192D_FwUMCWWImageArray;
+	FwImageWoWLANLen =UMCACutWWImgArrayLength ;
+#endif //CONFIG_WOWLAN_92D
 	DBG_8192C(" ===> FirmwareDownload92D() fw:Rtl8192D_FwImageArray\n");
 
 	#ifdef CONFIG_FILE_FWIMG
@@ -470,6 +483,12 @@ int FirmwareDownload92D(
 #endif
 			pFirmware->szFwBuffer = FwImage;
 			pFirmware->ulFwLength = FwImageLen;
+#ifdef CONFIG_WOWLAN_92D
+			{
+				pFirmware->szWoWLANFwBuffer=FwImageWoWLAN;
+				pFirmware->ulWoWLANFwLength = FwImageWoWLANLen;
+			}
+#endif //CONFIG_WOWLAN_92D
 			break;
 	}
 
@@ -480,11 +499,21 @@ int FirmwareDownload92D(
 	}
 	#endif
 
-	pFirmwareBuf = pFirmware->szFwBuffer;
-	FirmwareLen = pFirmware->ulFwLength;
+#ifdef CONFIG_WOWLAN_92D
+	if(bUsedWoWLANFw)	{		
+		pFirmwareBuf = pFirmware->szWoWLANFwBuffer;		
+		FirmwareLen = pFirmware->ulWoWLANFwLength;		
+		pFwHdr = (PRT_8192D_FIRMWARE_HDR)pFirmware->szWoWLANFwBuffer;	
+	}	
+	else
+#endif //CONFIG_WOWLAN_92D
+	{
+		pFirmwareBuf = pFirmware->szFwBuffer;
+		FirmwareLen = pFirmware->ulFwLength;
 
-	// To Check Fw header. Added by tynli. 2009.12.04.
-	pFwHdr = (PRT_8192D_FIRMWARE_HDR)pFirmware->szFwBuffer;
+		// To Check Fw header. Added by tynli. 2009.12.04.
+		pFwHdr = (PRT_8192D_FIRMWARE_HDR)pFirmware->szFwBuffer;
+	}
 
 	pHalData->FirmwareVersion =  le16_to_cpu(pFwHdr->Version); 
 	pHalData->FirmwareSubVersion = le16_to_cpu(pFwHdr->Subversion); 
@@ -582,6 +611,68 @@ Exit:
 
 }
 
+#ifdef CONFIG_WOWLAN_92D
+VOID
+InitializeFirmwareVars92D(
+	IN	PADAPTER		Adapter
+)
+{
+	HAL_DATA_TYPE		*pHalData	= GET_HAL_DATA(Adapter);
+
+	// Init Fw LPS related.
+	Adapter->pwrctrlpriv.bFwCurrentInPSMode = _FALSE;
+
+	//Init H2C counter. by tynli. 2009.12.09.
+	pHalData->LastHMEBoxNum = 0;
+}
+
+
+//===========================================
+
+//
+// Description: Prepare some information to Fw for WoWLAN.
+//			(1) Download wowlan Fw.
+//			(2) Download RSVD page packets.
+//			(3) Enable AP offload if needed.
+//
+// 2011.04.12 by tynli.
+//
+VOID
+SetFwRelatedForWoWLAN8192DU(
+	IN	PADAPTER			padapter,
+	IN	u8			bHostIsGoingtoSleep
+)
+{	
+	int	status=_FAIL;
+	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(padapter);
+	u8	 bRecover = _FALSE;
+	
+	if(bHostIsGoingtoSleep)
+	{
+		//
+		// 1. Before WoWLAN we need to re-download WoWLAN Fw.
+		//
+		status = FirmwareDownload92D(padapter, bHostIsGoingtoSleep);
+		if(status != _SUCCESS)
+		{
+			DBG_8192C("ConfigFwRelatedForWoWLAN8192DU(): Re-Download Firmware failed!!\n");
+			return;
+		}
+		else
+		{
+			DBG_8192C("ConfigFwRelatedForWoWLAN8192DU(): Re-Download Firmware Success !!\n");
+		}
+
+		//
+		// 2. Re-Init the variables about Fw related setting.
+		//
+		InitializeFirmwareVars92D(padapter);
+
+		
+	}
+}
+#endif //CONFIG_WOWLAN_92D
+
 //"chnl" begins from 0. It's not a real channel.
 //"channel_info[chnl]" is a real channel.
 static u8 Hal_GetChnlGroupfromArray(u8 chnl)
@@ -674,7 +765,11 @@ _HalMapChannelPlan8192D(
 			break;
 #endif /* Not using EEPROM_CHANNEL_PLAN directly */
 		case 0x7F: //Realtek Reserve
+#ifdef CONFIG_DFS
+			rtChannelDomain = RT_CHANNEL_DOMAIN_FCC;
+#else
 			rtChannelDomain = RT_CHANNEL_DOMAIN_FCC_NO_DFS;
+#endif 
 			//RT_TRACE(COMP_INIT, DBG_LOUD, ("_HalMapChannelPlan8192D():Force ChannelPlan =0x%X \n" ,0));
 			break;
 		default:

@@ -1644,7 +1644,7 @@ dm_CheckEdcaTurbo(
 					(pmlmeext->cur_wireless_mode&WIRELESS_11_5N) )
 				{
 					if(trafficIndex == DOWN_LINK)
-						edca_param = 0xa42b;
+						edca_param = 0x5aa42b;
 					else
 						edca_param = EDCA_BE[trafficIndex];
 				}

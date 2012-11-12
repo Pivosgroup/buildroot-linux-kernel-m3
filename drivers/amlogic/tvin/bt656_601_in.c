@@ -47,6 +47,8 @@
 #define DEVICE_NAME "amvdec_656in"
 #define MODULE_NAME "amvdec_656in"
 #define BT656IN_IRQ_NAME "amvdec_656in-irq"
+#define CANVAS_SIZE_6_500M (2592*2*1952*6 + BT656IN_ANCI_DATA_SIZE)
+#define CANVAS_SIZE_6_300M (2048*2*1536*6 + BT656IN_ANCI_DATA_SIZE)
 
 //#define HANDLE_BT656IN_IRQ
 
@@ -267,6 +269,19 @@ static int bt656_camera_in_canvas_init(unsigned int mem_start, unsigned int mem_
     unsigned decbuf_start = mem_start + BT656IN_ANCI_DATA_SIZE;
     am656in_dec_info.decbuf_size   = 0x400000;
 
+    //pr_dbg("mem_size=%ld, 500Msize=%ld,300M=%ld\n", 
+		//mem_size, CANVAS_SIZE_6_500M, CANVAS_SIZE_6_300M);
+    if( mem_size >= CANVAS_SIZE_6_500M){
+	canvas_width  = 2592 << 1;
+	canvas_height = 1952;
+	am656in_dec_info.decbuf_size   = canvas_width*canvas_height + 0x1000;
+	pr_dbg("5M canvas config\n");
+    }else if( mem_size >= CANVAS_SIZE_6_300M ){
+	canvas_width  = 2048 << 1;
+	canvas_height = 1536;
+	am656in_dec_info.decbuf_size   = canvas_width*canvas_height + 0x1000;
+	pr_dbg("3M canvas config\n");
+    }
     i = (unsigned)((mem_size - BT656IN_ANCI_DATA_SIZE) / am656in_dec_info.decbuf_size);
 
     am656in_dec_info.canvas_total_count = (BT656IN_VF_POOL_SIZE > i)? i : BT656IN_VF_POOL_SIZE;

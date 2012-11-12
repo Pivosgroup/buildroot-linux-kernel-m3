@@ -1,7 +1,7 @@
 /*
  * Video Frame Manager For Provider and Receiver
  *
- * Author: Bobby Yang <bo.yang@amlogic.com>
+ * Author: Rain Zhang <rain.zhang@amlogic.com>
  *
  *
  * Copyright (C) 2010 Amlogic Inc.
@@ -16,7 +16,6 @@
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/list.h>
-#include <linux/spinlock.h>
 
 /* Amlogic headers */
 #include <linux/amports/vframe.h>
@@ -25,27 +24,22 @@
 /* Local headers */
 #include "vfm.h"
 
-static struct list_head rhead = LIST_HEAD_INIT(rhead);
-static DEFINE_SPINLOCK(rlist_lock);
+#define MAX_RECEIVER_NUM    8
+vframe_receiver_t* receiver_table[MAX_RECEIVER_NUM];
 
-bool is_receiver_active(const char* receiver_name)
+int receiver_list(char* buf)
 {
-    struct vframe_receiver_s *p = NULL, *ptmp;
-    list_for_each_entry_safe(p, ptmp, &rhead, list) {
-        if (!strcmp(p->name, receiver_name)) {
-            return 1;
+    struct vframe_receiver_s *r = NULL;
+    int len = 0;
+    int i = 0;
+    len += sprintf(buf+len, "\nreceiver list:\n");
+    for(i=0; i<MAX_RECEIVER_NUM; i++){
+        r = receiver_table[i];
+        if(r){
+            len += sprintf(buf+len, "   %s\n", r->name);
         }
     }
-    return 0;
-}
-
-void receiver_list(void)
-{
-    struct vframe_receiver_s *r = NULL, *rtmp;
-    pr_info("\nreceiver list:\n");
-    list_for_each_entry_safe(r, rtmp, &rhead, list) {
-        pr_info("   %s\n", r->name);
-    }
+    return len;
 }
 /*
  * get vframe provider from the provider list by receiver name.
@@ -53,30 +47,30 @@ void receiver_list(void)
  */
 struct vframe_receiver_s * vf_get_receiver(const char *provider_name)
 {
-    struct vframe_receiver_s *p = NULL, *ptmp;
+    struct vframe_receiver_s *r = NULL;
     char* receiver_name = NULL;
-
-    if (list_empty(&rhead)){
-       pr_err("Error: no receiver registered\n");
-       return NULL;
+    int i;
+    receiver_name = vf_get_receiver_name( provider_name);
+    if(vfm_debug_flag&2){
+        printk("%s:receiver_name:%s\n", __func__, receiver_name);
     }
-
-    if(vfm_mode){
-        receiver_name = vf_get_receiver_name( provider_name);
-        if(receiver_name){
-            list_for_each_entry_safe(p, ptmp, &rhead, list) {
-                if (!strcmp(p->name, receiver_name)) {
-                    //pr_info("%s:%s %s", __func__, p->name, receiver_name);
-                    break;
+    if(receiver_name){
+        for(i=0; i<MAX_RECEIVER_NUM; i++){
+            r = receiver_table[i];
+            if(r){
+                if(vfm_debug_flag&2){
+                    printk("%s: r: %s\n", __func__, r->name);
+                }
+                if (!strcmp(r->name, receiver_name)) {
+                        break;
                 }
             }
         }
+        if(i == MAX_RECEIVER_NUM){
+            r = NULL;
+        } 
     }
-    else{
-        /* get the first receiver in the list */
-        p = list_first_entry(&rhead, struct vframe_receiver_s, list);
-    }
-    return p;
+    return r;
 }
 EXPORT_SYMBOL(vf_get_receiver);
 
@@ -98,15 +92,6 @@ int vf_notify_receiver(const char* provider_name, int event_type, void* data)
 }
 EXPORT_SYMBOL(vf_notify_receiver);
 
-
-struct vframe_receiver_s *vf_receiver_alloc(void)
-{
-    vframe_receiver_t *r;
-    r = kmalloc(sizeof(vframe_receiver_t), GFP_KERNEL);
-    return r;
-}
-EXPORT_SYMBOL(vf_receiver_alloc);
-
 void vf_receiver_init(struct vframe_receiver_s *recv,
     const char *name, const struct vframe_receiver_op_s *ops, void* op_arg)
 {
@@ -120,46 +105,46 @@ void vf_receiver_init(struct vframe_receiver_s *recv,
 }
 EXPORT_SYMBOL(vf_receiver_init);
 
-void vf_receiver_free(struct vframe_receiver_s *recv)
-{
-    kfree(recv);
-}
-EXPORT_SYMBOL(vf_receiver_free);
-
 int vf_reg_receiver(struct vframe_receiver_s *recv)
 {
-    ulong flags;
-    vframe_receiver_t *r, *rtmp;
-
+    vframe_receiver_t *r;
+    int i;
     if (!recv)
         return -1;
 
-    spin_lock_irqsave(&rlist_lock, flags);
-    list_for_each_entry_safe(r, rtmp, &rhead, list) {
-        if (!strcmp(r->name, recv->name)) {
-            spin_unlock_irqrestore(&rlist_lock, flags);
-            return -1;
+    for(i=0; i<MAX_RECEIVER_NUM; i++){ 
+        r = receiver_table[i];
+        if(r){
+            if (!strcmp(r->name, recv->name)) {
+                return -1;
+            }
         }
     }
-    list_add_tail(&recv->list, &rhead);
-    spin_unlock_irqrestore(&rlist_lock, flags);
+    for(i=0; i<MAX_RECEIVER_NUM; i++){
+        if(receiver_table[i] == NULL){
+           receiver_table[i] = recv; 
+           break;
+        }
+    }
     return 0;
 }
 EXPORT_SYMBOL(vf_reg_receiver);
 
 void vf_unreg_receiver(struct vframe_receiver_s *recv)
 {
-    ulong flags;
-
-    struct vframe_receiver_s *r, *rtmp;
-    spin_lock_irqsave(&rlist_lock, flags);
-    list_for_each_entry_safe(r, rtmp, &rhead, list) {
-        if (!strcmp(r->name, recv->name)) {
-            list_del(&r->list);
-            break;
+    vframe_receiver_t *r;
+    int i;
+    if (!recv)
+        return;
+    for(i=0; i<MAX_RECEIVER_NUM; i++){ 
+        r = receiver_table[i];
+        if(r){
+            if (!strcmp(r->name, recv->name)) {
+                receiver_table[i] = NULL;
+                break;
+            }
         }
     }
-    spin_unlock_irqrestore(&rlist_lock, flags);
 }
 EXPORT_SYMBOL(vf_unreg_receiver);
 

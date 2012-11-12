@@ -32,6 +32,12 @@
 #define PLATFORM_LINUX	1
 
 
+//#define CONFIG_IOCTL_CFG80211 1
+#ifdef CONFIG_IOCTL_CFG80211
+	#define CONFIG_CFG80211_FORCE_COMPATIBLE_2_6_37_UNDER
+	//#define CONFIG_DEBUG_CFG80211 1
+#endif
+
 /*
  * Internal  General Config
  */
@@ -74,10 +80,16 @@
 
 //	Unmarked if there is low p2p scanned ratio; Kurt
 //#define CONFIG_P2P_AGAINST_NOISE	1
+#define CONFIG_P2P_REMOVE_GROUP_INFO
+//#define CONFIG_DBG_P2P
 #endif
 
 //	Added by Kurt 20110511
 //#define CONFIG_TDLS 1
+#ifdef CONFIG_TDLS
+	#define CONFIG_TDLS_AUTOSETUP			1
+	#define CONFIG_TDLS_AUTOCHECKALIVE		1
+#endif	
 
 #ifdef CONFIG_AP_MODE
 	#ifndef CONFIG_NATIVEAP_MLME

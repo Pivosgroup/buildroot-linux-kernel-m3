@@ -13,7 +13,7 @@ obj-$(CONFIG_ARCH_MESON3)	+= pinmux.o
 obj-$(CONFIG_ARCH_MESON3)	+= gpio.o
 obj-$(CONFIG_ARCH_MESON3)	+= power_gate.o
 obj-$(CONFIG_ARCH_MESON3)	+= sd_pad.o
-obj-$(CONFIG_AML_SUSPEND) += power_suspend.o
+obj-$(CONFIG_ARCH_MESON3)       += power_suspend.o
 obj-$(CONFIG_ARCH_MESON3)	+= lm.o usbclock.o clk_set.o sram.o sleep.o
 
 obj-$(CONFIG_MACH_MESON3_REFF01)	+= board-m3-reff01.o
@@ -33,6 +33,7 @@ obj-$(CONFIG_MACH_MESON3_REFF14)	+= board-m3-reff14.o
 obj-$(CONFIG_MACH_MESON3_REFF16)	+= board-m3-reff16.o
 obj-$(CONFIG_MACH_MESON3_REFF16_1)	+= board-m3-reff16-1.o
 obj-$(CONFIG_MACH_MESON3_REFF20)	+= board-m3-reff20.o
+obj-$(CONFIG_MACH_MESON3_REFF33)	+= board-m3-reff33.o
 obj-$(CONFIG_MACH_MESON3_STV_MBX_MC)	+= board-stv-mbx-mc.o
 
 # Power Management

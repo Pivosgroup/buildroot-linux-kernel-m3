@@ -91,7 +91,8 @@ int aml_nftl_check_node(struct aml_nftl_info_t *aml_nftl_info, addr_blk_t blk_ad
 	struct phyblk_node_t *phy_blk_node;
 	struct vtblk_node_t  *vt_blk_node, *vt_blk_node_free;
 	addr_blk_t phy_blk_num, vt_blk_num;
-	int16_t valid_page[MAX_BLK_NUM_PER_NODE+2];
+	//int16_t valid_page[MAX_BLK_NUM_PER_NODE+2];
+	int16_t	*valid_page;
 	int k, node_length, node_len_actual, node_len_max, status = 0;
 
 	aml_nftl_wl = aml_nftl_info->aml_nftl_wl;
@@ -99,14 +100,24 @@ int aml_nftl_check_node(struct aml_nftl_info_t *aml_nftl_info, addr_blk_t blk_ad
 	vt_blk_node = (struct vtblk_node_t *)(*(aml_nftl_info->vtpmt + vt_blk_num));
 	if (vt_blk_node == NULL)
 		return -ENOMEM;
-/*
+
 	if (vt_blk_num < NFTL_FAT_TABLE_NUM)
 		node_len_max = (MAX_BLK_NUM_PER_NODE + 2);
-	else*/
+	else
 		node_len_max = (MAX_BLK_NUM_PER_NODE + 1);
 
 	node_len_actual = aml_nftl_get_node_length(aml_nftl_info, vt_blk_node);
+	node_len_actual = (node_len_actual > (aml_nftl_info->accessibleblocks-1)) ? (aml_nftl_info->accessibleblocks-1) : node_len_actual;
+	
+	valid_page = aml_nftl_malloc(sizeof(int16_t) * (node_len_actual + 2));
+	if(valid_page == NULL){
+		aml_nftl_dbg("%s, have no mem for valid_page, at blk_addr:%d,  node_len_actual:%d!!!!\n", blk_addr, node_len_actual);
+		return -ENOMEM;
+	}
+
 	if (node_len_actual > node_len_max) {
+		aml_nftl_dbg("%s Line:%d blk_addr:%d  have node length over MAX, and node_len_actual:%d\n", __func__, __LINE__, blk_addr, node_len_actual);
+#if 0		
 		node_length = 0;
 		while (vt_blk_node != NULL) {
 			node_length++;
@@ -121,9 +132,10 @@ int aml_nftl_check_node(struct aml_nftl_info_t *aml_nftl_info, addr_blk_t blk_ad
 			}
 			vt_blk_node = vt_blk_node->next;
 		}
+#endif		
 	}
 
-	memset((unsigned char *)valid_page, 0x0, sizeof(int16_t)*(MAX_BLK_NUM_PER_NODE+2));
+	memset((unsigned char *)valid_page, 0x0, sizeof(int16_t)*(node_len_actual+2));
 	for (k=0; k<aml_nftl_info->pages_per_blk; k++) {
 
 		node_length = 0;
@@ -168,6 +180,8 @@ int aml_nftl_check_node(struct aml_nftl_info_t *aml_nftl_info, addr_blk_t blk_ad
 	if ((node_length == node_len_max) && (valid_page[node_len_max-1] == (aml_nftl_info->pages_per_blk - (phy_blk_node->last_write + 1)))) {
 		status = AML_NFTL_STRUCTURE_FULL;
 	}
+
+	aml_nftl_free(valid_page);
 
 	return status;
 }

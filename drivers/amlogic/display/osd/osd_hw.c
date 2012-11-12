@@ -48,6 +48,7 @@ static bool osd_vf_need_update = false;
 #if defined(CONFIG_ARCH_MESON3)
 static u32 osd_current_field = 0;
 #endif
+static struct vframe_provider_s osd_vf_prov;
 
 /********************************************************************/
 /***********		osd psedu frame provider 			*****************/
@@ -60,6 +61,7 @@ static vframe_t *osd_vf_peek(void* op_arg)
 static vframe_t *osd_vf_get(void* op_arg)
 {
 	if (osd_vf_need_update) {
+		vf_ext_light_unreg_provider(&osd_vf_prov);
 		osd_vf_need_update = false;
 		return &vf;
 	}
@@ -74,7 +76,6 @@ static const struct vframe_operations_s osd_vf_provider =
     .put  = NULL,
 };
 
-static struct vframe_provider_s osd_vf_prov;
 static unsigned char osd_vf_prov_init = 0;
 
 static inline void  osd_update_3d_mode(int enable_osd1,int enable_osd2)
@@ -128,51 +129,22 @@ static irqreturn_t vsync_isr(int irq, void *dev_id)
 	unsigned  int  fb0_cfg_w0,fb1_cfg_w0;
 	unsigned  int  current_field;
 	
+#ifdef CONFIG_AM_VIDEO2
+  int viu1_sel = (READ_MPEG_REG(VPU_VIU_VENC_MUX_CTRL)>>0)&0x3; // 0=No connection, 1=ENCI, 2=ENCP, 3=ENCT.
+  if((viu1_sel==1)&&(READ_MPEG_REG(ENCI_VIDEO_EN) & 1)) 
+    osd_hw.scan_mode= SCAN_MODE_INTERLACE;
+#else
 	if (READ_MPEG_REG(ENCI_VIDEO_EN) & 1)
 		osd_hw.scan_mode= SCAN_MODE_INTERLACE;
+#endif		
 	else if (READ_MPEG_REG(ENCP_VIDEO_MODE) & (1 << 12))
 		osd_hw.scan_mode= SCAN_MODE_INTERLACE;
 	else
 		osd_hw.scan_mode= SCAN_MODE_PROGRESSIVE;
 
-	fb0_cfg_w0 = READ_MPEG_REG(VIU_OSD1_BLK0_CFG_W0);
-	fb1_cfg_w0 = READ_MPEG_REG(VIU_OSD1_BLK0_CFG_W0+ REG_OFFSET);
 	if(osd_hw.free_scale_enable[OSD1])
 	{
 		osd_hw.scan_mode= SCAN_MODE_PROGRESSIVE;
-		if (fb0_cfg_w0 & 1 << 1) {
-			fb0_cfg_w0 &= ~(1 << 1);
-		}
-
-		if (fb1_cfg_w0 & (1 << 1)) {
-			fb1_cfg_w0 &= ~(1 << 1);
-		}
-	}
-
-	{
-		if((osd_hw.color_info[OSD1] != NULL) &&
-			(((fb0_cfg_w0&0xf00)!=osd_hw.color_info[OSD1]->hw_blkmode<<8) ||
-			((fb0_cfg_w0&0x3c)!=osd_hw.color_info[OSD1]->hw_colormat<<2))){
-			fb0_cfg_w0 &= 0xfffff0c3;
-			fb0_cfg_w0 |= osd_hw.color_info[OSD1]->hw_blkmode<<8;
-			fb0_cfg_w0 |= osd_hw.color_info[OSD1]->hw_colormat<<2;
-		}
-		WRITE_MPEG_REG(VIU_OSD1_BLK0_CFG_W0, fb0_cfg_w0);
-		WRITE_MPEG_REG(VIU_OSD1_BLK1_CFG_W0, fb0_cfg_w0);
-		WRITE_MPEG_REG(VIU_OSD1_BLK2_CFG_W0, fb0_cfg_w0);
-		WRITE_MPEG_REG(VIU_OSD1_BLK3_CFG_W0, fb0_cfg_w0);
-
-		if((osd_hw.color_info[OSD2] != NULL) &&
-			(((fb1_cfg_w0&0xf00)!=osd_hw.color_info[OSD2]->hw_blkmode<<8) ||
-			((fb1_cfg_w0&0x3c)!=osd_hw.color_info[OSD2]->hw_colormat<<2))){
-			fb1_cfg_w0 &= 0xfffff0c3;
-			fb1_cfg_w0 |= osd_hw.color_info[OSD2]->hw_blkmode<<8;
-			fb1_cfg_w0 |= osd_hw.color_info[OSD2]->hw_colormat<<2;
-		}
-		WRITE_MPEG_REG(VIU_OSD1_BLK0_CFG_W0 + REG_OFFSET, fb1_cfg_w0);
-		WRITE_MPEG_REG(VIU_OSD1_BLK1_CFG_W0 + REG_OFFSET, fb1_cfg_w0);
-		WRITE_MPEG_REG(VIU_OSD1_BLK2_CFG_W0 + REG_OFFSET, fb1_cfg_w0);
-		WRITE_MPEG_REG(VIU_OSD1_BLK3_CFG_W0 + REG_OFFSET, fb1_cfg_w0);
 	}
 
 	if (osd_hw.scan_mode == SCAN_MODE_INTERLACE)
@@ -553,7 +525,9 @@ void osd_free_scale_enable_hw(u32 index,u32 enable)
 #ifdef CONFIG_AM_VIDEO  
 #ifdef CONFIG_POST_PROCESS_MANAGER
 	if(mode_changed){
-        vf_notify_receiver(PROVIDER_NAME,VFRAME_EVENT_PROVIDER_RESET,NULL);
+        //vf_notify_receiver(PROVIDER_NAME,VFRAME_EVENT_PROVIDER_RESET,NULL);
+        extern void vf_ppmgr_reset_ext(void);
+        vf_ppmgr_reset_ext();
     }
 #endif
 #endif
@@ -1387,6 +1361,7 @@ void osd_init_hw(u32  logo_loaded)
 	//here we will init default value ,these value only set once .
 	if(!logo_loaded)
 	{
+		data32  = 1;
 	    	data32  = 4   << 5;  // hold_fifo_lines
 	    	data32 |= 3   << 10; // burst_len_sel: 3=64
 	    	data32 |= 32  << 12; // fifo_depth_val: 32*8=256

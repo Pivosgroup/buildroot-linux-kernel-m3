@@ -22,14 +22,13 @@
 *.lst
 *.symtypes
 *.order
-modules.builtin
 *.elf
 *.bin
 *.gz
-*.bz2
+*.gzip
 *.lzma
-*.patch
-*.gcno
+ccImage
+modules.builtin
 
 #
 # Top-level generic files

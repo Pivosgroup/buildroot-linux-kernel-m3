@@ -527,18 +527,20 @@ const static struct file_operations amjpegdec_fops = {
     .release  = amjpegdec_release,
     .ioctl    = amjpegdec_ioctl,
 };
-
+int HWJPEGDEC_MAJOR = 0;
 static int amjpegdec_probe(struct platform_device *pdev)
 {
     int r;
     struct resource *s;
 
+    HWJPEGDEC_MAJOR = 0;
     r = register_chrdev(HWJPEGDEC_MAJOR, "amjpegdev", &amjpegdec_fops);
 
     if (r < 0) {
         pr_error("Can't register major for amjpegdec device\n");
         return r;
     }
+    HWJPEGDEC_MAJOR = r;
 
     amjpegdec_class = class_create(THIS_MODULE, DEVICE_NAME);
 

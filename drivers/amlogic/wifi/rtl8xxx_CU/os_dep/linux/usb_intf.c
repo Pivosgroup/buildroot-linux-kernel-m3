@@ -162,6 +162,7 @@ static struct usb_device_id rtw_usb_id_tbl[] ={
 	{USB_DEVICE(USB_VENDER_ID_REALTEK, 0x8194)},//8192DU-VS
 	{USB_DEVICE(USB_VENDER_ID_REALTEK, 0x8111)},//Realtek 5G dongle for WiFi Display
 	{USB_DEVICE(USB_VENDER_ID_REALTEK, 0x0193)},//8192DE-VAU
+	{USB_DEVICE(USB_VENDER_ID_REALTEK, 0x8171)},//8192DU-VC
 	
 	/*=== Customer ID ===*/
 	/****** 8192DU-VC ********/
@@ -580,11 +581,11 @@ static void rtw_dev_unload(_adapter *padapter)
 		{
 			//DBG_8192C("r871x_dev_unload()->rtl871x_hal_deinit()\n");
 			#ifdef CONFIG_WOWLAN
-			if(padapter->pwrctrlpriv.bSupportWakeOnWlan==_TRUE){
+			if((padapter->pwrctrlpriv.bSupportRemoteWakeup==_TRUE)&&(padapter->pwrctrlpriv.wowlan_mode==_TRUE)){
 				DBG_8192C("%s bSupportWakeOnWlan==_TRUE  do not run rtw_hal_deinit()\n",__FUNCTION__);
 			}
 			else
-			#endif
+			#endif //CONFIG_WOWLAN
 			{
 				rtw_hal_deinit(padapter);
 			}
@@ -783,7 +784,7 @@ static int rtw_suspend(struct usb_interface *pusb_intf, pm_message_t message)
 	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
 	struct pwrctrl_priv *pwrpriv = &padapter->pwrctrlpriv;
 	struct usb_device *usb_dev = interface_to_usbdev(pusb_intf);
-	
+	struct wowlan_ioctl_param poidparam;	
 	_func_enter_;
 
 	if((!padapter->bup) || (padapter->bDriverStopped)||(padapter->bSurpriseRemoved))
@@ -824,13 +825,23 @@ static int rtw_suspend(struct usb_interface *pusb_intf, pm_message_t message)
 			netif_stop_queue(pnetdev);
 		}
 #ifdef CONFIG_WOWLAN
-		padapter->pwrctrlpriv.bSupportWakeOnWlan=_TRUE;
-#else		
+		if(padapter->pwrctrlpriv.bSupportRemoteWakeup==_TRUE&&padapter->pwrctrlpriv.wowlan_mode==_TRUE){
+			u8 ps_mode=PS_MODE_MIN;
+			//set H2C command
+			poidparam.subcode=WOWLAN_ENABLE;
+			padapter->HalFunc.SetHwRegHandler(padapter,HW_VAR_WOWLAN,(u8 *)&poidparam);
+			padapter->HalFunc.SetHwRegHandler(padapter, HW_VAR_H2C_FW_PWRMODE, &ps_mode);	
+			rtw_set_rpwm(padapter, PS_STATE_S2);
+		}
+		else
+#endif //CONFIG_WOWLAN
+		{
 		//s2.
 		//s2-1.  issue rtw_disassoc_cmd to fw
 		disconnect_hdl(padapter, NULL);
 		//rtw_disassoc_cmd(padapter);
-#endif
+		}
+
 
 #ifdef CONFIG_LAYER2_ROAMING_RESUME
 		if(check_fwstate(pmlmepriv, WIFI_STATION_STATE) && check_fwstate(pmlmepriv, _FW_LINKED) )
@@ -861,6 +872,12 @@ static int rtw_suspend(struct usb_interface *pusb_intf, pm_message_t message)
 		pwrpriv->bips_processing = _FALSE;
 #endif
 		_exit_pwrlock(&pwrpriv->lock);
+
+		if(check_fwstate(pmlmepriv, _FW_UNDER_SURVEY))
+			rtw_indicate_scan_done(padapter, 1);
+
+		if(check_fwstate(pmlmepriv, _FW_UNDER_LINKING))
+			rtw_indicate_disconnect(padapter);
 	}
 	else
 		goto error_exit;
@@ -882,6 +899,9 @@ static int rtw_resume(struct usb_interface *pusb_intf)
 	_adapter *padapter = (_adapter*)rtw_netdev_priv(pnetdev);
 	struct pwrctrl_priv *pwrpriv = &padapter->pwrctrlpriv;
 	 int ret = 0;
+#ifdef CONFIG_WOWLAN
+	 struct wowlan_ioctl_param poidparam;
+#endif //CONFIG_WOWLAN
  
 	if(pwrpriv->bInternalAutoSuspend ){
  		ret = rtw_resume_process(pusb_intf);
@@ -899,6 +919,20 @@ static int rtw_resume(struct usb_interface *pusb_intf)
 		ret = rtw_resume_process(pusb_intf);
 #endif //CONFIG_RESUME_IN_WORKQUEUE
 	}
+	
+#ifdef CONFIG_WOWLAN
+		if(padapter->pwrctrlpriv.bSupportRemoteWakeup==_TRUE&&padapter->pwrctrlpriv.wowlan_mode==_TRUE){
+			u8 ps_mode=PS_MODE_MIN;
+			//set H2C command
+			poidparam.subcode=WOWLAN_ENABLE;
+			padapter->HalFunc.SetHwRegHandler(padapter,HW_VAR_WOWLAN,(u8 *)&poidparam);
+			padapter->HalFunc.SetHwRegHandler(padapter, HW_VAR_H2C_FW_PWRMODE, &ps_mode);	
+			rtw_set_rpwm(padapter, PS_STATE_S2);
+			//set H2C command
+			poidparam.subcode=WOWLAN_DISABLE;
+			padapter->HalFunc.SetHwRegHandler(padapter,HW_VAR_WOWLAN,(u8 *)&poidparam);
+		}
+#endif //CONFIG_WOWLAN
 	
 	return ret;
 
@@ -1094,6 +1128,9 @@ extern char* ifname;
  * notes: drv_init() is called when the bus driver has located a card for us to support.
  *        We accept the new device by returning 0.
 */
+
+_adapter  *rtw_sw_export = NULL;
+
 static int rtw_drv_init(struct usb_interface *pusb_intf, const struct usb_device_id *pdid)
 {
 	int i;
@@ -1128,6 +1165,11 @@ static int rtw_drv_init(struct usb_interface *pusb_intf, const struct usb_device
 	pdvobjpriv->padapter = padapter;
 	pdvobjpriv->pusbintf = pusb_intf ;
 	pdvobjpriv->pusbdev = interface_to_usbdev(pusb_intf);
+
+#ifdef CONFIG_IOCTL_CFG80211
+	rtw_wdev_alloc(padapter, &pusb_intf->dev);
+#endif //CONFIG_IOCTL_CFG80211
+	
 
 	// set data
 	usb_set_intfdata(pusb_intf, pnetdev);
@@ -1269,6 +1311,9 @@ static int rtw_drv_init(struct usb_interface *pusb_intf, const struct usb_device
 		rtw_signal_process(ui_pid[1], SIGUSR2);
 	}
 #endif
+#ifdef CONFIG_INTEL_PROXIM	
+	rtw_sw_export=padapter;
+#endif
 
 	DBG_8192C("bDriverStopped:%d, bSurpriseRemoved:%d, bup:%d, hw_init_completed:%d\n"
 		,padapter->bDriverStopped
@@ -1317,9 +1362,16 @@ _func_exit_;
 
 	if(padapter)
 	{
+
+#ifdef CONFIG_IOCTL_CFG80211
+		struct wireless_dev *wdev = padapter->rtw_wdev;
+#endif //CONFIG_IOCTL_CFG80211
+	
 		DBG_8192C("+rtw_dev_remove\n");
 		RT_TRACE(_module_hci_intfs_c_,_drv_err_,("+dev_remove()\n"));
-
+#if defined(CONFIG_HAS_EARLYSUSPEND ) || defined(CONFIG_ANDROID_POWER)
+		rtw_unregister_early_suspend(&padapter->pwrctrlpriv);
+#endif
 		LeaveAllPowerSaveMode(padapter);
 
 		if(check_fwstate(pmlmepriv, _FW_LINKED))
@@ -1354,7 +1406,9 @@ _func_exit_;
 		}
 
 		rtw_cancel_all_timer(padapter);
-
+#ifdef CONFIG_WOWLAN
+		padapter->pwrctrlpriv.wowlan_mode=_FALSE;
+#endif
 		rtw_dev_unload(padapter);
 
 		DBG_8192C("+r871xu_dev_remove, hw_init_completed=%d\n", padapter->hw_init_completed);
@@ -1376,6 +1430,10 @@ _func_exit_;
 
 		//after rtw_free_drv_sw(), padapter has beed freed, don't refer to it.
 		rtw_free_drv_sw(padapter);	
+		
+#ifdef CONFIG_IOCTL_CFG80211	
+		rtw_wdev_free(wdev);
+#endif //CONFIG_IOCTL_CFG80211
 		
 	}
 
@@ -1399,7 +1457,9 @@ _func_exit_;
 	DBG_8192C("wlan link down\n");
 	rtd2885_wlan_netlink_sendMsg("linkdown", "8712");
 #endif
-
+#ifdef CONFIG_INTEL_PROXIM	
+	rtw_sw_export=NULL;
+#endif
 	#ifdef DBG_MEM_ALLOC
 	rtw_dump_mem_stat ();
 	#endif
@@ -1436,7 +1496,8 @@ static int __init rtw_drv_entry(void)
 
 	RT_TRACE(_module_hci_intfs_c_,_drv_err_,("+rtw_drv_entry\n"));
 
-	DBG_8192C("\nrtw driver version=%s\n", DRIVERVERSION);		
+	DBG_871X("rtw driver version=%s \n", DRIVERVERSION);
+	DBG_871X("Build at: %s %s\n", __DATE__, __TIME__);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)) 
 	//console_suspend_enabled=0;
 #endif	
@@ -1483,4 +1544,11 @@ r8711u_drv_entry()
 r8712s_drv_entry()
 r8712u_drv_entry()
 */
+#ifdef CONFIG_INTEL_PROXIM	
+_adapter  *rtw_usb_get_sw_pointer(void)
+{
+	return rtw_sw_export;
+}
+EXPORT_SYMBOL(rtw_usb_get_sw_pointer);
+#endif	//CONFIG_INTEL_PROXIM
 

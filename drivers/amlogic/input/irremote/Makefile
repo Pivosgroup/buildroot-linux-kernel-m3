@@ -6,6 +6,6 @@
 
 obj-$(CONFIG_VIRTUAL_REMOTE)		+= virtual_remote.o
 obj-$(CONFIG_KEYPADS_AM)		+= remote.o
-remote-objs :=remote_kbd.o   sw_remote_kbd.o
+remote-objs :=remote_kbd.o   sw_remote_kbd.o sw_remote_rc5.o sw_remote_rc6.o
 
 

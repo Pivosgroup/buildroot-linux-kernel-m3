@@ -202,7 +202,7 @@ static int set_phy_tune(amlogic_usb_struct_t *paus)
 
     clear_reg32_mask(phy_reg,mask);
     set_reg32_mask(phy_reg,reg_val);
-
+    //printk("set reg: 0x%x, val: 0x%x\n",(int)phy_reg,reg_val);
     return ret;	
 }
 
@@ -409,12 +409,12 @@ static ssize_t phy_power_store(struct device *_dev,
 	if (addr != NULL) {
 		mask = paus->phy_index?PREI_USB_PHY_B_POR:PREI_USB_PHY_A_POR;
 		val = read_reg32(addr);
-		//printk("reg: 0x%x, val: 0x%x\n",(int)addr,val);
+		//printk("get reg: 0x%x, val: 0x%x\n",(int)addr,val);
 		if(is_on)
 			val = val & ~mask;
 		else
 			val = val | mask;
-		//printk("reg: 0x%x, val: 0x%x\n",(int)addr,val);
+		//printk("set reg: 0x%x, val: 0x%x\n",(int)addr,val);
 		write_reg32(addr,val);
 	}
 

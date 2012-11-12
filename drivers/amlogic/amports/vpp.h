@@ -110,6 +110,12 @@ vpp_set_filters(u32 wide_mode, vframe_t * vf,
                 vpp_frame_par_t * next_frame_par, const vinfo_t *vinfo);
 
 extern void
+vpp_set_video_source_crop(u32 t, u32 l, u32 b, u32 r);
+
+extern void
+vpp_get_video_source_crop(u32 *t, u32 *l, u32 *b, u32 *r);
+
+extern void
 vpp_set_video_layer_position(s32 x, s32 y, s32 w, s32 h);
 
 extern void

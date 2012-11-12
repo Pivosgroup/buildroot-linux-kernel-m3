@@ -8,7 +8,7 @@ config AM_ETHERNET
 	depends on  NET
 	
 config AM_ETHERNET_DEBUG_LEVEL
-	int "Amloigc Ethetnet support"
+	int "Amloigc Ethetnet debug level support"
 	default 1
 	depends on  NET && AM_ETHERNET
 	help

@@ -113,7 +113,7 @@
 #define REG_FSISR					0x0054
 
 #define REG_MCUFWDL				0x0080
-
+#define REG_WOWLAN_REASON			0x0081
 #define REG_HMEBOX_EXT_0			0x0088
 #define REG_HMEBOX_EXT_1			0x008A
 #define REG_HMEBOX_EXT_2			0x008C

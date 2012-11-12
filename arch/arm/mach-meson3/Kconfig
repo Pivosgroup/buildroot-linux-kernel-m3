@@ -96,21 +96,24 @@ config MACH_MESON3_REFF16_1
 	bool "Support M3(lenovo) MBX platform"
 	help
 	  Include support for the Ref M3 board platform.	  
-config MACH_MESON3_STV_MBX_MC
-	select GENERIC_ALLOCATOR
-	bool "Support M3 (geniatech) platform"
-	help
-	  Include support for the AML M3 geniatech board platform.
-config STV
-	bool "support STV mod"
-	help
-		Just for all stv config.
+
 config MACH_MESON3_REFF20
 	select GENERIC_ALLOCATOR
 	bool "Support M3 Bestv MBX platform"
 	help
 	  Include support for the Ref M3 board platform.
 
+config MACH_MESON3_REFF33
+        select GENERIC_ALLOCATOR
+        bool "Support M3 PBI MBX platform"
+        help
+          Include support for the Ref M3 board platform.
+
+config MACH_MESON3_STV_MBX_MC
+	select GENERIC_ALLOCATOR
+	bool "Support M3 (geniatech) platform"
+	help
+	  Include support for the AML M3 geniatech board platform.
 config MESON3_CLOCK_TICK_RATE
     int "Clock Tick Rate"
 	default 25000000
@@ -139,5 +142,9 @@ config AML_SUSPEND_FIRMWARE_BASE
 	depends on AML_SUSPEND
 	help
 	  The base address of 1MB of memory to be reserved for suspend firmware.
+
+config STV_RECOVERY
+	bool "make recovery partition visible"
+	default n
 
 endmenu

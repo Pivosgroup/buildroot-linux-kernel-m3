@@ -86,3 +86,8 @@ obj-y += camera/
 obj-y += modem/
 obj-y += debug/
 obj-y += vfm/
+
+# watchdog timer
+obj-y += watchdog/
+
+

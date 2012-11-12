@@ -597,6 +597,22 @@ void mute_spk(struct snd_soc_codec* codec, int flag)
   }
 }
 
+#define APB_BASE 0x4000
+void mute_headphone(void* codec, int flag)
+{
+	int reg_val;
+#ifdef _AML_M3_HW_DEBUG_
+	printk("***Entered %s:%s\n", __FILE__,__func__);
+#endif
+	reg_val = READ_APB_REG(APB_BASE+(0x18<<2));
+    if(flag){
+		reg_val |= 0xc0;
+		WRITE_APB_REG((APB_BASE+(0x18<<2)), reg_val);			// mute headphone
+	}else{
+		reg_val &= ~0xc0;
+		WRITE_APB_REG((APB_BASE+(0x18<<2)), reg_val);			// unmute headphone
+	}
+}
 
 static struct aml_m3_platform_data aml_m3_pdata = {
     .is_hp_pluged = &aml_m3_is_hp_pluged,
@@ -1793,6 +1809,22 @@ struct bt_dev_data bt_dev = {
 };
 #endif
 
+static struct resource freescale_resources[] = {
+    [0] = {
+        .start = FREESCALE_ADDR_START,
+        .end   = FREESCALE_ADDR_END,
+        .flags = IORESOURCE_MEM,
+    },
+};
+
+static struct platform_device freescale_device =
+{
+    .name           = "freescale",
+    .id             = 0,
+    .num_resources  = ARRAY_SIZE(freescale_resources),
+    .resource       = freescale_resources,
+};
+
 static struct platform_device __initdata *platform_devs[] = {
 #if defined(CONFIG_FB_AM)
     &fb_device,
@@ -1884,6 +1916,9 @@ static struct platform_device __initdata *platform_devs[] = {
 #if defined(CONFIG_USB_PHY_CONTROL)
     &usb_phy_control_device,
 #endif
+#ifdef CONFIG_FREE_SCALE
+	&freescale_device,
+#endif 
 };
 
 static struct i2c_board_info __initdata aml_i2c_bus_info[] = {

@@ -36,6 +36,7 @@
 #define VFRAME_EVENT_PROVIDER_RESET             6
 #define VFRAME_EVENT_PROVIDER_FORCE_BLACKOUT		7
 #define VFRAME_EVENT_PROVIDER_REG               8
+#define VFRAME_EVENT_PROVIDER_LIGHT_UNREG_RETURN_VFRAME   9
 
 typedef enum {
   RECEIVER_STATE_NULL = -1,
@@ -68,7 +69,6 @@ struct vframe_receiver_s * vf_get_receiver(const char *provider_name);
 
 int vf_notify_receiver(const char* provider_name, int event_type, void* data);
 
-void receiver_list(void);
 
 #endif /* VFRAME_RECEIVER_H */
 

@@ -69,6 +69,10 @@ u8 rtw_set_802_11_remove_key(_adapter * padapter, NDIS_802_11_REMOVE_KEY * key);
 
 u8 rtw_validate_ssid(NDIS_802_11_SSID *ssid);
 
+u16 rtw_get_network_max_rate(_adapter *adapter, WLAN_BSSID_EX *bss);
+int rtw_set_scan_mode(_adapter *adapter, RT_SCAN_TYPE scan_mode);
+int rtw_set_channel_plan(_adapter *adapter, u8 channel_plan);
+int rtw_set_country(_adapter *adapter, const char *country_code);
 
 #endif
 

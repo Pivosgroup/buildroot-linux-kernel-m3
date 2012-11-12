@@ -323,7 +323,9 @@ struct pkt_attrib
 	u8	triggered;//for ap mode handling Power Saving sta
 	u8	qsel;
 	u8	eosp;
-
+	u8	rate;
+	u8	intel_proxim;
+	u8 	retry_ctrl;
 	struct sta_info * psta;
 #ifdef CONFIG_TCP_CSUM_OFFLOAD_TX
 	u8	hw_tcp_csum;
@@ -624,8 +626,8 @@ extern s32 rtw_xmit_classifier(_adapter *padapter, struct xmit_frame *pxmitframe
 extern thread_return rtw_xmit_thread(thread_context context);
 extern s32 rtw_xmitframe_coalesce(_adapter *padapter, _pkt *pkt, struct xmit_frame *pxmitframe);
 #ifdef CONFIG_TDLS
-extern void fill_tdls_dis_rsp_frbody(_adapter * padapter, struct xmit_frame * pxmitframe, u8 *pframe);
-extern s32 xmit_tdls_coalesce(_adapter *padapter, struct xmit_frame *pxmitframe, u8 action);
+extern void rtw_tdls_dis_rsp_fr(_adapter * padapter, struct xmit_frame * pxmitframe, u8 *pframe, u8 dialog);
+extern s32 rtw_xmit_tdls_coalesce(_adapter *padapter, struct xmit_frame *pxmitframe, u8 action);
 void rtw_dump_xframe(_adapter *padapter, struct xmit_frame *pxmitframe);
 #endif
 #ifdef CONFIG_IOL
@@ -652,11 +654,12 @@ s32 rtw_free_xmitframe_ex(struct xmit_priv *pxmitpriv, struct xmit_frame *pxmitf
 s32 rtw_xmit(_adapter *padapter, _pkt **pkt);
 
 #ifdef CONFIG_TDLS
-sint xmit_tdls_enqueue_for_sleeping_sta(_adapter *padapter, struct xmit_frame *pxmitframe);
+sint xmitframe_enqueue_for_tdls_sleeping_sta(_adapter *padapter, struct xmit_frame *pxmitframe);
 #endif
 
 #ifdef CONFIG_AP_MODE
 sint xmitframe_enqueue_for_sleeping_sta(_adapter *padapter, struct xmit_frame *pxmitframe);
+void stop_sta_xmit(_adapter *padapter, struct sta_info *psta);
 void wakeup_sta_to_xmit(_adapter *padapter, struct sta_info *psta);
 void xmit_delivery_enabled_frames(_adapter *padapter, struct sta_info *psta);
 #endif

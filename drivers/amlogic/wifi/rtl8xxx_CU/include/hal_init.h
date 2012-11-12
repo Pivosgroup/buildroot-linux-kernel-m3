@@ -88,6 +88,10 @@ typedef enum _HW_VARIABLES{
 	HW_VAR_H2C_FW_JOINBSSRPT,
 	HW_VAR_FWLPS_RF_ON,
 	HW_VAR_H2C_FW_P2P_PS_OFFLOAD,
+	HW_VAR_TDLS_WRCR,
+	HW_VAR_TDLS_INIT_CH_SEN,
+	HW_VAR_TDLS_RS_RCR,
+	HW_VAR_TDLS_DONE_CH_SEN,
 	HW_VAR_INITIAL_GAIN,
 	HW_VAR_TRIGGER_GPIO_0,
 	HW_VAR_BT_SET_COEXIST,
@@ -98,8 +102,9 @@ typedef enum _HW_VARIABLES{
 	HW_VAR_SWITCH_EPHY_WoWLAN,
 	HW_VAR_EFUSE_BYTES,
 	HW_VAR_FIFO_CLEARN_UP,
-	HW_VAR_CHECK_TXBUF,
-	HW_VAR_APFM_ON_MAC, //Auto FSM to Turn On, include clock, isolation, power control for MAC only
+	HW_VAR_CHECK_TXBUF,	
+	HW_VAR_APFM_ON_MAC, //Auto FSM to Turn On, include clock, isolation, power control for MAC only	HW_VAR_WOWLAN,}HW_VARIABLES;
+	HW_VAR_WOWLAN,
 }HW_VARIABLES;
 
 typedef enum _HAL_DEF_VARIABLE{
@@ -164,7 +169,7 @@ struct hal_ops {
 	void	(*UpdateRAMaskHandler)(PADAPTER Adapter, u32 mac_id);
 	void	(*SetBeaconRelatedRegistersHandler)(PADAPTER Adapter);
 
-	void	(*Add_RateATid)(PADAPTER Adapter, u32 bitmap, u8 arg);
+	void	(*Add_RateATid)(PADAPTER Adapter, u32 bitmap, u8 arg, u8 mac_id);
 
 #ifdef CONFIG_ANTENNA_DIVERSITY
 	u8	(*SwAntDivBeforeLinkHandler)(PADAPTER Adapter);
@@ -260,7 +265,24 @@ typedef enum _HARDWARE_TYPE{
 typedef struct eeprom_priv EEPROM_EFUSE_PRIV, *PEEPROM_EFUSE_PRIV;
 #define GET_EEPROM_EFUSE_PRIV(priv)	(&priv->eeprompriv)
 
+typedef enum _wowlan_subcode{
+	WOWLAN_PATTERN_MATCH = 1,
+	WOWLAN_MAGIC_PACKET  = 2,
+	WOWLAN_UNICAST       = 3,
+	WOWLAN_SET_PATTERN   = 4,
+	WOWLAN_DUMP_REG      = 5,
+	WOWLAN_ENABLE        = 6,
+	WOWLAN_DISABLE       = 7,
+	WOWLAN_STATUS		= 8
+}wowlan_subcode;
 
+struct wowlan_ioctl_param{
+	unsigned int subcode;
+	unsigned int subcode_value;
+	unsigned int wakeup_reason;
+	unsigned int len;
+	unsigned char pattern[0];
+};
 void	rtw_dm_init(_adapter *padapter);
 void	rtw_sw_led_init(_adapter *padapter);
 void	rtw_sw_led_deinit(_adapter *padapter);

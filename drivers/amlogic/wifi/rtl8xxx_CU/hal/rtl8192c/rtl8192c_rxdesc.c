@@ -383,7 +383,7 @@ void rtl8192c_query_rx_phy_status(union recv_frame *prframe, struct phy_stat *pp
 				//continue;
 
 			rx_pwr[i] =  ((pOfdm_buf->trsw_gain_X[i]&0x3F)*2) - 110;
-			padapter->recvpriv.RxRssi[i] = rx_pwr[i];
+			pattrib->rx_rssi[i]=query_rx_pwr_percentage(rx_pwr[i]);
 			/* Translate DBM to percentage. */
 			rssi=query_rx_pwr_percentage(rx_pwr[i]);
 			total_rssi += rssi;
@@ -395,7 +395,7 @@ void rtl8192c_query_rx_phy_status(union recv_frame *prframe, struct phy_stat *pp
 			rx_snrX = (s8)(tmp_rxsnr);
 			rx_snrX >>= 1;
 			padapter->recvpriv.RxSNRdB[i] =  (int)rx_snrX;
-
+			pattrib->rx_snr[i]=pOfdm_buf->rxsnr_X[i];
 			/* Record Signal Strength for next packet */
 			//if(bPacketMatchBSSID)
 			{
@@ -763,3 +763,5 @@ void rtl8192c_process_phy_info(_adapter *padapter, void *prframe)
 	process_link_qual(padapter,  precvframe);
 
 }
+
+

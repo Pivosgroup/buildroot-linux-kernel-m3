@@ -17,7 +17,7 @@
 #define fifo_empty()					get_bits(SAR_ADC_REG0, 26, 1)
 #define get_fifo_cnt()				get_bits(SAR_ADC_REG0, 21, 5)
 #define get_cur_chan_id()			get_bits(SAR_ADC_REG0, 16, 3)
-
+#define temp_sens_sel(sel)		set_bits(SAR_ADC_REG0, sel, 15, 1)
 #define stop_sample()				set_bits(SAR_ADC_REG0, 1, 14, 1)
 
 #define enable_chan1_delta()			set_bits(SAR_ADC_REG0, 1, 13, 1)

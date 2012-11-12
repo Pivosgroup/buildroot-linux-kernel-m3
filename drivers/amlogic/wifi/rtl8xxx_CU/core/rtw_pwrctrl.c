@@ -35,6 +35,7 @@ void ips_enter(_adapter * padapter)
 	struct pwrctrl_priv *pwrpriv = &padapter->pwrctrlpriv;
 	struct mlme_priv *pmlmepriv = &(padapter->mlmepriv);
 	
+
 	_enter_pwrlock(&pwrpriv->lock);
 
 	pwrpriv->bips_processing = _TRUE;	
@@ -194,7 +195,7 @@ void rtw_ps_processor(_adapter*padapter)
 			(check_fwstate(pmlmepriv, WIFI_ADHOC_STATE) == _TRUE) ||
 			(padapter->bup == _FALSE)	
 			#ifdef CONFIG_P2P
-			|| (pwdinfo->p2p_state != P2P_STATE_NONE)
+			|| !rtw_p2p_chk_state(pwdinfo, P2P_STATE_NONE)
 			#endif //CONFIG_P2P
 		)
 		{
@@ -260,7 +261,7 @@ void pwr_state_check_handler(void *FunctionContext)
 			(check_fwstate(pmlmepriv, _FW_LINKED|_FW_UNDER_SURVEY|_FW_UNDER_LINKING) == _TRUE)  ||
 			(padapter->bup == _FALSE)		
 #ifdef CONFIG_P2P
-			|| (pwdinfo->p2p_state != P2P_STATE_NONE)
+			|| !rtw_p2p_chk_state(pwdinfo, P2P_STATE_NONE)
 #endif //CONFIG_P2P
 			)
 		{	
@@ -378,7 +379,7 @@ _func_enter_;
 		if(pwdinfo->opp_ps == 0)
 #endif //CONFIG_P2P
 		{
-			//DBG_8192C("rtw_set_ps_mode(): Busy Traffic , Leave 802.11 power save..\n");
+			DBG_8192C("rtw_set_ps_mode(): Busy Traffic , Leave 802.11 power save..\n");
 			pwrpriv->smart_ps = smart_ps;
 			pwrpriv->pwr_mode = ps_mode;
 			rtw_set_rpwm(padapter, PS_STATE_S4);
@@ -390,7 +391,7 @@ _func_enter_;
 	{
 		if(PS_RDY_CHECK(padapter))
 		{
-			//DBG_8192C("rtw_set_ps_mode(): Enter 802.11 power save mode...\n");
+			DBG_8192C("rtw_set_ps_mode(): Enter 802.11 power save mode...\n");
 			pwrpriv->smart_ps = smart_ps;
 			pwrpriv->pwr_mode = ps_mode;
 			pwrpriv->bFwCurrentInPSMode = _TRUE;
@@ -424,8 +425,8 @@ void LPS_Enter(PADAPTER padapter)
 
 _func_enter_;
 
-	//DBG_8192C("LeisurePSEnter()...\n");
-	
+//	DBG_871X("+LeisurePSEnter\n");
+
 	if (	(check_fwstate(pmlmepriv, _FW_LINKED) == _FALSE) ||
 		(check_fwstate(pmlmepriv, _FW_UNDER_SURVEY) == _TRUE) ||
 		(check_fwstate(pmlmepriv, WIFI_AP_STATE) == _TRUE) ||
@@ -1055,6 +1056,8 @@ void rtw_unregister_early_suspend(struct pwrctrl_priv *pwrpriv)
 {
 	DBG_871X("%s\n", __FUNCTION__);
 
+	pwrpriv->do_late_resume = _FALSE;
+
 	if (pwrpriv->early_suspend.suspend) 
 		unregister_early_suspend(&pwrpriv->early_suspend);
 
@@ -1106,6 +1109,8 @@ void rtw_unregister_early_suspend(struct pwrctrl_priv *pwrpriv)
 {
 	DBG_871X("%s\n", __FUNCTION__);
 
+	pwrpriv->do_late_resume = _FALSE;
+
 	if (pwrpriv->early_suspend.suspend) 
 		android_unregister_early_suspend(&pwrpriv->early_suspend);
 
@@ -1123,4 +1128,100 @@ u8 rtw_interface_ps_func(_adapter *padapter,HAL_INTF_PS_FUNC efunc_id,u8* val)
 	}
 	return bResult;
 }
+
+/*
+* rtw_pwr_wakeup - Wake the NIC up from: 1)IPS. 2)USB autosuspend
+* @adapter: pointer to _adapter structure
+* 
+* Return _SUCCESS or _FAIL
+*/
+int _rtw_pwr_wakeup(_adapter *padapter, const char *caller)
+{
+	struct pwrctrl_priv *pwrpriv = &padapter->pwrctrlpriv;
+	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;	
+	int ret = _SUCCESS;
+
+	//System suspend is not allowed to wakeup
+	if((pwrpriv->bInternalAutoSuspend == _FALSE) && (_TRUE == pwrpriv->bInSuspend )){
+		ret = _FAIL;
+		goto exit;
+	}
+
+	//I think this should be check in IPS, LPS, autosuspend functions...
+	//if( pwrpriv->power_mgnt == PS_MODE_ACTIVE ) {
+	//	goto exit;
+	//}
+
+	//block???
+	if((pwrpriv->bInternalAutoSuspend == _TRUE)  && (padapter->net_closed == _TRUE)) {
+		ret = _FAIL;
+		goto exit;
+	}
+
+	//I think this should be check in IPS, LPS, autosuspend functions...
+	if (check_fwstate(pmlmepriv, _FW_LINKED) == _TRUE)
+	{
+		ret = _SUCCESS;
+		goto exit;
+	}
+		
+	if(rf_off == pwrpriv->rf_pwrstate )
+	{		
+#ifdef CONFIG_USB_HCI
+#ifdef CONFIG_AUTOSUSPEND
+		 if(pwrpriv->brfoffbyhw==_TRUE)
+		{
+			DBG_8192C("hw still in rf_off state ...........\n");
+			ret = _FAIL;
+			goto exit;
+		}
+		else if(padapter->registrypriv.usbss_enable)
+		{
+			DBG_8192C("\n %s call autoresume_enter....\n",__FUNCTION__);	
+			if(_FAIL ==  autoresume_enter(padapter))
+			{
+				DBG_8192C("======> autoresume fail.............\n");
+				ret = _FAIL;
+				goto exit;
+			}	
+		}
+		else
+#endif
+#endif
+		{
+#ifdef CONFIG_IPS
+			DBG_8192C("\n %s call ips_leave....\n",__FUNCTION__);				
+			if(_FAIL ==  ips_leave(padapter))
+			{
+				DBG_8192C("======> ips_leave fail.............\n");
+				ret = _FAIL;
+				goto exit;
+			}
+#endif
+		}
+	}else {
+		//Jeff: reset timer to avoid falling ips or selective suspend soon
+		if(pwrpriv->bips_processing == _FALSE)
+			rtw_set_pwr_state_check_timer(pwrpriv);
+	}
+
+	//TODO: the following checking need to be merged...
+	if(padapter->bDriverStopped
+		|| !padapter->bup
+		|| !padapter->hw_init_completed
+	){
+		DBG_8192C("%s: bDriverStopped=%d, bup=%d, hw_init_completed=%u\n"
+			, caller
+		   	, padapter->bDriverStopped
+		   	, padapter->bup
+		   	, padapter->hw_init_completed);
+		ret= _FALSE;
+		goto exit;
+	}
+
+exit:
+	return ret;
+
+}
+
 

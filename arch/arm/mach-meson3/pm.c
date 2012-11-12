@@ -690,19 +690,19 @@ static void meson_system_early_suspend(struct early_suspend *h)
         if (pdata->set_exgpio_early_suspend) {
             pdata->set_exgpio_early_suspend(OFF);
         }
-        early_power_gate_switch(OFF);
         early_clk_switch(OFF);
         early_pll_switch(OFF);
-        early_suspend_flag = 1;
+         early_power_gate_switch(OFF);
+       early_suspend_flag = 1;
     }
 }
 
 static void meson_system_late_resume(struct early_suspend *h)
 {
     if (early_suspend_flag) {
+        early_power_gate_switch(ON);
         early_pll_switch(ON);
         early_clk_switch(ON);
-        early_power_gate_switch(ON);
         early_suspend_flag = 0;
         if (pdata->set_exgpio_early_suspend) {
             pdata->set_exgpio_early_suspend(ON);

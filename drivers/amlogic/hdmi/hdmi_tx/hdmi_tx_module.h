@@ -92,6 +92,7 @@ typedef struct hdmi_tx_dev_s {
 #define HDMI_PACKET_AVI         3
 #define HDMI_AUDIO_INFO         4
 #define HDMI_AUDIO_CONTENT_PROTECTION   5
+#define HDMI_PACKET_HBR         6
 
 #ifdef AVOS
 #define HDMI_PROCESS_DELAY  AVTimeDly(500)
@@ -102,7 +103,7 @@ typedef struct hdmi_tx_dev_s {
 #endif        
 
 
-#define HDMITX_VER "2012Apr17b"
+#define HDMITX_VER "2012Jun15a"
 
 /************************************
 *    hdmitx protocol level interface

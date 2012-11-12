@@ -79,6 +79,11 @@ dsp_register.h
 #define DSP_DECODE_51PCM_OUT_RD_ADDR  	    DSP_REG(108)
 #define DSP_DECODE_51PCM_OUT_WD_ADDR  		DSP_REG(109)
 //------------------------------------------------
+/*
+as iec958 ouput maybe be enabled before the spdif module inititation finish in the spdif driver,
+in this case,it will cause 958 module not work.so add a protocal register to co-work for that
+*/
+#define DSP_IEC958_INIT_READY_INFO  		DSP_REG(110) 
 
 #define DSP_WORK_INFO (AUDIO_DSP_END_ADDR - 128)
 

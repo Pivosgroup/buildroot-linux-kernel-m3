@@ -89,7 +89,10 @@ MODULE_AMLOG(LOG_LEVEL_ERROR, 0, LOG_LEVEL_DESC, LOG_DEFAULT_MASK_DESC);
 #define STAT_TIMER_ARM      0x10
 #define STAT_VDEC_RUN       0x20
 
-#define DEC_CONTROL_FLAG_FORCE_2500_576P_INTERLACE  0x0002
+#define DEC_CONTROL_FLAG_FORCE_2500_720_576_INTERLACE  0x0002
+#define DEC_CONTROL_FLAG_FORCE_3000_704_480_INTERLACE  0x0004
+#define DEC_CONTROL_FLAG_FORCE_2500_704_576_INTERLACE  0x0008
+#define DEC_CONTROL_FLAG_FORCE_2500_544_576_INTERLACE  0x0010
 
 static vframe_t *vmpeg_vf_peek(void*);
 static vframe_t *vmpeg_vf_get(void*);
@@ -137,7 +140,7 @@ static spinlock_t lock = SPIN_LOCK_UNLOCKED;
 
 /* for error handling */
 static s32 frame_force_skip_flag = 0;
-static s32 error_frame_skip_level = 2;
+static s32 error_frame_skip_level = 0;
 
 static inline u32 index2canvas(u32 index)
 {
@@ -234,12 +237,31 @@ static irqreturn_t vmpeg12_isr(int irq, void *dev_id)
             frame_prog = info & PICINFO_PROG;
         }
 
-        if ((dec_control & DEC_CONTROL_FLAG_FORCE_2500_576P_INTERLACE) &&
+        if ((dec_control & DEC_CONTROL_FLAG_FORCE_2500_720_576_INTERLACE) &&
             (frame_width == 720) &&
             (frame_height == 576) &&
             (frame_dur == 3840)) {
             frame_prog = 0;
         }
+        else if ((dec_control & DEC_CONTROL_FLAG_FORCE_3000_704_480_INTERLACE) &&
+            (frame_width == 704) &&
+            (frame_height == 480) &&
+            (frame_dur == 3200)) {
+            frame_prog = 0;
+        }
+        else if ((dec_control & DEC_CONTROL_FLAG_FORCE_2500_704_576_INTERLACE) &&
+            (frame_width == 704) &&
+            (frame_height == 576) &&
+            (frame_dur == 3840)) {
+            frame_prog = 0;
+        }
+        else if ((dec_control & DEC_CONTROL_FLAG_FORCE_2500_544_576_INTERLACE) &&
+            (frame_width == 544) &&
+            (frame_height == 576) &&
+            (frame_dur == 3840)) {
+            frame_prog = 0;
+        }
+
 
         if (frame_prog & PICINFO_PROG) {
             u32 index = ((reg & 7) - 1) & 3;

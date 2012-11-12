@@ -22,7 +22,7 @@ static struct saradc *gp_saradc;
 #define CHAN_XN	CHAN_2
 #define CHAN_YN	CHAN_3
 
-#define INTERNAL_CAL_NUM	6
+#define INTERNAL_CAL_NUM	5
 
 static u8 chan_mux[SARADC_CHAN_NUM] = {0,1,2,3,4,5,6,7};
 
@@ -90,7 +90,7 @@ static int  saradc_internal_cal(struct calibration *cal)
 		set_cal_voltage(voltage[i]);
 		msleep(100);
 		cal[i].ref = ref[i];
-		cal[i].val = get_adc_sample(CHAN_CAL);
+		cal[i].val = get_adc_sample(CHAN_7);
 		printk(KERN_INFO "cal[%d]=%d\n", i, cal[i].val);
 		if (cal[i].val < 0) {
 			return -1;
@@ -175,7 +175,7 @@ int get_adc_sample(int chan)
 	value = (count) ? (sum / count) : (-1);
 
 end:
-	changed = (value == last_value[chan]) ? 0 : 1;
+	changed = (abs(value-last_value[chan])<3) ? 0 : 1;
 	if (changed && ((print_flag>>chan)&1)) {
 		printk("before cal: ch%d = %d\n", chan, value);
 		last_value[chan] = value;
@@ -284,8 +284,24 @@ static ssize_t saradc_ch7_show(struct class *cla, struct class_attribute *attr, 
 }
 static ssize_t saradc_print_flag_store(struct class *cla, struct class_attribute *attr, char *buf, ssize_t count)
 {
-		sscanf(buf, "%x", &print_flag);
+		sscanf(buf, "%x", (int*)&print_flag);
     printk("print_flag=%d\n", print_flag);
+    return count;
+}
+static ssize_t saradc_temperature_store(struct class *cla, struct class_attribute *attr, char *buf, ssize_t count)
+{
+		u8 tempsen;
+		sscanf(buf, "%x", (int*)&tempsen);
+		if (tempsen) {
+    	temp_sens_sel(1);
+    	set_tempsen(2);
+    	printk("enter temperature mode, please get the value from chan6\n");
+		}
+		else {
+     	temp_sens_sel(0);
+   		set_tempsen(0);
+    	printk("exit temperature mode\n");
+  	}
     return count;
 }
 
@@ -298,7 +314,8 @@ static struct class_attribute saradc_class_attrs[] = {
     __ATTR_RO(saradc_ch5),
     __ATTR_RO(saradc_ch6),
     __ATTR_RO(saradc_ch7),    
-    __ATTR(saradc_print_flag, S_IRUGO | S_IWUSR|S_IWGRP, 0, saradc_print_flag_store),
+    __ATTR(saradc_print_flag, S_IRUGO | S_IWUSR, 0, saradc_print_flag_store),
+    __ATTR(saradc_temperature, S_IRUGO | S_IWUSR, 0, saradc_temperature_store),    
     __ATTR_NULL
 };
 static struct class saradc_class = {

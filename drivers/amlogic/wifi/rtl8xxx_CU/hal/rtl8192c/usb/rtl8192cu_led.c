@@ -59,53 +59,6 @@ BlinkWorkItemCallback(
 	struct work_struct *work
 	);
 
-//================================================================================
-// LED_819xUsb routines. 
-//================================================================================
-
-//
-//	Description:
-//		Initialize an LED_871x object.
-//
-static void
-InitLed871x(
-	_adapter			*padapter,
-	PLED_871x		pLed,
-	LED_PIN_871x	LedPin
-	)
-{
-	pLed->padapter = padapter;
-
-	pLed->LedPin = LedPin;
-
-	pLed->CurrLedState = LED_OFF;
-	pLed->bLedOn = _FALSE;
-
-	pLed->bLedBlinkInProgress = _FALSE;
-	pLed->BlinkTimes = 0;
-	pLed->BlinkingLedState = LED_UNKNOWN;
-
-	_init_timer(&(pLed->BlinkTimer), padapter->pnetdev, BlinkTimerCallback, pLed);
-
-	_init_workitem(&(pLed->BlinkWorkItem), BlinkWorkItemCallback, pLed);
-}
-
-
-//
-//	Description:
-//		DeInitialize an LED_871x object.
-//
-static void
-DeInitLed871x(
-	PLED_871x			pLed
-	)
-{
-	_cancel_timer_ex(&(pLed->BlinkTimer));
-
-	// We should reset bLedBlinkInProgress if we cancel the LedControlTimer, 2005.03.10, by rcnjko.
-	pLed->bLedBlinkInProgress = _FALSE;
-}
-
 //
 //	Description:
 //		Reset blinking status of LED_871x object.
@@ -122,7 +75,45 @@ ResetLedStatus(PLED_871x	pLed) {
 	pLed->bLedScanBlinkInProgress = _FALSE;
 	pLed->bLedWPSBlinkInProgress = _FALSE;
 	pLed->BlinkTimes = 0; // Number of times to toggle led state for blinking.
-	pLed->BlinkingLedState = LED_OFF; // Next state for blinking, either LED_ON or LED_OFF are.
+	pLed->BlinkingLedState = LED_UNKNOWN; // Next state for blinking, either LED_ON or LED_OFF are.
+}
+
+//================================================================================
+// LED_819xUsb routines. 
+//================================================================================
+
+//
+//	Description:
+//		Initialize an LED_871x object.
+//
+static void
+InitLed871x(
+	_adapter			*padapter,
+	PLED_871x		pLed,
+	LED_PIN_871x	LedPin
+	)
+{
+	pLed->padapter = padapter;
+	pLed->LedPin = LedPin;
+
+	ResetLedStatus(pLed);
+
+	_init_timer(&(pLed->BlinkTimer), padapter->pnetdev, BlinkTimerCallback, pLed);
+	_init_workitem(&(pLed->BlinkWorkItem), BlinkWorkItemCallback, pLed);
+}
+
+
+//
+//	Description:
+//		DeInitialize an LED_871x object.
+//
+static void
+DeInitLed871x(
+	PLED_871x			pLed
+	)
+{
+	_cancel_timer_ex(&(pLed->BlinkTimer));
+	ResetLedStatus(pLed);
 }
 
 //

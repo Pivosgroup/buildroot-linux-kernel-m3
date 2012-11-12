@@ -46,8 +46,12 @@ typedef struct {
 #define DISPLAY2_CANVAS_BASE_INDEX   0x66
 #define DISPLAY2_CANVAS_MAX_INDEX    0x6b 
 
-#define DEINTERLACE_CANVAS_BASE_INDEX	0x78
-#define DEINTERLACE_CANVAS_MAX_INDEX	0x7f
+    /* DEINTERLACE_CANVAS_MAX_INDEX is 0x77 because the canvas start from 0x78 are used by h264 */
+#define DEINTERLACE_CANVAS_BASE_INDEX	0x70
+#define DEINTERLACE_CANVAS_MAX_INDEX	0x77
+
+#define FREESCALE_CANVAS_INDEX 0x50   //for osd&video scale use
+#define MAX_FREESCALE_CANVAS_INDEX 0x5f
 
 extern void canvas_config(u32 index, ulong addr, u32 width,
                           u32 height, u32 wrap, u32 blkmode);

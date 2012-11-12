@@ -35,9 +35,42 @@
 #include <linux/ft5x06_ts.h>
 static int ft5x0x_write_reg(u8 addr, u8 para);
 static int ft5x0x_read_reg(u8 addr, u8 *pdata);
+unsigned char fts_ctpm_get_upg_ver(void);
+static unsigned char ft5x0x_read_fw_info(const char cmd);
 static struct i2c_client *this_client;
 static struct ts_platform_data *focaltechPdata2;
 static int ft5x0x_printk_enable_flag=0;
+
+typedef enum
+{
+    ERR_OK,
+    ERR_MODE,
+    ERR_READID,
+    ERR_ERASE,
+    ERR_STATUS,
+    ERR_ECC,
+    ERR_DL_ERASE_FAIL,
+    ERR_DL_PROGRAM_FAIL,
+    ERR_DL_VERIFY_FAIL,
+    ERR_REV_FILE_FAIL,
+    ERR_IN_UPGRADE,
+    ERR_INIT_STATE
+}E_UPGRADE_ERR_TYPE;
+
+static char upgrade_result = ERR_INIT_STATE;
+typedef unsigned char         FTS_BYTE;     //8 bit
+typedef unsigned short        FTS_WORD;    //16 bit
+typedef unsigned int          FTS_DWRD;    //16 bit
+typedef unsigned char         FTS_BOOL;    //8 bit
+
+#define FTS_NULL                0x0
+#define FTS_TRUE                0x01
+#define FTS_FALSE              0x0
+
+#define I2C_CTPM_ADDRESS       0x70
+
+E_UPGRADE_ERR_TYPE  fts_ctpm_fw_upgrade(FTS_BYTE* pbt_buf, FTS_DWRD dw_lenth);
+
 
 #define FT5X0X_EVENT_MAX	5
 //#define CONFIG_TOUCH_PANEL_KEY
@@ -85,13 +118,14 @@ struct ft5x0x_ts_data {
 					printk("[ft5x0x]: " fmt, ## args); }
 
 //#define AC_DETECT_IN_TOUCH_DRIVER
+#ifdef AC_DETECT_IN_TOUCH_DRIVER
 static int ac_detect_flag_current=0;
 static int ac_detect_flag_old=3;
-#ifdef AC_DETECT_IN_TOUCH_DRIVER
 static void Ac_Detect_In_Touch_Driver(void)
 {
 	unsigned char ver;
 	int ac_detect_flag_temp=0;
+	if (!focaltechPdata2->Ac_is_connect) return;
 	ac_detect_flag_temp=focaltechPdata2->Ac_is_connect();
 	ac_detect_flag_current=ac_detect_flag_temp;
 	if(ac_detect_flag_current!=ac_detect_flag_old)
@@ -111,21 +145,55 @@ static void Ac_Detect_In_Touch_Driver(void)
 #endif
 static ssize_t ft5x0x_read(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    struct capts *ts = (struct capts *)dev_get_drvdata(dev);
-
+	  char *pre_buf = buf; int i = 0;
     if (!strcmp(attr->attr.name, "ft5x0xPrintFlag")) {
         memcpy(buf, &ft5x0x_printk_enable_flag,sizeof(ft5x0x_printk_enable_flag));
         printk("buf[0]=%d, buf[1]=%d\n", buf[0], buf[1]);
         return sizeof(ft5x0x_printk_enable_flag);
     }
+    else if (!strcmp(attr->attr.name, "effect")) {    	 
+         *buf++ = ft5x0x_read_fw_info(FT5X0X_REG_THGROUP);
+         *buf++ = ft5x0x_read_fw_info(FT5X0X_REG_THPEAK);
+         *buf++ = ft5x0x_read_fw_info(FT5X0X_REG_TIMEENTERMONITOR);
+         *buf++ = ft5x0x_read_fw_info(FT5X0X_REG_PERIODACTIVE);
+         *buf++ = ft5x0x_read_fw_info(FT5X0X_REG_PERIODMONITOR);
+         *buf++ = ft5x0x_read_fw_info(FT5X0X_REG_AUTO_CLB_MODE);
+         *buf++ = ft5x0x_read_fw_info(FT5X0X_REG_PMODE);
+         *buf++ = ft5x0x_read_fw_info(FT5X0X_REG_FIRMID);
+         *buf++ = ft5x0x_read_fw_info(FT5X0X_REG_ERR);
+         *buf = ft5x0x_read_fw_info(FT5X0X_REG_CLB);
+         for (i=0; i<buf-pre_buf+1; i++) {
+           printk("pre_buf[%d] = 0x%x\n", i, pre_buf[i]);
+         }                     
+         return buf-pre_buf+1; 
+    }
+    else if (!strcmp(attr->attr.name, "upgrade")) {
+         *buf = upgrade_result+'0';
+         printk("upgrade_result = %d.\n", upgrade_result); 
+         return buf-pre_buf+1;
+    }
     return 0;
+}
+
+static FTS_BYTE char_to_hex(const char prec, const char nextc)
+{
+	FTS_BYTE sum = 0;
+	if ((prec>='0') && (prec<='9')) sum = prec - '0';
+	else if ((prec>='a') && (prec<='f')) sum = prec - 'a' + 10;
+	 
+	if ((nextc>='0') && (nextc<='9')) sum = sum*16 + nextc - '0';
+	else if ((nextc>='a') && (nextc<='f')) sum = sum*16 + nextc - 'a' + 10; 
+	      	    	
+  return sum;
 }
 
 static ssize_t ft5x0x_write(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
-	int ret = 0;
-	struct capts *ts = (struct capts *)dev_get_drvdata(dev);
-
+	int ret = 0, i = 0, send_len = 0;
+	static size_t length;	
+	E_UPGRADE_ERR_TYPE err = ERR_REV_FILE_FAIL;
+	static FTS_BYTE  *to_buf = NULL, *pre_to_buf = NULL, *free_to_buf = NULL;
+	
 	if (!strcmp(attr->attr.name, "ft5x0xPrintFlag")) {
 		printk("buf[0]=%d, buf[1]=%d\n", buf[0], buf[1]);
 		if (buf[0] == '0') ft5x0x_printk_enable_flag = 0;
@@ -148,12 +216,90 @@ static ssize_t ft5x0x_write(struct device *dev, struct device_attribute *attr, c
 			printk("read back: reg[0xa5] = %d\n", data);
     }
   }
-	return count;
+	else if (!strcmp(attr->attr.name, "effect")) {    
+       printk("buf[0]=%d, buf[1]=%d\n", buf[0], buf[1]);
+  }
+  else if (!strcmp(attr->attr.name, "upgrade")) {
+	     if (length == 0) {        
+	       if (free_to_buf == NULL) free_to_buf = (FTS_BYTE *)kmalloc((128*1024-20)*sizeof(FTS_BYTE), GFP_KERNEL);
+         printk("start free_to_buf = 0x%x.\n", free_to_buf); 
+         if (free_to_buf == NULL) {
+           printk("Insufficient memory in upgrade!\n");
+           length = 0;
+           upgrade_result = ERR_REV_FILE_FAIL;
+           return -ERR_REV_FILE_FAIL;
+         }         
+         pre_to_buf = free_to_buf;  
+         to_buf = pre_to_buf;
+         upgrade_result = ERR_IN_UPGRADE;  
+	     }
+	     memcpy(to_buf, buf, count);
+	     
+	     to_buf += count;
+	     length += count;
+	    
+	   //  printk("upgrade data count = %d.\n", count); 
+       //  printk("upgrade data length = %d.\n", length);  
+	    
+	     if (length > (128*1024-25)) {
+	       upgrade_result = ERR_REV_FILE_FAIL;
+	       printk("upgrade_result = %d.\n", ERR_REV_FILE_FAIL);
+	       printk("end free_to_buf = 0x%x.\n", free_to_buf); 
+	       length = 0;
+	       if (free_to_buf != NULL) {
+	         kfree(free_to_buf);
+	         free_to_buf = NULL;
+	       }	       
+	       return ERR_REV_FILE_FAIL;
+	     }     
+      
+	     if ((to_buf != NULL) && (*(to_buf-1)=='d') && (*(to_buf-2)=='n') && (*(to_buf-3)=='e')) {
+	         for (i=0; i<length-3;) {
+              if ((*pre_to_buf=='0') && (*(pre_to_buf+1)=='x')) {     
+      	        if ((*(pre_to_buf+3)==',') && (*(pre_to_buf+4)==' ')) free_to_buf[send_len++] = char_to_hex('0', *(pre_to_buf+2));    
+      	        else free_to_buf[send_len++] = char_to_hex(*(pre_to_buf+2), *(pre_to_buf+3));        
+	    			    pre_to_buf += 5; 
+      	        i += 5;
+	    			  }
+	    			  else {
+	    			    pre_to_buf++;
+	    			  	i++;
+	    			  }	    			  		    				    			     			        	   
+	    	   }
+	    	  
+	    	   for (i=0; i<10; i++) {
+	    	     printk("free_to_buf[%d] = 0x%x.\n", i, free_to_buf[i]); 
+	    	   }	    	  
+	    	   for (i=send_len-1; i>=send_len-10; i--) {
+	    	  	 printk("free_to_buf[%d] = 0x%x.\n", i, free_to_buf[i]); 
+	    	   }
+	    	 
+	    	   for (i=0; i<5; i++) {
+	    	     err = fts_ctpm_fw_upgrade(free_to_buf, send_len);
+	    	     if (err == 0) break;
+	       	 }
+	    	   upgrade_result = err;
+	    	   printk("upgrade status is %d.\n", err); 
+	    	   printk("upgrade data send_len = %d.\n", send_len); 
+	    	   printk("end free_to_buf = 0x%x.\n", free_to_buf); 
+	    	   if (free_to_buf != NULL) {
+	    	     kfree(free_to_buf);
+	    	     free_to_buf = NULL;
+	    	   }
+	    	   length = 0;	    	      
+	     }
+	    // #endif                                
+   } 
+	return count; 
 }
 
 static DEVICE_ATTR(ft5x0xPrintFlag, S_IRWXUGO, ft5x0x_read, ft5x0x_write);
+static DEVICE_ATTR(effect, S_IRUGO|S_IWUGO, ft5x0x_read, ft5x0x_write);
+static DEVICE_ATTR(upgrade, S_IRUGO|S_IWUGO, ft5x0x_read, ft5x0x_write);
 static struct attribute *ft5x0x_attr[] = {
     &dev_attr_ft5x0xPrintFlag.attr,
+    &dev_attr_effect.attr,
+    &dev_attr_upgrade.attr,
     NULL
 };
 
@@ -320,36 +466,12 @@ static unsigned char ft5x0x_read_fw_ver(void)
 	return(ver);
 }
 
-
-//#define CONFIG_FOCALTECH_TOUCHSCREEN_CODE_UPG
-
-
-#ifdef CONFIG_FOCALTECH_TOUCHSCREEN_CODE_UPG
-
-typedef enum
+static unsigned char ft5x0x_read_fw_info(const char cmd)
 {
-    ERR_OK,
-    ERR_MODE,
-    ERR_READID,
-    ERR_ERASE,
-    ERR_STATUS,
-    ERR_ECC,
-    ERR_DL_ERASE_FAIL,
-    ERR_DL_PROGRAM_FAIL,
-    ERR_DL_VERIFY_FAIL
-}E_UPGRADE_ERR_TYPE;
-
-typedef unsigned char         FTS_BYTE;     //8 bit
-typedef unsigned short        FTS_WORD;    //16 bit
-typedef unsigned int          FTS_DWRD;    //16 bit
-typedef unsigned char         FTS_BOOL;    //8 bit
-
-#define FTS_NULL                0x0
-#define FTS_TRUE                0x01
-#define FTS_FALSE              0x0
-
-#define I2C_CTPM_ADDRESS       0x70
-
+	unsigned char ver;
+	ft5x0x_read_reg(cmd, &ver);
+	return(ver);
+}
 
 void delay_qt_ms(unsigned long  w_ms)
 {
@@ -490,17 +612,42 @@ FTS_BOOL byte_read(FTS_BYTE* pbt_buf, FTS_BYTE bt_len)
 
 
 #define    FTS_PACKET_LENGTH        128
-#ifdef CONFIG_MACH_MESON_8726M_REFB04
-static unsigned char CTPM_FW[]=
+
+int fts_ctpm_auto_clb(void)
 {
-#include "ft_app848.ft"
-};
-#else
-static unsigned char CTPM_FW[]=
-{
-#include "ft_app.ft"
-};
-#endif
+    unsigned char uc_temp;
+    unsigned char i ;
+
+    printk("[FTS] start auto CLB.\n");
+    msleep(200);
+    ft5x0x_write_reg(0, 0x40);  
+    delay_qt_ms(100);   //make sure already enter factory mode
+    ft5x0x_write_reg(2, 0x4);  //write command to start calibration
+    delay_qt_ms(300);
+    for(i=0;i<100;i++)
+    {
+        ft5x0x_read_reg(0,&uc_temp);
+        if ( ((uc_temp&0x70)>>4) == 0x0)  //return to normal mode, calibration finish
+        {
+            break;
+        }
+        delay_qt_ms(200);
+        printk("[FTS] waiting calibration %d\n",i);
+        
+    }
+    printk("[FTS] calibration OK.\n");
+    
+    msleep(300);
+    ft5x0x_write_reg(0, 0x40);  //goto factory mode
+    delay_qt_ms(100);   //make sure already enter factory mode
+    ft5x0x_write_reg(2, 0x5);  //store CLB result
+    delay_qt_ms(300);
+    ft5x0x_write_reg(0, 0x0); //return to normal mode 
+    msleep(300);
+    printk("[FTS] store CLB result OK.\n");
+    return 0;
+}
+
 E_UPGRADE_ERR_TYPE  fts_ctpm_fw_upgrade(FTS_BYTE* pbt_buf, FTS_DWRD dw_lenth)
 {
     FTS_BYTE reg_val[2] = {0};
@@ -537,7 +684,7 @@ E_UPGRADE_ERR_TYPE  fts_ctpm_fw_upgrade(FTS_BYTE* pbt_buf, FTS_DWRD dw_lenth)
     }while(i_ret <= 0 && i < 5 );
 
     /*********Step 3:check READ-ID***********************/ 
-	delay_qt_ms(5);
+//	delay_qt_ms(5);
     cmd_write(0x90,0x00,0x00,0x00,4);
     byte_read(reg_val,2);
     if (reg_val[0] == 0x79 && reg_val[1] == 0x3)
@@ -567,10 +714,14 @@ E_UPGRADE_ERR_TYPE  fts_ctpm_fw_upgrade(FTS_BYTE* pbt_buf, FTS_DWRD dw_lenth)
         //i_is_new_protocol = 1;
     }
 
-     /*********Step 4:erase app*******************************/
+    cmd_write(0xcd,0x0,0x00,0x00,1);
+    byte_read(reg_val,1);
+    printk("[FTS] bootloader version = 0x%x\n", reg_val[0]);
     cmd_write(0x61,0x00,0x00,0x00,1);
    
     delay_qt_ms(1500);
+    cmd_write(0x63,0x00,0x00,0x00,1);  //erase panel parameter area
+    delay_qt_ms(100);
     printk("[TSP] Step 4: erase. \n");
 
     /*********Step 5:write firmware(FW) to ctpm flash*********/
@@ -654,27 +805,17 @@ E_UPGRADE_ERR_TYPE  fts_ctpm_fw_upgrade(FTS_BYTE* pbt_buf, FTS_DWRD dw_lenth)
 	
     cmd_write(0x07,0x00,0x00,0x00,1);
 	printk("[TSP] Step 7 \n");
+	delay_qt_ms(300);
+	fts_ctpm_auto_clb();
     return ERR_OK;
 }
 
+#ifdef CONFIG_FOCALTECH_TOUCHSCREEN_CODE_UPG
 
-int fts_ctpm_fw_upgrade_with_i_file(void)
+static unsigned char CTPM_FW[]=
 {
-   FTS_BYTE*     pbt_buf = FTS_NULL;
-   int i_ret;
-    
-    //=========FW upgrade========================*/
-   pbt_buf = CTPM_FW;
-   /*call the upgrade function*/
-   i_ret =  fts_ctpm_fw_upgrade(pbt_buf,sizeof(CTPM_FW));
-   if (i_ret != 0)
-   {
-       //error handling ...
-       //TBD
-   }
-
-   return i_ret;
-}
+#include "ft_app.ft"
+};
 
 unsigned char fts_ctpm_get_upg_ver(void)
 {
@@ -691,10 +832,39 @@ unsigned char fts_ctpm_get_upg_ver(void)
     }
 }
 
+int fts_ctpm_fw_upgrade_with_i_file(void)
+{
+   FTS_BYTE*     pbt_buf = FTS_NULL;
+   int i_ret;
+    unsigned char uc_host_fm_ver;   
+   unsigned char uc_tp_fm_ver;
+    //=========FW upgrade========================*/
+   pbt_buf = CTPM_FW;
+   /*call the upgrade function*/
+   uc_tp_fm_ver = ft5x0x_read_fw_ver();    
+   uc_host_fm_ver = fts_ctpm_get_upg_ver();   
+  if ( uc_tp_fm_ver == 0xa6  ||   //the firmware in touch panel maybe corrupted     
+         uc_tp_fm_ver < uc_host_fm_ver   //the firmware in host flash is new, need upgrade   
+         )
+   	{    printk("[FTS] upgrade start.\n");
+            i_ret =  fts_ctpm_fw_upgrade(pbt_buf,sizeof(CTPM_FW));
+   	}
+   else{
+            printk("[FTS] do not upgrade.\n");
+    }
+   if (i_ret != 0)
+   {
+       //error handling ...
+       //TBD
+   }
+
+   return i_ret;
+}
+
 #endif
 
 
-
+#ifdef CONFIG_TOUCH_PANEL_KEY
 static int is_tp_key(struct tp_key *tp_key, int key_num, int x, int y)
 {
 	int i;
@@ -711,7 +881,6 @@ static int is_tp_key(struct tp_key *tp_key, int key_num, int x, int y)
 	return 0;
 }
 
-#ifdef CONFIG_TOUCH_PANEL_KEY
 static enum hrtimer_restart ft5x0x_timer(struct hrtimer *timer)
 {
 	struct ft5x0x_ts_data *data = container_of(timer, struct ft5x0x_ts_data, timer);
@@ -905,9 +1074,15 @@ static void ft5x0x_ts_pen_irq_work(struct work_struct *work)
 	     	data->touch_state = NO_TOUCH;
     	}
     	else {
-				ft5x0x_dbg("touch screen up(1)\n");
-	      hrtimer_start(&data->timer, ktime_set(0, TOUCH_SCREEN_RELEASE_DELAY), HRTIMER_MODE_REL);
-			}
+				#if 0
+	      hrtimer_start(&data->timer, ktime_set(0, TP_KEY_GUARANTEE_TIME_AFTER_TOUCH), HRTIMER_MODE_REL);//honghaoyu
+				#else
+				input_report_key(data->input_dev, BTN_TOUCH, 0);
+				input_report_abs(data->input_dev, ABS_MT_TOUCH_MAJOR, 0);
+				input_sync(data->input_dev);
+	 			data->touch_state = NO_TOUCH;		
+ 				#endif	
+	     }
 		}
 		else {
 			hrtimer_cancel(&data->timer);
@@ -952,8 +1127,8 @@ function	:
 ***********************************************************************************************/
 static irqreturn_t ft5x0x_ts_interrupt(int irq, void *dev_id)
 {
-//	static int irq_count = 0;
-//	printk("irq count: %d\n", irq_count++);
+	static int irq_count = 0;
+	ft5x0x_dbg("irq count: %d\n", irq_count++);
 	struct ft5x0x_ts_data *ft5x0x_ts = dev_id;
 	disable_irq_nosync(this_client->irq);	
 	if (!work_pending(&ft5x0x_ts->pen_event_work)) {
@@ -978,7 +1153,9 @@ static void ft5x0x_ts_suspend(struct early_suspend *handler)
 //	struct ft5x0x_ts_data *ts;
 //	ts =  container_of(handler, struct ft5x0x_ts_data, early_suspend);
 	printk("==ft5x0x_ts_suspend=\n");
-	if(focaltechPdata2->power) {
+	if(focaltechPdata2->power)
+	  focaltechPdata2->power(0);
+	else {
 		u8 data;
 		ft5x0x_write_reg(0xa5, 0x03);
 		printk("set reg[0xa5] = 0x03\n");
@@ -986,6 +1163,8 @@ static void ft5x0x_ts_suspend(struct early_suspend *handler)
 		ft5x0x_read_reg(0xa5, &data);
 		printk("read back: reg[0xa5] = %d\n", data);
 	}
+	if(focaltechPdata2->enable)
+	  focaltechPdata2->enable(0);
 	if (focaltechPdata2->key_led_ctrl)
 		focaltechPdata2->key_led_ctrl(0);
 }
@@ -1009,6 +1188,8 @@ static void ft5x0x_ts_resume(struct early_suspend *handler)
 		focaltechPdata2->power(1);
 		msleep(200);
 	}
+	if(focaltechPdata2->enable)
+	  focaltechPdata2->enable(1);
 	if (focaltechPdata2->key_led_ctrl)
 		focaltechPdata2->key_led_ctrl(1);
 }
@@ -1040,13 +1221,18 @@ ft5x0x_ts_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		
 	}
 	focaltechPdata2 = client->dev.platform_data;
-	if(pdata->power){
-		pdata->power(0);
-		mdelay(50);
-		pdata->power(1);
-		mdelay(200);
-	}
 
+	if(pdata->enable) {
+	  pdata->enable(1);
+		mdelay(5);
+  }      
+  	if(pdata->power){
+		pdata->power(0);
+		mdelay(5);
+		pdata->power(1);
+		mdelay(300);
+	}
+    
 	printk("==ft5x0x_ts_probe=\n");
 	
 	
@@ -1142,6 +1328,8 @@ printk("==enable Irq success=\n");
 	register_early_suspend(&ft5x0x_ts->early_suspend);
 #endif
 
+    uc_reg_value = ft5x0x_read_fw_ver();
+    printk("[FST] Firmware version = 0x%x\n", uc_reg_value);
 #ifdef CONFIG_FOCALTECH_TOUCHSCREEN_CODE_UPG
     msleep(50);
     //get some register information
@@ -1152,10 +1340,8 @@ printk("==enable Irq success=\n");
     fts_ctpm_fw_upgrade_with_i_file();
     mdelay(200);
     uc_reg_value = ft5x0x_read_fw_ver();
-    printk("[FST] Firmware new version = 0x%x\n", uc_reg_value);
+    printk("[FST] Firmware new version after update = 0x%x\n", uc_reg_value);
 #endif
-    uc_reg_value = ft5x0x_read_fw_ver();
-    printk("[FST] Firmware new version = 0x%x\n", uc_reg_value);
 
 	err = request_irq(client->irq, ft5x0x_ts_interrupt, IRQF_DISABLED, "ft5x0x_ts", ft5x0x_ts);
 //	err = request_irq(IRQ_EINT(6), ft5x0x_ts_interrupt, IRQF_TRIGGER_FALLING, "ft5x0x_ts", ft5x0x_ts);
@@ -1190,7 +1376,6 @@ exit_input_dev_alloc_failed:
 	free_irq(client->irq, ft5x0x_ts);
 //	free_irq(IRQ_EINT(6), ft5x0x_ts);
 exit_irq_request_failed:
-exit_platform_data_null:
 	cancel_work_sync(&ft5x0x_ts->pen_event_work);
 	destroy_workqueue(ft5x0x_ts->ts_workqueue);
 exit_create_singlethread:

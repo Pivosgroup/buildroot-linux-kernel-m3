@@ -1,7 +1,7 @@
 /*
  * Video Frame Manager For Provider and Receiver
  *
- * Author: Bobby Yang <bo.yang@amlogic.com>
+ * Author: Rain Zhang <rain.zhang@amlogic.com>
  *
  *
  * Copyright (C) 2010 Amlogic Inc.
@@ -42,62 +42,78 @@ typedef struct{
     char id[VFM_NAME_LEN];
     char name[VFM_MAP_SIZE][VFM_NAME_LEN];
     int vfm_map_size;
+    int valid;
+    int active;
 }vfm_map_t;
 
 vfm_map_t* vfm_map[VFM_MAP_COUNT];
+static int vfm_map_num = 0;
 
-int vfm_mode = 1; //new mode
+int vfm_debug_flag = 0;
 
-static DEFINE_SPINLOCK(vfm_lock);
+void vf_update_active_map(void)
+{
+    int i,j;
+    struct vframe_provider_s *vfp;
+    for (i = 0; i < vfm_map_num; i++) {
+        if (vfm_map[i] && vfm_map[i]->valid) {
+            for (j = 0; j < (vfm_map[i]->vfm_map_size - 1); j++) {
+                vfp = vf_get_provider_by_name(vfm_map[i]->name[j]);
+                if(vfp == NULL){
+                    vfm_map[i]->active&=(~(1<<j));
+                }
+                else{
+                    vfm_map[i]->active|=(1<<j);
+                }
+            }
+        }
+    }
+    
+}
 
 static int get_vfm_map_index(const char* id)
 {
     int index = -1;
     int i;
-    for (i = 0; i < VFM_MAP_COUNT; i++){
-        if (vfm_map[i] && (!strcmp(vfm_map[i]->id, id))){
+    for (i = 0; i < vfm_map_num; i++){
+        if(vfm_map[i]){
+            if (vfm_map[i]->valid && (!strcmp(vfm_map[i]->id, id))){
             index = i;
             break;
         }
+    }
     }
     return index;
 }
 
 static int vfm_map_remove_by_index(int index)
 {
-    ulong flags;
     int i;
     int ret = 0;
-    vfm_map_t *p;
     struct vframe_provider_s *vfp;
-    for (i = 0; i < vfm_map[index]->vfm_map_size; i++) {
-        if( (i < (vfm_map[index]->vfm_map_size - 1)) &&
-            is_provider_active(vfm_map[index]->name[i])) {
 
-            vfp = vf_get_provider(vfm_map[index]->name[i+1]);
+    vfm_map[index]->active = 0;
+    for (i = 0; i < (vfm_map[index]->vfm_map_size - 1); i++) {
+        vfp = vf_get_provider_by_name(vfm_map[index]->name[i]);
             if(vfp && vfp->ops && vfp->ops->event_cb){
                 vfp->ops->event_cb(VFRAME_EVENT_RECEIVER_FORCE_UNREG, NULL, vfp->op_arg);
                 printk("%s: VFRAME_EVENT_RECEIVER_FORCE_UNREG %s\n", __func__, vfm_map[index]->name[i]);
             }
         }
-    }
 
-    for (i = 0; i < vfm_map[index]->vfm_map_size; i++) {
-        if( (i < (vfm_map[index]->vfm_map_size - 1)) &&
-            is_provider_active(vfm_map[index]->name[i])) {
+    for (i = 0; i < (vfm_map[index]->vfm_map_size - 1); i++) {
+        vfp = vf_get_provider_by_name(vfm_map[index]->name[i]);
+        if(vfp){
             break;
         }
     }
-    if (i == vfm_map[index]->vfm_map_size) {
-    	p = vfm_map[index];
-        vfm_map[index] = NULL;
-        kfree(p);
-    }
-    else {
+    if (i < (vfm_map[index]->vfm_map_size -1)) {
         pr_err("failed to remove vfm map %s with active provider %s.\n",
             vfm_map[index]->id, vfm_map[index]->name[i]);
         ret = -1;
     }
+    vfm_map[index]->valid = 0;
+    
     return ret;
 
 }
@@ -108,7 +124,7 @@ static int vfm_map_remove(char* id)
     int index;
     int ret = 0;
     if (!strcmp(id, "all")) {
-        for (i = 0; i < VFM_MAP_COUNT; i++) {
+        for (i = 0; i < vfm_map_num; i++) {
             if (vfm_map[i]) {
                 ret = vfm_map_remove_by_index(i);
             }
@@ -129,27 +145,12 @@ static int vfm_map_add(char* id,   char* name_chain)
     int ret = -1;
     char* ptr, *token;
     vfm_map_t *p;
-    for (i = 0; i < VFM_MAP_COUNT; i++) {
-        if (vfm_map[i] == NULL){
-            break;
-        }
-    }
-    /* avoid to add the path with the same path name */
-    for (j = 0; j < VFM_MAP_COUNT; j++) {
-        if (vfm_map[j] != NULL){
-            if (!strcmp(vfm_map[j]->name, id)) {
-
-                pr_err("[vfm] failed to add the path due to same path name\n");
-                return ret;
-            }
-        }
-    }
-    if (i < VFM_MAP_COUNT) {
 
         p = kmalloc(sizeof(vfm_map_t), GFP_KERNEL);
         if (p) {
             memset(p, 0, sizeof(vfm_map_t));
             memcpy(p->id, id, strlen(id));
+        p->valid = 1;
             ptr = name_chain;
             while (1) {
                 token = strsep(&ptr, " \n");
@@ -161,9 +162,37 @@ static int vfm_map_add(char* id,   char* name_chain)
                     token, strlen(token));
                 p->vfm_map_size++;
             }
-            ret = 0;
-            vfm_map[i] = p;
+        for (i = 0; i < vfm_map_num; i++) {
+            if (vfm_map[i]){
+                if((vfm_map[i]->vfm_map_size == p->vfm_map_size)&&
+                    (!strcmp(vfm_map[i]->id, p->id))){
+                    for(j=0; j<p->vfm_map_size; j++){
+                        if(strcmp(vfm_map[i]->name[j], p->name[j])){
+                            break;    
+                        } 
+                    }          
+                    if(j == p->vfm_map_size){
+                        vfm_map[i]->valid = 1;
+                        kfree(p);
+                        break;
+                    }          
+                }
+            }
         }
+        
+        if(i == vfm_map_num){
+            if(i<VFM_MAP_COUNT){
+            vfm_map[i] = p;
+                vfm_map_num++;
+        }
+            else{
+                printk("%s: Error, vfm_map full\n", __func__);
+                ret = -1;   
+            }
+        }
+
+        ret = 0;
+
     }
     return ret;
 
@@ -171,23 +200,13 @@ static int vfm_map_add(char* id,   char* name_chain)
 
 char* vf_get_provider_name(const char* receiver_name)
 {
-    ulong flags = 0;
     int i,j;
     char* provider_name = NULL;
-    unsigned char receiver_is_amvideo = 0;
-    if((!strcmp(receiver_name, "amvideo"))||(!strcmp(receiver_name, "amvideo2"))){
-        receiver_is_amvideo = 1; //do not call spin_lock_irqsave in fiq
-    }
-    if(receiver_is_amvideo==0){
-        spin_lock_irqsave(&vfm_lock, flags);
-    }
-
-    for (i = 0; i < VFM_MAP_COUNT; i++) {
-        if (vfm_map[i]) {
+    for (i = 0; i < vfm_map_num; i++) {
+        if (vfm_map[i] && vfm_map[i]->active) {
             for (j = 0; j < vfm_map[i]->vfm_map_size; j++) {
                 if (!strcmp(vfm_map[i]->name[j], receiver_name)) {
-                    if (j > 0 &&
-                        is_provider_active(vfm_map[i]->name[j - 1])) {
+                    if ((j > 0)&&((vfm_map[i]->active>>(j-1))&0x1)) {
                         provider_name = vfm_map[i]->name[j - 1];
                     }
                     break;
@@ -197,31 +216,27 @@ char* vf_get_provider_name(const char* receiver_name)
         if (provider_name)
             break;
     }
-    if(receiver_is_amvideo==0){
-        spin_unlock_irqrestore(&vfm_lock, flags);
-    }
     return provider_name;
 }
 
 char* vf_get_receiver_name(const char* provider_name)
 {
-    ulong flags;
     int i,j;
     char* receiver_name = NULL;
     int namelen;
     int provide_namelen = strlen(provider_name);
 
-    spin_lock_irqsave(&vfm_lock, flags);
-
-    for (i = 0; i < VFM_MAP_COUNT; i++) {
-        if (vfm_map[i]){
+    for (i = 0; i < vfm_map_num; i++) {
+        if (vfm_map[i] && vfm_map[i]->valid) {
             for (j = 0; j < vfm_map[i]->vfm_map_size; j++){
                 namelen = strlen(vfm_map[i]->name[j]);
+                if(vfm_debug_flag&2){
+                    printk("%s:vfm_map:%s\n", __func__, vfm_map[i]->name[j]);
+                }
                 if (!strncmp(vfm_map[i]->name[j], provider_name, namelen)) {
                     if (namelen == provide_namelen ||
                         provider_name[namelen] == '.') {
-                        if ((j + 1) < vfm_map[i]->vfm_map_size &&
-                            is_receiver_active(vfm_map[i]->name[j + 1])) {
+                        if ((j + 1) < vfm_map[i]->vfm_map_size) {
                             receiver_name = vfm_map[i]->name[j + 1];
                         }
                         break;
@@ -232,7 +247,6 @@ char* vf_get_receiver_name(const char* provider_name)
         if (receiver_name)
             break;
     }
-    spin_unlock_irqrestore(&vfm_lock, flags);
 
     return receiver_name;
 }
@@ -262,9 +276,9 @@ static void vfm_init(void)
     for(i=0; i<VFM_MAP_COUNT; i++){
         vfm_map[i] = NULL;
     }
-    vfm_map_add(def_id, def_name_chain);
     vfm_map_add(def_osd_id, def_osd_name_chain);
-#ifdef CONFIG_AMLOGIC_VIDEOIN_MANAGER
+    vfm_map_add(def_id, def_name_chain);
+#if (defined CONFIG_AMLOGIC_VIDEOIN_MANAGER)||(defined CONFIG_TVIN_VIUIN)
     vfm_map_add(def_ext_id, def_ext_name_chain);
 #endif        
 
@@ -279,13 +293,12 @@ static ssize_t vfm_map_show(struct class *class,
     int i,j;
     int len = 0;
 
-    for (i = 0; i < VFM_MAP_COUNT; i++){
-        if (vfm_map[i]){
+    for (i = 0; i < vfm_map_num; i++){
+        if (vfm_map[i] && vfm_map[i]->valid){
             len += sprintf(buf+len, "%s { ", vfm_map[i]->id);
             for (j = 0; j < vfm_map[i]->vfm_map_size; j++){
                 if (j < (vfm_map[i]->vfm_map_size-1)){
-                    len += sprintf(buf+len, "%s(%d) ", vfm_map[i]->name[j],
-                        is_provider_active(vfm_map[i]->name[j]));
+                    len += sprintf(buf+len, "%s(%d) ", vfm_map[i]->name[j], (vfm_map[i]->active>>j)&0x1);
                 }
                 else{
                     len += sprintf(buf+len, "%s", vfm_map[i]->name[j]);
@@ -294,8 +307,8 @@ static ssize_t vfm_map_show(struct class *class,
             len += sprintf(buf+len, "}\n");
         } 
     }
-    provider_list();
-    receiver_list();
+    len += provider_list(buf+len);
+    len += receiver_list(buf+len);
     return len;
 }
 
@@ -317,6 +330,7 @@ static ssize_t vfm_map_store(struct class *class,
     int i = 0;
     int cmd = 0;
     char* id = NULL;
+  printk("%s:%s\n", __func__, buf);
 
 	buf_orig = kstrdup(buf, GFP_KERNEL);
 	ps = buf_orig;
@@ -392,8 +406,11 @@ static void __exit vfm_class_exit(void)
 fs_initcall(vfm_class_init);
 module_exit(vfm_class_exit);
 
-MODULE_PARM_DESC(vfm_mode, "\n vfm_mode \n");
-module_param(vfm_mode, int, 0664);
+MODULE_PARM_DESC(vfm_debug_flag, "\n vfm_debug_flag \n");
+module_param(vfm_debug_flag, int, 0664);
+
+MODULE_PARM_DESC(vfm_map_num, "\n vfm_map_num \n");
+module_param(vfm_map_num, int, 0664);
 
 MODULE_DESCRIPTION("Amlogic video frame manager driver");
 MODULE_LICENSE("GPL");

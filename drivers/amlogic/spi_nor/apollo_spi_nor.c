@@ -79,7 +79,12 @@ static void spi_hw_enable(void)
 
 static void spi_hw_disable(void)
 {
+#if defined CONFIG_ARCH_MESON3
+    // Notice: In M3, PERIPHS_PIN_MUX_1[25:22] is only used for HDMI
+	CLEAR_PERI_REG_MASK(PERIPHS_PIN_MUX_1, ((1 << 27)|(1 << 29)));
+#else
 	CLEAR_PERI_REG_MASK(PERIPHS_PIN_MUX_1, ((1 << 23)|(1 <<25)|(1 << 27)|(1 << 29)));
+#endif
 	asm("nop");
 	asm("nop");
 	asm("nop");

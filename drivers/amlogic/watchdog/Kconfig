@@ -1,0 +1,13 @@
+#
+# AMLOGIC Watchdog
+#
+
+menu "Amlogic Watchdog Timer Support"
+
+config AML_WATCHDOG
+	tristate "Amlogic Watchdog"
+	default y
+	help
+		Amlogic watchdog timer embedded in chip.
+endmenu
+

@@ -1,6 +1,7 @@
 /*
  * Amlogic M2
  * frame buffer driver-----------Deinterlace
+ * Author: Rain Zhang <rain.zhang@amlogic.com>
  * Copyright (C) 2010 Amlogic, Inc.
  *
  * This program is free software; you can redistribute it and/or modify

@@ -82,6 +82,24 @@ static inline void vm_vf_put_from_provider(vframe_t *vf);
 #define VM_DEPTH_8_CANVAS_V 0x58
 #define VM_DMA_CANVAS_INDEX 0x5e
 #define VM_CANVAS_MX 0x5f
+static int vmdecbuf_size[] ={
+			0xE79C00,//5M
+			0x900000,//3M
+			0x591000,//2M
+			0x384000,//1M3
+			0x240000,//1M
+			0xE1000,//VGA
+			0x3C000,//QVGA
+			};
+static struct v4l2_frmsize_discrete canvas_config_wh[]={
+					{2592,1952},
+					{2048,1536},
+					{1600,1216},
+					{1280,960},
+					{1024,768},
+					{640,480},
+					{320,256},
+				    };
 
 #define GE2D_ENDIAN_SHIFT        24
 #define GE2D_ENDIAN_MASK            (0x1 << GE2D_ENDIAN_SHIFT)
@@ -316,7 +334,7 @@ void vm_local_init(void)
 static vframe_receiver_op_t* vf_vm_unreg_provider(void)
 {
 //    ulong flags;    
-//    stop_vm_task();
+    stop_vm_task();
 //    spin_lock_irqsave(&lock, flags); 
 //    vfp = NULL;
 //    spin_unlock_irqrestore(&lock, flags);
@@ -330,6 +348,7 @@ static vframe_receiver_op_t* vf_vm_reg_provider( )
     spin_lock_irqsave(&lock, flags);
     spin_unlock_irqrestore(&lock, flags);
     
+    vm_buffer_init();
     vf_reg_provider(&vm_vf_prov);
     start_vm_task();   
 #if 0   
@@ -893,15 +912,22 @@ static int vm_task(void *data) {
     vframe_t *vf;
     int src_canvas;
     int timer_count = 0 ;
+    struct sched_param param = {.sched_priority = MAX_RT_PRIO - 1 };
     ge2d_context_t *context=create_ge2d_work_queue();
     config_para_ex_t ge2d_config;
     memset(&ge2d_config,0,sizeof(config_para_ex_t));
+
+    sched_setscheduler(current, SCHED_FIFO, &param);
+    allow_signal(SIGTERM);
 //    printk("vm task is running\n ");
     while(1) {        
 //        printk("vm task wait\n");
-        down_interruptible(&vb_start_sema);		
+        down_interruptible(&vb_start_sema);
         timer_count = 0;
-       
+        if (kthread_should_stop()){
+            up(&vb_done_sema);
+            break;
+        }
 		/*wait for frame from 656 provider until 500ms runs out*/        
         while(((vf = local_vf_peek()) == NULL)&&(timer_count < 100)){
             timer_count ++;
@@ -926,6 +952,14 @@ static int vm_task(void *data) {
     }
     
     destroy_ge2d_work_queue(context);
+    while(!kthread_should_stop()){
+	/* 	   may not call stop, wait..
+                   it is killed by SIGTERM,eixt on down_interruptible
+		   if not call stop,this thread may on do_exit and 
+		   kthread_stop may not work good;
+	*/
+	    msleep(10);
+    }
     return 0;
 }
 
@@ -958,10 +992,19 @@ int vm_buffer_init(void)
     init_MUTEX_LOCKED(&vb_start_sema);
     init_MUTEX_LOCKED(&vb_done_sema);    
     if(buf_start && buf_size){
-        canvas_width = 1920;
-        canvas_height = 1200;
-        decbuf_size = 0x700000;
-        
+	for(i=0; i<ARRAY_SIZE(vmdecbuf_size);i++){
+		if( buf_size >= vmdecbuf_size[i])
+			break;
+	}
+	if(ARRAY_SIZE(vmdecbuf_size) == i){
+		printk("vmbuf size=%d less than the smallest vmbuf size%d\n",
+			buf_size, vmdecbuf_size[i-1]);
+		return -1;
+	}
+
+	canvas_width = canvas_config_wh[i].width;//1920;
+	canvas_height = canvas_config_wh[i].height;//1200;
+	decbuf_size = vmdecbuf_size[i];//0x700000;
         buf_num  = buf_size/decbuf_size;
         if(buf_num > 0){
             local_pool_size   = 1;  
@@ -1039,8 +1082,11 @@ int start_simulate_task(void)
 
 
 void stop_vm_task(void) {
-    if(task) kthread_stop(task);
-    task=NULL;
+    if(task){
+        send_sig(SIGTERM, task, 1);
+        kthread_stop(task);
+        task = NULL;
+    }
     vm_local_init();
 }
 

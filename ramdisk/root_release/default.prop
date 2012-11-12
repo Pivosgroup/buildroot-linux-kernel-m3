@@ -4,3 +4,4 @@
 ro.secure=1
 ro.allow.mock.location=0
 ro.debuggable=0
+persist.sys.usb.config=mass_storage

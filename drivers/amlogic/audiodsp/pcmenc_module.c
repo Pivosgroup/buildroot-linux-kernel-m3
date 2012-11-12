@@ -124,7 +124,7 @@ static int __init audiodsp_pcmenc_init_module(void)
         goto err1;
     }
 
-    priv_data.stream_buffer_mem_size = 2*512*1024+PAGE_SIZE;//buffer should be page aligned for mmap operation
+    priv_data.stream_buffer_mem_size = 2*2*512*1024+PAGE_SIZE;//buffer should be page aligned for mmap operation
 
     ret = audiodsp_pcmenc_create_stream_buffer(); 
     if(ret){
@@ -170,7 +170,7 @@ static int audiodsp_pcmenc_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 	}
 #endif /* 0 */
-	audiodsp_pcmenc_create_stream_buffer(); //init the r/p register	
+	//audiodsp_pcmenc_create_stream_buffer(); //init the r/p register	
 	pcmenc_stream_init();
 	return SUCCESS;
 }
@@ -185,6 +185,8 @@ static int audiodsp_pcmenc_release(struct inode *inode, struct file *file)
         buf = NULL;
     }
 #endif
+	audiodsp_pcmenc_create_stream_buffer(); //init the r/p register 
+
     pcmenc_stream_deinit();
 
     return SUCCESS;
@@ -280,12 +282,12 @@ static int audiodsp_pcmenc_ioctl(struct inode *inode, struct file *file, unsigne
 static int audiodsp_pcmenc_create_stream_buffer(void)
 {
     dma_addr_t buf_map;
-
+#if 0
     DSP_WD(DSP_DECODE_51PCM_OUT_START_ADDR, ARM_2_ARC_ADDR_SWAP(0));
     DSP_WD(DSP_DECODE_51PCM_OUT_END_ADDR,ARM_2_ARC_ADDR_SWAP(0));
     DSP_WD(DSP_DECODE_51PCM_OUT_RD_ADDR,ARM_2_ARC_ADDR_SWAP(0));
     DSP_WD(DSP_DECODE_51PCM_OUT_WD_ADDR,ARM_2_ARC_ADDR_SWAP(0));
-
+#endif
     if(priv_data.stream_buffer_mem_size == 0){
         return 0;
     }

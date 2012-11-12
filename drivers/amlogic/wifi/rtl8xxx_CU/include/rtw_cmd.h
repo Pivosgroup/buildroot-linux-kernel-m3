@@ -270,14 +270,8 @@ Command-Event Mode
 struct sitesurvey_parm {
 	sint scan_mode;	//active: 1, passive: 0 
 	sint bsslimit;	// 1 ~ 48
-	
 	// for up to 9 probreq with specific ssid
-#if 1
 	NDIS_802_11_SSID ssid[RTW_SSID_SCAN_AMOUNT];
-#else
-	sint	ss_ssidlen[RTW_SSID_SCAN_AMOUNT]; 
-	u8 	ss_ssid[RTW_SSID_SCAN_AMOUNT][IW_ESSID_MAX_SIZE + 1];
-#endif
 };
 
 /*
@@ -880,6 +874,13 @@ struct SetChannelSwitch_param
 	u8 new_ch_no;
 };
 
+/*H2C Handler index: 62 */ 
+struct TDLSoption_param
+{
+	u8 addr[ETH_ALEN];
+	u8 option;
+};
+
 #define GEN_CMD_CODE(cmd)	cmd ## _CMD_
 
 
@@ -949,6 +950,7 @@ u8 rtw_chk_hi_queue_cmd(_adapter*padapter);
 extern u8 rtw_set_chplan_cmd(_adapter*padapter, u8 chplan, u8 enaueue);
 extern u8 rtw_led_blink_cmd(_adapter*padapter, PLED_871x pLed);
 extern u8 rtw_set_csa_cmd(_adapter*padapter, u8 new_ch_no);
+extern u8 rtw_tdls_cmd(_adapter*padapter, u8 *addr, u8 option);
 
 u8 rtw_drvextra_cmd_hdl(_adapter *padapter, unsigned char *pbuf);
 
@@ -1041,6 +1043,7 @@ enum rtw_h2c_cmd
 	GEN_CMD_CODE(_LedBlink), /*60*/
 	
 	GEN_CMD_CODE(_SetChannelSwitch), /*61*/
+	GEN_CMD_CODE(_TDLS), /*62*/
 	
 	MAX_H2CCMD
 };
@@ -1121,6 +1124,7 @@ struct _cmd_callback 	rtw_cmd_callback[] =
 	{GEN_CMD_CODE(_SetChannelPlan), NULL},/*59*/
 	{GEN_CMD_CODE(_LedBlink), NULL},/*60*/
 	{GEN_CMD_CODE(_SetChannelSwitch), NULL},/*61*/
+	{GEN_CMD_CODE(_TDLS), NULL},/*62*/
 };
 #endif
 

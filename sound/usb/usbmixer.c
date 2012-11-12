@@ -762,12 +762,14 @@ static int get_min_max(struct usb_mixer_elem_info *cval, int default_min)
 			cval->res = 1;
 		} else {
 			int last_valid_res = cval->res;
-
+#if 0
 			while (cval->res > 1) {
 				if (set_ctl_value(cval, UAC_SET_RES, (cval->control << 8) | minchn, cval->res / 2) < 0)
 					break;
 				cval->res /= 2;
 			}
+
+#endif
 			if (get_ctl_value(cval, UAC_GET_RES, (cval->control << 8) | minchn, &cval->res) < 0)
 				cval->res = last_valid_res;
 		}

@@ -76,7 +76,8 @@ extern u32 amvideo_get_scaler_para(int* x, int* y, int* w, int* h, u32* ratio);
 #endif
 
 static spinlock_t lock = SPIN_LOCK_UNLOCKED;
-static bool ppmgr_blocking = false;
+static bool ppmgr_blocking = false ;
+static int video_vf_lock = 0;
 static bool ppmgr_inited = false;
 
 static struct ppframe_s vfp_pool[VF_POOL_SIZE];
@@ -120,19 +121,27 @@ static int q_free_set = 0 ;
 static vframe_t *ppmgr_vf_peek(void *op_arg)
 {
    vframe_t* vf;
+    if(video_vf_lock){
+    	return NULL;	
+    }   
    vf= vfq_peek(&q_ready);
    return vf;
 }
 
 static vframe_t *ppmgr_vf_get(void *op_arg)
 {
+    if(video_vf_lock){
+    	return NULL;	
+    }	
     return vfq_pop(&q_ready);
 }
 
 static void ppmgr_vf_put(vframe_t *vf, void *op_arg)
 {
     ppframe_t *pp_vf = to_ppframe(vf);
-
+    if(video_vf_lock){
+    	return ;	
+    }
     /* the frame is in bypass mode, put the decoder frame */
     if (pp_vf->dec_frame)
         ppmgr_vf_put_dec(pp_vf->dec_frame);
@@ -256,18 +265,22 @@ static int ppmgr_receiver_event_fun(int type, void *data, void *private_data)
             case VFRAME_EVENT_PROVIDER_START:
 #ifdef DDD
         printk("register now \n");
-#endif                        
+#endif          
+			video_vf_lock = 0 ;              
             vf_ppmgr_reg_provider();
             break;
             case VFRAME_EVENT_PROVIDER_UNREG:
 #ifdef DDD
         printk("unregister now \n");
 #endif            
+			video_vf_lock = 0 ;
             vf_ppmgr_unreg_provider();
             break;
             case VFRAME_EVENT_PROVIDER_LIGHT_UNREG:
             break;                 
             case VFRAME_EVENT_PROVIDER_RESET       :
+            	video_vf_lock  = 1;
+            	vf_light_unreg_provider(&ppmgr_vf_prov);
             	vf_ppmgr_reset();
             	break;
         default:
@@ -309,14 +322,14 @@ const vframe_receiver_op_t* vf_ppmgr_reg_provider(void)
     vf_local_init();
 
     //vf_reg_provider(&ppmgr_vf_prov);
-	if(ppmgr_device.video_out==0) {
-		vf_reg_provider(&ppmgr_vf_prov);
-	} 
-#	ifdef CONFIG_V4L_AMLOGIC_VIDEO 
-	else  {
-		v4l_reg_provider(&ppmgr_vf_prov);
-	}
-#			endif
+    if(ppmgr_device.video_out==0) {
+        vf_reg_provider(&ppmgr_vf_prov);
+    } 
+#ifdef CONFIG_V4L_AMLOGIC_VIDEO 
+    else{
+        v4l_reg_provider(&ppmgr_vf_prov);
+    }
+#endif
 
     if (start_ppmgr_task() == 0) {
         r = &ppmgr_vf_receiver;
@@ -348,6 +361,16 @@ void vf_ppmgr_reset(void)
     }
 }
 
+void vf_ppmgr_reset_ext(void)
+{
+    video_vf_lock  = 1;
+    vf_light_unreg_provider(&ppmgr_vf_prov);
+    if(ppmgr_inited){
+        ppmgr_blocking = true;
+        up(&thread_sem);
+    }
+}
+
 void vf_ppmgr_init_receiver(void)
 {
     vf_receiver_init(&ppmgr_vf_recv, RECEIVER_NAME, &ppmgr_vf_receiver, NULL);
@@ -367,6 +390,9 @@ static inline vframe_t *ppmgr_vf_peek_dec(void)
     struct vframe_provider_s *vfp;
     vframe_t *vf;
     vfp = vf_get_provider(RECEIVER_NAME);
+    if(video_vf_lock){
+    	return NULL;	
+    }
     if (!(vfp && vfp->ops && vfp->ops->peek))
         return NULL;
 
@@ -379,6 +405,9 @@ static inline vframe_t *ppmgr_vf_get_dec(void)
 {
     struct vframe_provider_s *vfp;
     vframe_t *vf;
+    if(video_vf_lock){
+    	return NULL;	
+    }
     vfp = vf_get_provider(RECEIVER_NAME);
     if (!(vfp && vfp->ops && vfp->ops->peek))
     return NULL;
@@ -389,6 +418,9 @@ static inline vframe_t *ppmgr_vf_get_dec(void)
 static inline void ppmgr_vf_put_dec(vframe_t *vf)
 {
 	struct vframe_provider_s *vfp;
+	if(video_vf_lock){
+		return;	
+	}
 	vfp = vf_get_provider(RECEIVER_NAME);
 	if (!(vfp && vfp->ops && vfp->ops->peek))
 	return;
@@ -1334,18 +1366,20 @@ static int ppmgr_task(void *data)
         }
         
         if (ppmgr_blocking) {
-            vf_light_unreg_provider(&ppmgr_vf_prov);
+            vf_notify_provider(PROVIDER_NAME,VFRAME_EVENT_RECEIVER_RESET,NULL);
+            //vf_light_unreg_provider(&ppmgr_vf_prov);
             vf_local_init();
             //vf_reg_provider(&ppmgr_vf_prov);
-			if(ppmgr_device.video_out==0) {
-				vf_reg_provider(&ppmgr_vf_prov);
-			} 
-#			ifdef CONFIG_V4L_AMLOGIC_VIDEO 
-			else  {
-				v4l_reg_provider(&ppmgr_vf_prov);
-			}
-#			endif
+            if(ppmgr_device.video_out==0) {
+                vf_reg_provider(&ppmgr_vf_prov);
+            } 
+#ifdef CONFIG_V4L_AMLOGIC_VIDEO 
+            else{
+                v4l_reg_provider(&ppmgr_vf_prov);
+            }
+#endif
             ppmgr_blocking = false;
+            video_vf_lock  =0 ;
             up(&thread_sem);
             printk("ppmgr rebuild from light-unregister\n");
         }

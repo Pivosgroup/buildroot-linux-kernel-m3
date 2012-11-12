@@ -43,7 +43,7 @@ struct ht_priv
 	//u8	ADDBA_retry_count;
 	u8	candidate_tid_bitmap;
 
-	struct ieee80211_ht_cap ht_cap;
+	struct rtw_ieee80211_ht_cap ht_cap;
 	
 };
 

@@ -38,6 +38,8 @@ amvdec_real-y    := vreal.o
 
 obj-$(CONFIG_AM_JPEGDEC) += jpegdec.o
 
+obj-$(CONFIG_AM_JPEGDEC_NO_SCALE) += qjpegdec.o
+
 obj-$(CONFIG_AM_VIDEO) += amvideo.o
 amvideo-objs := video.o vpp.o
 amvideo-y    := video.o vpp.o
@@ -57,5 +59,5 @@ obj-$(CONFIG_AM_PTSSERVER) += ptsserv.o
 obj-$(CONFIG_AM_SUBTITLE) += subtitle.o
 
 ifneq ($(CONFIG_AM_DVB),)
-EXTRA_CFLAGS = -DENABLE_DEMUX_DRIVER
+EXTRA_CFLAGS = -DENABLE_DEMUX_DRIVER -DMODIFY_TIMESTAMP_INC_WITH_PLL -DCALC_CACHED_TIME #-DUSE_VMASTER_MODE
 endif

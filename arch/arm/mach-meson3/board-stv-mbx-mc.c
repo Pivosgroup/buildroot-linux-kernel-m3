@@ -41,7 +41,6 @@
 #include <linux/reboot.h>
 #include <mach/usbclock.h>
 #include <mach/am_regs.h>
-#include <sound/soc.h>
 
 #ifdef CONFIG_AM_UART_WITH_S_CORE 
 #include <linux/uart-aml.h>
@@ -79,9 +78,9 @@
 #include <mach/pm.h>
 #endif
 
-
-
-
+#ifdef CONFIG_VIDEO_AMLOGIC_CAPTURE
+#include <media/amlogic/aml_camera.h>
+#endif
 
 
 
@@ -95,6 +94,9 @@
 #ifdef CONFIG_SUSPEND
 static int suspend_state=0;
 #endif
+
+static int board_ver_id = 0; // Rony add 20120611 get hardware id 
+static int board_dvb_id = 0; // Rony add 20120702 0 dvbt,1 dvbs
 
 #if defined(CONFIG_JPEGLOGO)
 static struct resource jpeglogo_resources[] = {
@@ -182,6 +184,8 @@ static struct platform_device adc_kp_device = {
 };
 #endif
 
+
+
 #if defined(CONFIG_KEY_INPUT_CUSTOM_AM) || defined(CONFIG_KEY_INPUT_CUSTOM_AM_MODULE)
 #include <linux/input.h>
 #include <linux/input/key_input.h>
@@ -195,9 +199,8 @@ static inline int key_input_init_func(void)
 //    WRITE_AOBUS_REG(AO_RTC_ADDR1, (READ_AOBUS_REG(AO_RTC_ADDR1) &~(1<<3)));
     return 0;
 }
-static inline int key_scan(void *data)
+static inline int key_scan(int *key_state_list)
 {
-    int *key_state_list = data;
     int ret = 0;
 	 // GPIOAO_3
 	 #ifdef CONFIG_SUSPEND
@@ -205,18 +208,18 @@ static inline int key_scan(void *data)
 	 	{
 	 	// forse power key down
 	 	suspend_state--;
-	 	key_state_list[0] = 0;
+	 	key_state_list[0] = 1;
 	 	}
 	 else
 	 #endif
-    key_state_list[0] = get_gpio_val(GPIOAO_bank_bit0_11(3), GPIOAO_bit_bit0_11(3))?1:0;
+    key_state_list[0] = get_gpio_val(GPIOAO_bank_bit0_11(3), GPIOAO_bit_bit0_11(3))?0:1;
 //    key_state_list[0] = ((READ_AOBUS_REG(AO_RTC_ADDR1) >> 2) & 1) ? 0 : 1;
     return ret;
 }
 
 static  struct key_input_platform_data  key_input_pdata = {
-    .scan_period = 20,
-    .fuzz_time = 60,
+    .scan_period = 25,
+    .fuzz_time = 40,
     .key_code_list = &_key_code_list[0],
     .key_num = ARRAY_SIZE(_key_code_list),
     .scan_func = key_scan,
@@ -235,6 +238,54 @@ static struct platform_device input_device_key = {
 };
 #endif
 
+#if defined(CONFIG_AM_IR_RECEIVER)
+#include <linux/input/irreceiver.h>
+
+static int ir_init()
+{
+    unsigned int control_value;
+    
+    //mask--mux gpioao_7 to remote
+    SET_AOBUS_REG_MASK(AO_RTI_PIN_MUX_REG,1<<0);
+    
+    //max frame time is 80ms, base rate is 20us
+    control_value = 3<<28|(0x9c40 << 12)|0x13;
+    WRITE_AOBUS_REG(AO_IR_DEC_REG0, control_value);
+     
+    /*[3-2]rising or falling edge detected
+      [8-7]Measure mode
+    */
+    control_value = 0x8574;
+    WRITE_AOBUS_REG(AO_IR_DEC_REG1, control_value);
+    
+    return 0;
+}
+
+static int pwm_init()
+{
+    CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_7, (1<<16));
+	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_0, (1<<29));
+    SET_CBUS_REG_MASK(PERIPHS_PIN_MUX_3, (1<<26));
+}
+
+static struct irreceiver_platform_data irreceiver_data = {
+    .pwm_no = PWM_A,
+    .freq = 38000, //38k
+    .init_pwm_pinmux = pwm_init,
+    .init_ir_pinmux = ir_init,
+};
+
+static struct platform_device irreceiver_device = {
+    .name = "irreceiver",
+    .id = 0,
+    .num_resources = 0,
+    .resource = NULL,
+    .dev = {
+        .platform_data = &irreceiver_data,
+    }
+};
+#endif
+
 #if defined(CONFIG_FB_AM)
 static struct resource fb_device_resources[] = {
     [0] = {
@@ -249,7 +300,6 @@ static struct resource fb_device_resources[] = {
         .flags = IORESOURCE_MEM,
     },
 #endif
-
 };
 
 static struct platform_device fb_device = {
@@ -318,6 +368,36 @@ static struct platform_device amlogic_spi_nor_device = {
 #endif
 
 #ifdef CONFIG_USB_DWC_OTG_HCD
+static void set_usb_a_vbus_power(char is_power_on)
+{
+}
+
+static void set_usb_b_vbus_power(char is_power_on)
+{ /*wifi rtl8188cus power control*/
+#define USB_B_POW_GPIO         GPIOC_bank_bit0_15(5)
+#define USB_B_POW_GPIO_BIT     GPIOC_bit_bit0_15(5)
+#define USB_B_POW_GPIO_BIT_ON   1
+#define USB_B_POW_GPIO_BIT_OFF  0
+	//Rony add,if board_ver_id equal 0x02 then inverse wifi power level 20120612
+	if((board_ver_id == 0x02) || (board_ver_id == 0x03)){
+		if(is_power_on){
+			is_power_on = 0;
+		}else{
+			is_power_on = 1;
+		}
+	}
+	//Rony add end
+    if(is_power_on) {
+        printk(KERN_INFO "set usb b port power on (board gpio %d)!\n",USB_B_POW_GPIO_BIT);
+        set_gpio_mode(USB_B_POW_GPIO, USB_B_POW_GPIO_BIT, GPIO_OUTPUT_MODE);
+        set_gpio_val(USB_B_POW_GPIO, USB_B_POW_GPIO_BIT, USB_B_POW_GPIO_BIT_ON);
+    } else    {
+        printk(KERN_INFO "set usb b port power off (board gpio %d)!\n",USB_B_POW_GPIO_BIT);
+        set_gpio_mode(USB_B_POW_GPIO, USB_B_POW_GPIO_BIT, GPIO_OUTPUT_MODE);
+        set_gpio_val(USB_B_POW_GPIO, USB_B_POW_GPIO_BIT, USB_B_POW_GPIO_BIT_OFF);
+    }
+    
+}
 //usb_a is OTG port
 static struct lm_device usb_ld_a = {
     .type = LM_DEVICE_TYPE_USB,
@@ -329,7 +409,7 @@ static struct lm_device usb_ld_a = {
     .port_type = USB_PORT_TYPE_HOST,
     .port_speed = USB_PORT_SPEED_DEFAULT,
     .dma_config = USB_DMA_BURST_SINGLE,
-	.set_vbus_power = 0,
+	.set_vbus_power = set_usb_a_vbus_power,
 };
 static struct lm_device usb_ld_b = {
     .type = LM_DEVICE_TYPE_USB,
@@ -341,11 +421,36 @@ static struct lm_device usb_ld_b = {
     .port_type = USB_PORT_TYPE_HOST,
     .port_speed = USB_PORT_SPEED_DEFAULT,
     .dma_config = USB_DMA_BURST_SINGLE , //   USB_DMA_DISABLE,
-    .set_vbus_power = 0,
+    .set_vbus_power = set_usb_b_vbus_power,
 };
 
 #endif
 
+
+/* usb wifi power 1:power on  0:power off */
+void extern_usb_wifi_power(int is_power)
+{
+/*    printk(KERN_INFO "usb_wifi_power %s\n", is_power ? "On" : "Off");	
+	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_1,(1<<6));
+	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_0,(1<<15));
+	//Rony add,if board_ver_id equal 0x02 then inverse wifi power level 20120612
+	if((board_ver_id == 0x02) || (board_ver_id == 0x03)){
+		if(is_power){
+			is_power = 0;
+		}else{
+			is_power = 1;
+		}
+	}
+	//Rony add end
+    set_gpio_mode(GPIOC_bank_bit0_15(5), GPIOC_bit_bit0_15(5), GPIO_OUTPUT_MODE);
+	if(is_power)
+       set_gpio_val(GPIOC_bank_bit0_15(5), GPIOC_bit_bit0_15(5), 1);
+	else
+       set_gpio_val(GPIOC_bank_bit0_15(5), GPIOC_bit_bit0_15(5), 0);  
+   */          
+}
+
+EXPORT_SYMBOL(extern_usb_wifi_power);
 
 #if defined(CONFIG_AM_STREAMING)
 static struct resource codec_resources[] = {
@@ -418,6 +523,73 @@ static struct platform_device vdin_device = {
 };
 #endif
 
+#if defined(CONFIG_SDIO_DHD_CDC_WIFI_40181_MODULE_MODULE)
+/******************************
+*WL_REG_ON	-->GPIOC_8
+*WIFI_32K		-->GPIOC_15(CLK_OUT1)
+*WIFIWAKE(WL_HOST_WAKE)-->GPIOX_11
+*******************************/
+#define WL_REG_ON_USE_GPIOC_6
+void extern_wifi_set_enable(int enable)
+{
+	if(enable){
+#ifdef WL_REG_ON_USE_GPIOC_6
+		SET_CBUS_REG_MASK(PREG_PAD_GPIO2_O, (1<<6));
+#else
+		SET_CBUS_REG_MASK(PREG_PAD_GPIO2_O, (1<<8));
+#endif
+		printk("Enable WIFI  Module!\n");
+	}
+    	else{
+#ifdef WL_REG_ON_USE_GPIOC_6
+		CLEAR_CBUS_REG_MASK(PREG_PAD_GPIO2_O, (1<<6));
+#else
+		CLEAR_CBUS_REG_MASK(PREG_PAD_GPIO2_O, (1<<8));
+#endif
+		printk("Disable WIFI  Module!\n");
+	}
+}
+EXPORT_SYMBOL(extern_wifi_set_enable);
+
+static void wifi_set_clk_enable(int on)
+{
+    //set clk for wifi
+	printk("set WIFI CLK Pin GPIOC_15 32KHz ***%d\n",on);
+	WRITE_CBUS_REG(HHI_GEN_CLK_CNTL,(READ_CBUS_REG(HHI_GEN_CLK_CNTL)&(~(0x7f<<0)))|((0<<0)|(1<<8)|(7<<9)) );
+	CLEAR_CBUS_REG_MASK(PREG_PAD_GPIO2_EN_N, (1<<15));   
+	if(on)
+		SET_CBUS_REG_MASK(PERIPHS_PIN_MUX_3, (1<<22));
+	else
+		CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_3, (1<<22));	
+}
+
+static void wifi_gpio_init(void)
+{
+#ifdef WL_REG_ON_USE_GPIOC_6
+    //set WL_REG_ON Pin GPIOC_6 out
+        CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_0, (1<<16));
+        CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_1, (1<<5));
+        CLEAR_CBUS_REG_MASK(PREG_PAD_GPIO2_EN_N, (1<<6));  //GPIOC_6
+#else
+    //set WL_REG_ON Pin GPIOC_8 out 
+   	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_3, (1<<23));
+	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_0, (1<<18));
+	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_1, (1<<10));
+     	CLEAR_CBUS_REG_MASK(PREG_PAD_GPIO2_EN_N, (1<<8));  //GPIOC_8
+#endif
+}
+
+
+static void aml_wifi_bcm4018x_init()
+{
+	wifi_set_clk_enable(1);
+	wifi_gpio_init();
+	extern_wifi_set_enable(0);
+        msleep(5);
+	extern_wifi_set_enable(1);
+}
+
+#endif
 
 #if defined(CONFIG_CARDREADER)
 static struct resource amlogic_card_resource[] = {
@@ -428,24 +600,23 @@ static struct resource amlogic_card_resource[] = {
     }
 };
 
-void extern_wifi_power(int is_power)
-{
-    printk("extern_wifi_power:%d.\n", is_power);
-	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_1,(1<<6));
-	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_0,(1<<15));
-
-    set_gpio_mode(GPIOC_bank_bit0_15(5), GPIOC_bit_bit0_15(5), GPIO_OUTPUT_MODE);
-	if(is_power)
-       set_gpio_val(GPIOC_bank_bit0_15(5), GPIOC_bit_bit0_15(5), 1);
-	else
-       set_gpio_val(GPIOC_bank_bit0_15(5), GPIOC_bit_bit0_15(5), 0);
-
-}
-
+#if defined(CONFIG_SDIO_DHD_CDC_WIFI_40181_MODULE_MODULE)
+#define GPIO_WIFI_HOSTWAKE  ((GPIOX_bank_bit0_31(11)<<16) |GPIOX_bit_bit0_31(11))
 void sdio_extern_init(void)
 {
-    extern_wifi_power(1);
+	printk("sdio_extern_init !\n");
+	printk("40183 set oob mode !\n");
+  SET_CBUS_REG_MASK(PAD_PULL_UP_REG4, (1<<11));
+	gpio_direction_input(GPIO_WIFI_HOSTWAKE);
+#if defined(CONFIG_BCM40181_WIFI)
+	gpio_enable_level_int(gpio_to_idx(GPIO_WIFI_HOSTWAKE), 0, 4);  //for 40181	
+#endif
+#if defined(CONFIG_BCM40183_WIFI)
+	gpio_enable_edge_int(gpio_to_idx(GPIO_WIFI_HOSTWAKE), 1, 5);     //for 40183
+#endif 
+	extern_wifi_set_enable(1);
 }
+#endif
 
 static struct aml_card_info  amlogic_card_info[] = {
     [0] = {
@@ -467,6 +638,7 @@ static struct aml_card_info  amlogic_card_info[] = {
         .card_wp_input_mask = 0,
         .card_extern_init = 0,
     },
+#if defined(CONFIG_SDIO_DHD_CDC_WIFI_40181_MODULE_MODULE)
     [1] = {
         .name = "sdio_card",
         .work_mode = CARD_HW_MODE,
@@ -475,10 +647,10 @@ static struct aml_card_info  amlogic_card_info[] = {
         .card_ins_en_mask = 0,
         .card_ins_input_reg = 0,
         .card_ins_input_mask = 0,
-        .card_power_en_reg = EGPIO_GPIOC_ENABLE,
-        .card_power_en_mask = PREG_IO_7_MASK,
-        .card_power_output_reg = EGPIO_GPIOC_OUTPUT,
-        .card_power_output_mask = PREG_IO_7_MASK,
+        .card_power_en_reg = 0,
+        .card_power_en_mask = 0,
+        .card_power_output_reg = 0,
+        .card_power_output_mask = 0,
         .card_power_en_lev = 1,
         .card_wp_en_reg = 0,
         .card_wp_en_mask = 0,
@@ -486,40 +658,8 @@ static struct aml_card_info  amlogic_card_info[] = {
         .card_wp_input_mask = 0,
         .card_extern_init = sdio_extern_init,
     },
+#endif
 };
-
-void extern_wifi_reset(int is_on)
-{
-    unsigned int val;
-    
-    /*output*/
-    val = readl(amlogic_card_info[1].card_power_en_reg);
-    val &= ~(amlogic_card_info[1].card_power_en_mask);
-    writel(val, amlogic_card_info[1].card_power_en_reg);
-        
-    if(is_on){
-        /*high*/
-        val = readl(amlogic_card_info[1].card_power_output_reg);
-        val |=(amlogic_card_info[1].card_power_output_mask);
-        writel(val, amlogic_card_info[1].card_power_output_reg);
-        printk("on val = %x\n", val);
-    }
-    else{
-        /*low*/
-        val = readl(amlogic_card_info[1].card_power_output_reg);
-        val &=~(amlogic_card_info[1].card_power_output_mask);
-        writel(val, amlogic_card_info[1].card_power_output_reg);
-        printk("off val = %x\n", val);
-    }
-
-    printk("ouput %x, bit %d, level %x, bit %d\n",
-            amlogic_card_info[1].card_power_en_reg,
-            amlogic_card_info[1].card_power_en_mask,
-            amlogic_card_info[1].card_power_output_reg,
-            amlogic_card_info[1].card_power_output_mask);
-    return;
-}
-EXPORT_SYMBOL(extern_wifi_reset);
 
 static struct aml_card_platform amlogic_card_platform = {
     .card_num = ARRAY_SIZE(amlogic_card_info),
@@ -591,6 +731,18 @@ void mute_spk(struct snd_soc_codec* codec, int flag)
 #ifdef _AML_M3_HW_DEBUG_
 	printk("***Entered %s:%s\n", __FILE__,__func__);
 #endif
+
+// Rony add it reversal level 20120611 
+	//printk("====================== mute spk flag = %d\n",flag);
+	if(board_ver_id == 0x02){
+		if(flag){
+			flag = 0;
+		}else{
+			flag = 1;
+		}
+	}
+	//printk("====================== mute spk flag1 = %d\n",flag);
+// Rony add end
     if(flag){
 		set_gpio_val(GPIOC_bank_bit0_15(4), GPIOC_bit_bit0_15(4), 0);	 // mute speak
 		set_gpio_mode(GPIOC_bank_bit0_15(4), GPIOC_bit_bit0_15(4), GPIO_OUTPUT_MODE);
@@ -600,10 +752,51 @@ void mute_spk(struct snd_soc_codec* codec, int flag)
 	}
 }
 
+
+
+#define APB_BASE 0x4000
+void mute_headphone(void* codec, int flag)
+{
+	int reg_val;
+#ifdef _AML_M3_HW_DEBUG_
+	printk("***Entered %s:%s\n", __FILE__,__func__);
+#endif
+	reg_val = READ_APB_REG(APB_BASE+(0x18<<2));
+    if(flag){
+		reg_val |= 0xc0;
+		WRITE_APB_REG((APB_BASE+(0x18<<2)), reg_val);			// mute headphone
+	}else{
+		reg_val &= ~0xc0;
+		WRITE_APB_REG((APB_BASE+(0x18<<2)), reg_val);			// unmute headphone
+	}
+}
+
+
 #endif
 
+#ifdef CONFIG_SND_AML_M3_CS4334
+static struct platform_device aml_sound_card={
+       .name                   = "aml_m3_audio_cs4334",
+       .id                     = -1,
+       .resource               = aml_m3_audio_resource,
+       .num_resources          = ARRAY_SIZE(aml_m3_audio_resource),
+};
 
-#if defined(CONFIG_ANDROID_PMEM) || defined(CONFIG_CMEM)
+/* --------------------------------------------------------------------------*/
+/**
+ * * @brief  set_audio_codec_pinmux
+ * *
+ * * @return
+ * */
+/* --------------------------------------------------------------------------*/
+static void __init set_audio_codec_pinmux(void)
+{
+    /* for gpiox_17~20 I2S_AMCLK I2S_AOCLK I2S_LRCLK I2S_OUT */
+    clear_mio_mux(7, (1 << 18) | (1 << 19) | (1 << 20) | (1 << 21) | (1 << 22) | (1 << 23));
+    set_mio_mux(8, (1 << 27) | (1 << 26) | (1 << 25) | (1 << 24));
+}
+#endif
+#ifdef CONFIG_ANDROID_PMEM
 static struct android_pmem_platform_data pmem_data =
 {
     .name = "pmem",
@@ -649,6 +842,16 @@ static struct platform_device vm_device =
 };
 #endif /* AMLOGIC_VIDEOIN_MANAGER */
 
+#ifdef CONFIG_VIDEO_AMLOGIC_CAPTURE
+static void __init camera_power_on_init(void)
+{
+    udelay(1000);
+    SET_CBUS_REG_MASK(HHI_ETH_CLK_CNTL,0x30f);// 24M XTAL
+    SET_CBUS_REG_MASK(HHI_DEMOD_PLL_CNTL,0x232);// 24M XTAL
+
+    //eth_set_pinmux(ETH_BANK0_GPIOC3_C12,ETH_CLK_OUT_GPIOC12_REG3_1, 1);		
+}
+#endif
 
 #if defined(CONFIG_SUSPEND)
 
@@ -741,7 +944,7 @@ static void set_vccx2(int power_on)
         printk(KERN_INFO "set_vcc power up\n");
 
 		#ifdef CONFIG_AML_SUSPEND
-       suspend_state=10;
+       suspend_state=5;
        #endif
 //        set_gpio_mode(GPIOA_bank_bit0_27(26), GPIOA_bit_bit0_27(26), GPIO_OUTPUT_MODE);
 //        set_gpio_val(GPIOA_bank_bit0_27(26), GPIOA_bit_bit0_27(26), 0);
@@ -823,11 +1026,40 @@ static struct aml_sw_i2c_platform aml_sw_i2c_plat = {
 
 static struct platform_device aml_sw_i2c_device = {
     .name         = "aml-sw-i2c",
-    .id       = -1,
+    .id       = 0,
     .dev = {
         .platform_data = &aml_sw_i2c_plat,
     },
 };
+
+#define MESON3_I2C_PREG_GPIOX_OE		CBUS_REG_ADDR(PREG_PAD_GPIO4_EN_N)
+#define MESON3_I2C_PREG_GPIOX_OUTLVL	CBUS_REG_ADDR(PREG_PAD_GPIO4_O)
+#define MESON3_I2C_PREG_GPIOX_INLVL	CBUS_REG_ADDR(PREG_PAD_GPIO4_I)
+
+
+static struct aml_sw_i2c_platform aml_sw_i2c_plat_tuner = {
+    .sw_pins = {
+        .scl_reg_out        = MESON3_I2C_PREG_GPIOX_OUTLVL,
+        .scl_reg_in     = MESON3_I2C_PREG_GPIOX_INLVL,
+        .scl_bit            = 26, 
+        .scl_oe         = MESON3_I2C_PREG_GPIOX_OE,
+        .sda_reg_out        = MESON3_I2C_PREG_GPIOX_OUTLVL,
+        .sda_reg_in     = MESON3_I2C_PREG_GPIOX_INLVL,
+        .sda_bit            = 25,
+        .sda_oe         = MESON3_I2C_PREG_GPIOX_OE,
+    },  
+    .udelay         = 2,
+    .timeout            = 100,
+};
+
+static struct platform_device aml_sw_i2c_device_tuner = {
+    .name         = "aml-sw-i2c",
+    .id       = 1,
+    .dev = {
+        .platform_data = &aml_sw_i2c_plat_tuner,
+    },
+};
+
 
 #endif
 
@@ -991,7 +1223,7 @@ static struct platform_device aml_efuse_device = {
 
 
 static struct mtd_partition multi_partition_info[] = 
-{
+{ // 2G
 #ifndef CONFIG_AMLOGIC_SPI_NOR
 /* Hide uboot partition
 	{
@@ -1030,7 +1262,7 @@ static struct mtd_partition multi_partition_info[] =
 	},
 	{//500M for cache
 	    .name = "cache",
-	    .offset = (0+4+8+500)*1024*1024,
+	    .offset = (0+4+8+512)*1024*1024,
 	    .size = 500*1024*1024,
 	},
 	
@@ -1055,6 +1287,21 @@ static struct mtd_partition multi_partition_info[] =
 
 };
 
+static void nand_set_parts(uint64_t size, struct platform_nand_chip *chip)
+{
+    printk("set nand parts for chip %lldMB\n", (size/(1024*1024)));
+
+    if (size/(1024*1024) == (1024*2)) {
+        chip->partitions = multi_partition_info;
+        chip->nr_partitions = ARRAY_SIZE(multi_partition_info);
+        }
+    else {
+        // Undefined
+        chip->partitions = NULL;
+        chip->nr_partitions = 0;
+        }
+    return;
+}
 
 static struct aml_nand_platform aml_nand_mid_platform[] = {
 #ifndef CONFIG_AMLOGIC_SPI_NOR
@@ -1081,6 +1328,7 @@ static struct aml_nand_platform aml_nand_mid_platform[] = {
 				.nr_chips = 4,
 				.nr_partitions = ARRAY_SIZE(multi_partition_info),
 				.partitions = multi_partition_info,
+				.set_parts = nand_set_parts,
 				.options = (NAND_TIMING_MODE5 | NAND_ECC_BCH60_1K_MODE | NAND_TWO_PLANE_MODE),
 			},
     	},
@@ -1247,38 +1495,14 @@ static struct platform_device bt_device = {
 
 static void bt_device_init(void)
 {
-	/* BT_RST_N */
-	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_0, (1<<16));
-	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_1, (1<<5));
-	
-	/* UART_RTS_N(BT) */
-	SET_CBUS_REG_MASK(PERIPHS_PIN_MUX_4, (1<<10));
-		
-	/* UART_CTS_N(BT) */ 
-	SET_CBUS_REG_MASK(PERIPHS_PIN_MUX_4, (1<<11));
-	
-	/* UART_TX(BT) */
-	SET_CBUS_REG_MASK(PERIPHS_PIN_MUX_4, (1<<13));
-	
-	/* UART_RX(BT) */
-	SET_CBUS_REG_MASK(PERIPHS_PIN_MUX_4, (1<<12));
 }
 
 static void bt_device_on(void)
 {
-	/* BT_RST_N */
-	CLEAR_CBUS_REG_MASK(PREG_PAD_GPIO2_EN_N, (1<<6));
-	CLEAR_CBUS_REG_MASK(PREG_PAD_GPIO2_O, (1<<6));	
-	msleep(200);	
-	SET_CBUS_REG_MASK(PREG_PAD_GPIO2_O, (1<<6));
 }
 
 static void bt_device_off(void)
 {
-	/* BT_RST_N */
-	CLEAR_CBUS_REG_MASK(PREG_PAD_GPIO2_EN_N, (1<<6));
-	CLEAR_CBUS_REG_MASK(PREG_PAD_GPIO2_O, (1<<6));	
-	msleep(200);	
 }
 
 struct bt_dev_data bt_dev = {
@@ -1287,6 +1511,237 @@ struct bt_dev_data bt_dev = {
     .bt_dev_off     = bt_device_off,
 };
 #endif
+
+#if defined(CONFIG_AM_DVB)
+static struct resource amlogic_dvb_resource[]  = {
+	[0] = {
+		.start = INT_DEMUX,                   //demux 0 irq
+		.end   = INT_DEMUX,
+		.flags = IORESOURCE_IRQ,
+		.name  = "demux0_irq"
+	},
+	[1] = {
+		.start = INT_DEMUX_1,                    //demux 1 irq
+		.end   = INT_DEMUX_1,
+		.flags = IORESOURCE_IRQ,
+		.name  = "demux1_irq"
+	},
+	[2] = {
+		.start = INT_DEMUX_2,                    //demux 2 irq
+		.end   = INT_DEMUX_2,
+		.flags = IORESOURCE_IRQ,
+		.name  = "demux2_irq"
+	},	
+	[3] = {
+		.start = INT_ASYNC_FIFO_FLUSH,                   //dvr 0 irq
+		.end   = INT_ASYNC_FIFO_FLUSH,
+		.flags = IORESOURCE_IRQ,
+		.name  = "dvr0_irq"
+	},
+	[4] = {
+		.start = INT_ASYNC_FIFO2_FLUSH,          //dvr 1 irq
+		.end   = INT_ASYNC_FIFO2_FLUSH,
+		.flags = IORESOURCE_IRQ,
+		.name  = "dvr1_irq"
+	},	
+};
+
+static  struct platform_device amlogic_dvb_device = {
+	.name             = "amlogic-dvb",
+	.id               = -1,
+	.num_resources    = ARRAY_SIZE(amlogic_dvb_resource),
+	.resource         = amlogic_dvb_resource,
+};
+#endif
+
+#ifdef CONFIG_AM_DVB
+static struct resource mxl101_resource[]  = {
+
+	[0] = {
+		.start = 1,                                    //frontend  i2c adapter id
+		.end   = 1,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_i2c"
+	},
+	[1] = {
+		.start = 0xc0,                                 //frontend 0 demod address
+		.end   = 0xc0,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_demod_addr"
+	},
+	[2] = {
+		.start = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8), //reset pin
+		.end   = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_reset_pin"
+	},
+	[3] = {
+		.start = 0, //reset enable value
+		.end   = 0,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_reset_value_enable"
+	},
+	[4] = {
+		.start = (GPIOC_bank_bit0_15(3)<<16)|GPIOC_bit_bit0_15(3),  //power enable pin
+		.end   = (GPIOC_bank_bit0_15(3)<<16)|GPIOC_bit_bit0_15(3),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_reset"
+	//	.name  = "frontend0_power_pin"
+	},	
+	[5] = {
+	.start = 0xc0,                                 //is mxl101
+	.end   = 0xc0,
+	.flags = IORESOURCE_MEM,
+	.name  = "frontend0_tuner_addr"
+	},	
+};
+
+static  struct platform_device mxl101_device = {
+	.name             = "mxl101",
+	.id               = -1,
+	.num_resources    = ARRAY_SIZE(mxl101_resource),
+	.resource         = mxl101_resource,
+};
+
+static struct resource avl6211_resource[]  = {
+
+	[0] = {
+		.start = 1,                                    //frontend  i2c adapter id
+		.end   = 1,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_i2c"
+	},
+	[1] = {
+		.start = 0xc0,                                 //frontend 0 demod address
+		.end   = 0xc0,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_demod_addr"
+	},
+	[2] = {
+		.start = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8), //reset pin
+		.end   = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_reset_pin"
+	},
+	[3] = {
+		.start = 0, //reset enable value
+		.end   = 0,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_reset_value_enable"
+	},
+	[4] = {
+		.start = (GPIOC_bank_bit0_15(3)<<16)|GPIOC_bit_bit0_15(3),  //DVBS2 LNBON/OFF pin
+		.end   = (GPIOC_bank_bit0_15(3)<<16)|GPIOC_bit_bit0_15(3),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_LNBON/OFF"
+	},	
+	[5] = {
+	.start = 0xc0,                                 //is avl6211
+	.end   = 0xc0,
+	.flags = IORESOURCE_MEM,
+	.name  = "frontend0_tuner_addr"
+	},	
+	[6] = {
+	.start = (GPIOD_bank_bit0_9(9)<<16)|GPIOD_bit_bit0_9(9),        //is avl6211
+	.end   = (GPIOD_bank_bit0_9(9)<<16)|GPIOD_bit_bit0_9(9),
+	.flags = IORESOURCE_MEM,
+	.name  = "frontend0_POWERON/OFF"
+	},	
+};
+
+static  struct platform_device avl6211_device = {
+	.name             = "avl6211",
+	.id               = -1,
+	.num_resources    = ARRAY_SIZE(avl6211_resource),
+	.resource         = avl6211_resource,
+};
+
+
+
+
+static struct resource gx1001_resource[]  = {
+	[0] = {
+		.start = (GPIOX_bank_bit0_31(31)<<16)|GPIOX_bit_bit0_31(31),                           //frontend 0 reset pin
+		.end   = (GPIOX_bank_bit0_31(31)<<16)|GPIOX_bit_bit0_31(31),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_reset"
+	},
+	[1] = {
+		.start = 1,                                    //frontend 0 i2c adapter id
+		.end   = 1,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_i2c"
+	},
+	[2] = {
+		.start = 0xC0,                                 //frontend 0 tuner address
+		.end   = 0xC0,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_tuner_addr"
+	},
+	[3] = {
+		.start = 0x18,                                 //frontend 0 demod address
+		.end   = 0x18,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_demod_addr"
+	},
+};
+
+static  struct platform_device gx1001_device = {
+	.name             = "gx1001",
+	.id               = -1,
+	.num_resources    = ARRAY_SIZE(gx1001_resource),
+	.resource         = gx1001_resource,
+};
+
+
+static struct resource ite9173_resource[]  = {
+	[0] = {
+		.start = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8), //reset pin
+		.end   = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_reset"
+	},
+	[1] = {
+		.start = 1,                                    //frontend 0 i2c adapter id
+		.end   = 1,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_i2c"
+	},
+	[2] = {
+		.start = 0x9E,                                 //frontend 0 tuner address
+		.end   = 0x9E,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_tuner_addr"
+	},
+	[3] = {
+		.start =  0x38,                                 //frontend 0 demod address
+		.end   =  0x38,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_demod_addr"
+	},
+	[4] = {
+		.start = (GPIOB_bank_bit0_23(23)<<16)|GPIOB_bit_bit0_23(23),  //// ANT_PWR_CTRL pin
+		.end   = (GPIOB_bank_bit0_23(23)<<16)|GPIOB_bit_bit0_23(23),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_power"
+	},
+};
+
+static  struct platform_device ite9173_device = {
+	.name             = "ite9173",
+	.id               = -1,
+	.num_resources    = ARRAY_SIZE(ite9173_resource),
+	.resource         = ite9173_resource,
+};
+#endif
+#if defined(CONFIG_AML_WATCHDOG)
+static struct platform_device aml_wdt_device = {
+    .name = "aml_wdt",
+    .id   = -1,
+    .num_resources = 0,
+};
+#endif
+
 
 static struct platform_device __initdata *platform_devs[] = {
 #if defined(CONFIG_JPEGLOGO)
@@ -1339,6 +1794,9 @@ static struct platform_device __initdata *platform_devs[] = {
 #if defined(CONFIG_NAND_FLASH_DRIVER_MULTIPLANE_CE)
     &aml_nand_device,
 #endif
+#ifdef CONFIG_BT_DEVICE
+ 	&bt_device,
+#endif
 #if defined(CONFIG_AML_RTC)
     &aml_rtc_device,
 #endif
@@ -1352,6 +1810,7 @@ static struct platform_device __initdata *platform_devs[] = {
     &android_pmem_device,
 #endif
 #if defined(CONFIG_I2C_SW_AML)
+    &aml_sw_i2c_device_tuner,
     &aml_sw_i2c_device,
 #endif
 #if defined(CONFIG_I2C_AML)|| defined(CONFIG_I2C_HW_AML)
@@ -1375,9 +1834,6 @@ static struct platform_device __initdata *platform_devs[] = {
         &usb_mass_storage_device,
     #endif
 #endif
-#ifdef CONFIG_BT_DEVICE  
-    &bt_device,
-#endif
 #ifdef CONFIG_POST_PROCESS_MANAGER
     &ppmgr_device,
 #endif
@@ -1388,7 +1844,16 @@ static struct platform_device __initdata *platform_devs[] = {
 #ifdef CONFIG_EFUSE
 	&aml_efuse_device,
 #endif
-
+#ifdef CONFIG_AM_DVB
+	&amlogic_dvb_device,
+	&mxl101_device,
+	&gx1001_device,
+	&avl6211_device,
+	&ite9173_device,
+#endif
+ #if defined(CONFIG_AML_WATCHDOG)
+        &aml_wdt_device,
+ #endif
 };
 
 static struct i2c_board_info __initdata aml_i2c_bus_info[] = {
@@ -1405,34 +1870,44 @@ static struct i2c_board_info __initdata aml_i2c_bus_info[] = {
 	},
 #endif
 };
+static struct i2c_board_info __initdata aml_i2c_bus_info_1[] = {
+};
+
+static struct i2c_board_info __initdata aml_i2c_bus_info_2[] = {
+};
+
 
 static int __init aml_i2c_init(void)
 {
-
-	i2c_register_board_info(0, aml_i2c_bus_info,ARRAY_SIZE(aml_i2c_bus_info));
+    i2c_register_board_info(0, aml_i2c_bus_info,
+        ARRAY_SIZE(aml_i2c_bus_info));
+    i2c_register_board_info(1, aml_i2c_bus_info_1,
+        ARRAY_SIZE(aml_i2c_bus_info_1)); 
+    i2c_register_board_info(2, aml_i2c_bus_info_2,
+        ARRAY_SIZE(aml_i2c_bus_info_2)); 
 	return 0;
 }
 
 static void __init eth_pinmux_init(void)
 {
 	//Rony add for eth used external clock 20120509
-	int board_hwid = 0;
+	//int board_hwid = 0;
 	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_6,(3<<17));//reg6[17/18]=0
 	
-	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_0,(1<<4));
-	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_3,(1<<12));
-	WRITE_CBUS_REG( PREG_PAD_GPIO1_EN_N, READ_CBUS_REG(PREG_PAD_GPIO1_EN_N) | ((1<<21)|(1<<22)|(1<<23)) ); 
-	board_hwid = READ_CBUS_REG(PREG_PAD_GPIO1_I) >> 21;	
-	if(board_hwid == 0x04)
-	{
-	  	eth_set_pinmux(ETH_BANK0_GPIOY1_Y9, ETH_CLK_IN_GPIOY0_REG6_18, 0);
-		printk("eth used external clock\n");
-	}
-	else // end Rony add for eth used external clock 20120509
+	
+	//board_hwid = = get_hardware_id();	// Rony modify 20120611 move in device_hardware_id_init
+	if((board_ver_id == 0x00) || (board_ver_id == 0x01)) //internal Rony add id 0x01 used internal clock
 	{
 		printk("eth used internal clock\n");
 	 	eth_set_pinmux(ETH_BANK0_GPIOY1_Y9, ETH_CLK_OUT_GPIOY0_REG6_17, 0);
 	}
+	else //external
+	{
+	  	eth_set_pinmux(ETH_BANK0_GPIOY1_Y9, ETH_CLK_IN_GPIOY0_REG6_18, 0);
+		printk("eth used external clock\n");
+	}
+	 // end Rony add for eth used external clock 20120509
+	 
     //power hold
     //setbits_le32(P_PREG_AGPIO_O,(1<<8));
     //clrbits_le32(P_PREG_AGPIO_EN_N,(1<<8));
@@ -1545,11 +2020,17 @@ static void __init gpio_init(void)
 */
 
 		// wifi power
-	   CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_1,(1<<6));
-	   CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_0,(1<<15));
-       set_gpio_mode(GPIOC_bank_bit0_15(5), GPIOC_bit_bit0_15(5), GPIO_OUTPUT_MODE);
-       set_gpio_val(GPIOC_bank_bit0_15(5), GPIOC_bit_bit0_15(5), 1);
-       
+	  // CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_1,(1<<6));
+	  // CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_0,(1<<15));
+    //   set_gpio_mode(GPIOC_bank_bit0_15(5), GPIOC_bit_bit0_15(5), GPIO_OUTPUT_MODE);
+	   //Rony add,if board_ver_id equal 0x02 then inverse wifi power level 20120612
+	  // if(board_ver_id == 0x02){
+     //  	set_gpio_val(GPIOC_bank_bit0_15(5), GPIOC_bit_bit0_15(5), 0);
+	   //}else
+	   //Rony add end
+	   //{
+     //  	set_gpio_val(GPIOC_bank_bit0_15(5), GPIOC_bit_bit0_15(5), 1);
+	   //}
     //VCCx2 power up
     printk(KERN_INFO "set_vccx2 power up\n");
     set_gpio_mode(GPIOA_bank_bit0_27(26), GPIOA_bit_bit0_27(26), GPIO_OUTPUT_MODE);
@@ -1577,16 +2058,67 @@ static void __init device_pinmux_init(void )
     /*pinmux of eth*/
     eth_pinmux_init();
     aml_i2c_init();
-    
-    //init sata
-    set_gpio_mode(GPIOC_bank_bit0_15(7), GPIOC_bit_bit0_15(7), GPIO_OUTPUT_MODE);
-    set_gpio_val(GPIOC_bank_bit0_15(7), GPIOC_bit_bit0_15(7), 1);
+    printk("SPDIF output.\n");
+		CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_0,(1<<19));
+		CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_3,(1<<25));
+		CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_7,(1<<17));
+		SET_CBUS_REG_MASK(PERIPHS_PIN_MUX_3, (1<<24));
 //    set_audio_pinmux(AUDIO_OUT_TEST_N);
    // set_audio_pinmux(AUDIO_IN_JTAG);
 
+#ifdef CONFIG_AM_MXL101
+	//for mxl101
+	if(board_dvb_id == 0){
+		//set_mio_mux(3, 0x3F);
+		//clear_mio_mux(6, 0x1F<<19);
+	
+		set_mio_mux(3, 0x3F<<6);
+		clear_mio_mux(0, 0xF);
+		clear_mio_mux(5, 0x1<<23);
+	
+		clear_mio_mux(0, 1<<6);
+		//pwr pin;
+		clear_mio_mux(0, 1<<13);
+		clear_mio_mux(1, 1<<8);
+		//rst pin;
+		clear_mio_mux(0, 1<<28);
+		clear_mio_mux(1, 1<<20);
+	/*	set_mio_mux(3, 1<<0);
+		set_mio_mux(3, 1<<1);
+		set_mio_mux(3, 1<<2);
+		set_mio_mux(3, 1<<3);
+		set_mio_mux(3, 1<<4);
+		clear_mio_mux(0, 1<<6);*/
+	}
+#endif
+
+#ifdef CONFIG_AM_AVL6211
+
+//for avl6211
+	printk("CONFIG_AM_AVL6211 set pinmux\n");
+	if(board_dvb_id == 1){
+		set_mio_mux(3, 0x3F<<6);
+	//	clear_mio_mux(0, 1<<4);
+		clear_mio_mux(0, 0x7);
+	}
+
+#endif
 	//add by steven
 	spdif_pinmux_init();
 	gpio_init();
+	
+#ifdef CONFIG_AM_ITE9173
+//for ite9173
+	printk("CONFIG_AM_ITE9173 set pinmux\n");
+	set_mio_mux(3, 0x3F<<6);
+//	clear_mio_mux(0, 1<<4);
+	clear_mio_mux(0, 0x7);
+#endif
+
+#if defined(CONFIG_SDIO_DHD_CDC_WIFI_40181_MODULE_MODULE)
+    aml_wifi_bcm4018x_init();
+#endif
+
 
 }
 
@@ -1596,17 +2128,15 @@ static void __init  device_clk_setting(void)
     //demod_apll_setting(0,1200*CLK_1M);
     /*eth clk*/
 	//Rony add for eth used external clock 20120509
-	int board_hwid = 0;
-	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_0,(1<<4));
-	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_3,(1<<12));
-	WRITE_CBUS_REG( PREG_PAD_GPIO1_EN_N, READ_CBUS_REG(PREG_PAD_GPIO1_EN_N) | ((1<<21)|(1<<22)|(1<<23)) ); 
-	board_hwid = READ_CBUS_REG(PREG_PAD_GPIO1_I) >> 21;
-	if(board_hwid == 0x04){
-		eth_clk_set(ETH_CLKSRC_EXT_XTAL_CLK, (50 * CLK_1M), (50 * CLK_1M), 1);
-	}else{ 
-	//end Rony add for eth used external clock 20120509
+	//int board_hwid = 0;
+	
+	//board_hwid = = get_hardware_id();	// Rony modify 20120611 move in get_hardware_id
+	if((board_ver_id == 0x00) || (board_ver_id == 0x01)){ // internal Rony add id 0x01 used internal clock
     	eth_clk_set(ETH_CLKSRC_MISC_CLK, get_misc_pll_clk(), (50 * CLK_1M), 0);
+	}else{ // external
+		eth_clk_set(ETH_CLKSRC_EXT_XTAL_CLK, (50 * CLK_1M), (50 * CLK_1M), 1);
 	}
+	//end Rony add for eth used external clock 20120509
     //eth_clk_set(1, get_system_clk(), (50 * CLK_1M), 0);
 }
 
@@ -1678,10 +2208,16 @@ static void __init power_hold(void)
         set_gpio_mode(GPIOD_bank_bit0_9(6), GPIOD_bit_bit0_9(6), GPIO_OUTPUT_MODE);
         set_gpio_val(GPIOD_bank_bit0_9(6), GPIOD_bit_bit0_9(6), 1);
 
-		// MUTE
-       set_gpio_mode(GPIOX_bank_bit0_31(29), GPIOX_bit_bit0_31(29), GPIO_OUTPUT_MODE);
-       set_gpio_val(GPIOX_bank_bit0_31(29), GPIOX_bit_bit0_31(29), 0);
-
+		// MUTE // Rony modify,used mute spk 20120611
+       //set_gpio_mode(GPIOX_bank_bit0_31(29), GPIOX_bit_bit0_31(29), GPIO_OUTPUT_MODE);
+       //set_gpio_val(GPIOX_bank_bit0_31(29), GPIOX_bit_bit0_31(29), 0);
+		set_gpio_mode(GPIOC_bank_bit0_15(4), GPIOC_bit_bit0_15(4), GPIO_OUTPUT_MODE);
+		if(board_ver_id == 0x02){
+			set_gpio_val(GPIOC_bank_bit0_15(4), GPIOC_bit_bit0_15(4), 1);	 // mute speak
+		}else{
+			set_gpio_val(GPIOC_bank_bit0_15(4), GPIOC_bit_bit0_15(4), 0);	 // mute speak
+		}
+	   
       // PC Link
 //       set_gpio_mode(GPIOC_bank_bit0_15(4), GPIOC_bit_bit0_15(4), GPIO_OUTPUT_MODE);
 //       set_gpio_val(GPIOC_bank_bit0_15(4), GPIOC_bit_bit0_15(4), 1);
@@ -1732,6 +2268,31 @@ static void __init LED_PWM_REG0_init(void)
     WRITE_CBUS_REG_BITS(LED_PWM_REG0,1,0,4); //adust cpu1.2v   to 1.26V     
 #endif
 }
+
+// Rony add 20120611 get hardware id 
+// GPIOB23,GPIOB22,GPIOB21
+void device_hardware_id_init(){	
+	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_0,(1<<4));
+	CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_3,(1<<12));
+	WRITE_CBUS_REG( PREG_PAD_GPIO1_EN_N, READ_CBUS_REG(PREG_PAD_GPIO1_EN_N) | ((1<<21)|(1<<22)|(1<<23)) ); 
+	board_ver_id = READ_CBUS_REG(PREG_PAD_GPIO1_I) >> 21;	
+	printk("++++++++++++++++++++++++++ hardware id = 0x%x\n",board_ver_id);
+}
+// Rony add end
+
+// Rony add 20120702 
+void device_dvb_id_init(){
+	set_gpio_mode(GPIOD_bank_bit0_9(9), GPIOD_bit_bit0_9(9), GPIO_INPUT_MODE);
+	board_dvb_id = get_gpio_val(GPIOD_bank_bit0_9(9), GPIOD_bit_bit0_9(9));
+	printk(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> dvb id = %s\n",board_dvb_id ? "dvbs" : "dvbt");
+}
+
+int get_device_dvb_id(){
+	return board_dvb_id;
+}
+EXPORT_SYMBOL(get_device_dvb_id);
+// Rony add end
+
 static __init void m1_init_machine(void)
 {
 	meson_cache_init();
@@ -1739,10 +2300,12 @@ static __init void m1_init_machine(void)
 	extern int (*pm_power_suspend)(void);
 	pm_power_suspend = meson_power_suspend;
 #endif /*CONFIG_AML_SUSPEND*/
-
+	device_dvb_id_init();// Rony add it device_dvb_id_init
+	device_hardware_id_init();// Rony add it check hardware id
     power_hold();
 	device_clk_setting();
 	device_pinmux_init();
+	extern_usb_wifi_power(0);
     LED_PWM_REG0_init();
 	platform_add_devices(platform_devs, ARRAY_SIZE(platform_devs));
 
@@ -1751,7 +2314,7 @@ static __init void m1_init_machine(void)
     set_usb_phy_clk(USB_PHY_CLOCK_SEL_XTAL_DIV2);
 	set_usb_phy_id_mode(USB_PHY_PORT_A, USB_PHY_MODE_SW_HOST);
     lm_device_register(&usb_ld_a);
-	set_usb_phy_id_mode(USB_PHY_PORT_B,USB_PHY_MODE_SW_HOST);
+  	set_usb_phy_id_mode(USB_PHY_PORT_B,USB_PHY_MODE_SW_HOST);
     lm_device_register(&usb_ld_b);
 #endif
     disable_unused_model();

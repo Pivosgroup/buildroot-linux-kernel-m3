@@ -383,6 +383,11 @@ struct btcoexist_priv	{
 #define		TxHighPwrLevel_Level2		2
 #define		TxHighPwrLevel_BT1			3
 #define		TxHighPwrLevel_BT2			4
+#define		TxHighPwrLevel_15			5
+#define		TxHighPwrLevel_35			6
+#define		TxHighPwrLevel_50			7
+#define		TxHighPwrLevel_70			8
+#define		TxHighPwrLevel_100			9
 
 #define		DM_Type_ByFW			0
 #define		DM_Type_ByDriver		1

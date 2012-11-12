@@ -55,6 +55,8 @@ struct zero_bulkout_context{
 #define MAX_USBCTRL_VENDORREQ_TIMES 1
 #endif
 
+#define RTW_USB_BULKOUT_TIMEOUT 5000 //ms
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)) || (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,18))
 #define _usbctrl_vendorreq_async_callback(urb, regs)	_usbctrl_vendorreq_async_callback(urb)
 #define usb_bulkout_zero_complete(purb, regs)	usb_bulkout_zero_complete(purb)
@@ -1962,7 +1964,7 @@ static inline u32 usb_write_port_async(struct intf_hdl *pintfhdl, u32 addr, u32 
 
 static inline int usb_write_port_sync(struct intf_hdl *pintfhdl, u32 addr, u32 cnt, u8 *wmem)
 {
-	return usb_write_port(pintfhdl, addr, cnt, wmem, RTW_USB_CONTROL_MSG_TIMEOUT);
+	return usb_write_port(pintfhdl, addr, cnt, wmem, RTW_USB_BULKOUT_TIMEOUT);
 }
 
 static void usb_write_port_cancel(struct intf_hdl *pintfhdl)
@@ -1973,7 +1975,7 @@ static void usb_write_port_cancel(struct intf_hdl *pintfhdl)
 
 	DBG_8192C("usb_write_port_cancel \n");
 	
-	padapter->bWritePortCancel = _TRUE;	
+	padapter->bWritePortCancel = _TRUE;
 	
 	for(i=0; i<NR_XMITBUFF; i++)
 	{

@@ -122,6 +122,7 @@ typedef enum _RT_CHANNEL_DOMAIN
 	RT_CHANNEL_DOMAIN_MAX,
 }RT_CHANNEL_DOMAIN, *PRT_CHANNEL_DOMAIN;
 
+#define rtw_is_channel_plan_valid(chplan) (chplan<RT_CHANNEL_DOMAIN_MAX)
 
 #define	MAX_SCAN_CHANNEL_NUM			54
 
@@ -172,13 +173,7 @@ struct	ss_res
 	int	bss_cnt;
 	int	channel_idx;
 	int	scan_mode;
-
-	#if 1
 	NDIS_802_11_SSID ssid[RTW_SSID_SCAN_AMOUNT];
-	#else
-	int	ss_ssidlen[RTW_SSID_SCAN_AMOUNT];
-	unsigned char	ss_ssid[RTW_SSID_SCAN_AMOUNT][IW_ESSID_MAX_SIZE + 1];
-	#endif
 };
 
 //#define AP_MODE				0x0C
@@ -213,9 +208,50 @@ struct	ss_res
 #define	TDLS_APSD_CHSW_STATE		0x00100000	//in APSD and want to setup channel switch
 #define	TDLS_PEER_SLEEP_STATE		0x00200000	//peer sta is sleeping
 #define	TDLS_SW_OFF_STATE			0x00400000	//terminate channel swithcing
+#define	TDLS_ALIVE_STATE				0x00010000	//Check if peer sta is alived.
+
 #define	TPK_RESEND_COUNT				301
 #define 	CH_SWITCH_TIME				10
 #define 	CH_SWITCH_TIMEOUT			30
+#define	TDLS_STAY_TIME				500
+#define	TDLS_SIGNAL_THRESH			0x20
+#define	TDLS_WATCHDOG_PERIOD		10	//Periodically sending tdls discovery request in TDLS_WATCHDOG_PERIOD * 2 sec
+#define	TDLS_ALIVE_TIMER_PH1			5000
+#define	TDLS_ALIVE_TIMER_PH2			2000
+#define	TDLS_STAY_TIME				500
+#define	TDLS_HANDSHAKE_TIME			5000
+#define	TDLS_ALIVE_COUNT				3
+
+
+// 1: Write RCR DATA BIT
+// 2: Issue peer traffic indication
+// 3: Go back to the channel linked with AP, terminating channel switch procedure
+// 4: Init channel sensing, receive all data and mgnt frame
+// 5: Channel sensing and report candidate channel
+// 6: First time set channel to off channel
+// 7: Go back tp the channel linked with AP when set base channel as target channel
+// 8: Set channel back to base channel
+// 9: Set channel back to off channel
+// 10: Restore RCR DATA BIT
+// 11: Check alive
+enum TDLS_option
+{
+	TDLS_WRCR			= 	1,
+	TDLS_SD_PTI		= 	2,
+	TDLS_CS_OFF		= 	3,
+	TDLS_INIT_CH_SEN	= 	4,
+	TDLS_DONE_CH_SEN	=	5,
+	TDLS_OFF_CH		=	6,
+	TDLS_BASE_CH 		=	7,
+	TDLS_P_OFF_CH		=	8,
+	TDLS_P_BASE_CH	= 	9,
+	TDLS_RS_RCR		=	10,
+	TDLS_CKALV_PH1	=	11,
+	TDLS_CKALV_PH2	=	12,
+	TDLS_FREE_STA		=	13,
+	maxTDLS,
+};
+
 #endif
 
 struct FW_Sta_Info
@@ -263,18 +299,6 @@ struct mlme_ext_info
 	// Accept ADDBA Request
 	BOOLEAN bAcceptAddbaReq;
 	u8	bwmode_updated;
-
-#ifdef CONFIG_TDLS
-	uint				tdls_setup_state;
-	u8				tdls_sta_cnt;
-	u8				tdls_dis_req;
-	u8				tdls_cam_entry_to_write;	//cam entry that is empty to write
-	u8				tdls_cam_entry_to_clear;	//cam entry that is trying to clear, using in direct link teardown
-	u8				tdls_ch_sensing;
-	u8				tdls_cur_channel;
-	u8				tdls_candidate_ch;
-	u8				tdls_collect_pkt_num[14];
-#endif
 
 	struct ADDBA_request		ADDBA_req;
 	struct WMM_para_element	WMM_param;
@@ -325,18 +349,18 @@ struct mlme_ext_priv
 	//_timer		ADDBA_timer;
 	u16			chan_scan_time;
 
-	u32	linked_to;//linked timeout
+	u8 scan_abort;
+
 	u32	retry; //retry for issue probereq
 	
 	u64 TSFValue;
 
-#ifdef CONFIG_TDLS
-	_workitem TDLS_restore_workitem;
-#endif
-	
 #ifdef CONFIG_AP_MODE	
 	unsigned char bstart_bss;
 #endif
+
+	//recv_decache check for Action_public frame 
+	u16 	 action_public_rxseq;
 
 };
 
@@ -345,6 +369,11 @@ int init_hw_mlme_ext(_adapter *padapter);
 void free_mlme_ext_priv (struct mlme_ext_priv *pmlmeext);
 extern void init_mlme_ext_timer(_adapter *padapter);
 extern void init_addba_retry_timer(_adapter *padapter, struct sta_info *psta);
+
+#ifdef CONFIG_TDLS
+int rtw_init_tdls_info(_adapter* padapter);
+void rtw_free_tdls_info(struct tdls_info *ptdlsinfo);
+#endif //CONFIG_TDLS
 
 extern struct xmit_frame *alloc_mgtxmitframe(struct xmit_priv *pxmitpriv);
 
@@ -393,6 +422,10 @@ int is_IBSS_empty(_adapter *padapter);
 unsigned char check_assoc_AP(u8 *pframe, uint len);
 
 int WMM_param_handler(_adapter *padapter, PNDIS_802_11_VARIABLE_IEs	pIE);
+#ifdef CONFIG_WFD
+int WFD_info_handler(_adapter *padapter, PNDIS_802_11_VARIABLE_IEs	pIE);
+#endif
+
 void WMMOnAssocRsp(_adapter *padapter);
 
 void HT_caps_handler(_adapter *padapter, PNDIS_802_11_VARIABLE_IEs pIE);
@@ -449,19 +482,18 @@ void issue_p2p_invitation_request(_adapter *padapter, u8* raddr );
 #endif //CONFIG_P2P
 #ifdef CONFIG_TDLS
 void issue_nulldata_to_TDLS_peer_STA(_adapter *padapter, struct sta_info *ptdls_sta, unsigned int power_mode);
-extern void TDLS_restore_workitem_callback(struct work_struct *work);
 void init_TPK_timer(_adapter *padapter, struct sta_info *psta);
-extern void TDLS_option_workitem_callback(struct work_struct *work);
 void init_ch_switch_timer(_adapter *padapter, struct sta_info *psta);
 void init_base_ch_timer(_adapter *padapter, struct sta_info *psta);
 void init_off_ch_timer(_adapter *padapter, struct sta_info *psta);
-extern void base_channel_workitem_callback(struct work_struct *work);
-extern void off_channel_workitem_callback(struct work_struct *work);
-void issue_tdls_dis_req(_adapter *padapter);
+void init_tdls_alive_timer(_adapter *padapter, struct sta_info *psta);
+void init_handshake_timer(_adapter *padapter, struct sta_info *psta);
+void free_tdls_sta(_adapter *padapter, struct sta_info *ptdls_sta);
+void issue_tdls_dis_req(_adapter *padapter, u8 *mac_addr);
 void issue_tdls_setup_req(_adapter *padapter, u8 *mac_addr);
 void issue_tdls_setup_rsp(_adapter *padapter, union recv_frame *precv_frame);
 void issue_tdls_setup_cfm(_adapter *padapter, union recv_frame *precv_frame);
-void issue_tdls_dis_rsp(_adapter * padapter, union recv_frame * precv_frame);
+void issue_tdls_dis_rsp(_adapter * padapter, union recv_frame * precv_frame, u8 dialog);
 void issue_tdls_teardown(_adapter *padapter, u8 *mac_addr);
 void issue_tdls_peer_traffic_indication(_adapter *padapter, struct sta_info *psta);
 void issue_tdls_ch_switch_req(_adapter *padapter, u8 *mac_addr);
@@ -595,6 +627,8 @@ u8 tx_beacon_hdl(_adapter *padapter, unsigned char *pbuf);
 u8 set_chplan_hdl(_adapter *padapter, unsigned char *pbuf);
 u8 led_blink_hdl(_adapter *padapter, unsigned char *pbuf);
 u8 set_csa_hdl(_adapter *padapter, unsigned char *pbuf);	//Kurt: Handling DFS channel switch announcement ie.
+u8 tdls_hdl(_adapter *padapter, unsigned char *pbuf);
+
 
 #define GEN_DRV_CMD_HANDLER(size, cmd)	{size, &cmd ## _hdl},
 #define GEN_MLME_EXT_HANDLER(size, cmd)	{size, cmd},
@@ -667,6 +701,7 @@ struct cmd_hdl wlancmds[] =
 	GEN_MLME_EXT_HANDLER(sizeof(struct SetChannelPlan_param), set_chplan_hdl) /*59*/
 	GEN_MLME_EXT_HANDLER(sizeof(struct LedBlink_param), led_blink_hdl) /*60*/
 	GEN_MLME_EXT_HANDLER(sizeof(struct SetChannelSwitch_param), set_csa_hdl) /*61*/
+	GEN_MLME_EXT_HANDLER(sizeof(struct TDLSoption_param), tdls_hdl) /*62*/
 };
 
 #endif

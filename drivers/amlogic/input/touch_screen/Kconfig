@@ -182,3 +182,9 @@ config TOUCHSCREEN_SIS_I2C
 	  To compile this driver as a module, choose M here: the
 	  module will be called .  
 	  
+config BU2102X_RESISTIVE_TOUCHSCREEN
+	tristate "BU2102X resistive touchscreen"
+	depends on I2C
+	default n
+	help
+	  Say Y here if you want to use the BU2102X resistive panel.

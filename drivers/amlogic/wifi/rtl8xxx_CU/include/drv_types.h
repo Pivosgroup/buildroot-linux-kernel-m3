@@ -94,6 +94,10 @@ typedef struct _ADAPTER _adapter, ADAPTER,*PADAPTER;
 #include <rtw_br_ext.h>
 #endif	// CONFIG_BR_EXT
 
+#ifdef CONFIG_IOCTL_CFG80211
+	#include "ioctl_cfg80211.h"	
+#endif //CONFIG_IOCTL_CFG80211
+
 #define SPEC_DEV_ID_NONE BIT(0)
 #define SPEC_DEV_ID_DISABLE_HT BIT(1)
 #define SPEC_DEV_ID_ENABLE_PS BIT(2)
@@ -188,6 +192,15 @@ struct registry_priv
 #ifdef CONFIG_LAYER2_ROAMING
 	u8	max_roaming_times; // the max number driver will try to roaming
 #endif
+
+#ifdef CONFIG_IOL
+	bool force_iol; //enable iol without other concern
+#endif
+
+#ifdef SUPPORT_64_STA
+	u8	bcmc_rate;
+#endif
+	u8	intel_class_mode;
 };
 
 
@@ -348,7 +361,36 @@ typedef enum _DRIVER_STATE{
 	DRIVER_REPLACE_DONGLE = 2,
 }DRIVER_STATE;
 
-struct _ADAPTER{	
+#ifdef CONFIG_INTEL_PROXIM	
+struct proxim {
+	bool proxim_support;
+	bool proxim_on;
+
+	void *proximity_priv;
+	int (*proxim_rx)(_adapter *padapter,
+		union recv_frame *precv_frame);
+	u8	(*proxim_get_var)(_adapter* padapter, u8 type);
+};
+#endif	//CONFIG_INTEL_PROXIM
+
+#ifdef RTL8723A_SDIO_LOOPBACK
+typedef struct loopbackdata
+{
+	_sema	sema;
+	_thread_hdl_ lbkthread;
+	u8 bstop;
+	u32 cnt;
+	u16 size;
+	u16 txsize;
+	u8 txbuf[0x8000];
+	u16 rxsize;
+	u8 rxbuf[0x8000];
+	u8 msg[100];
+
+}LOOPBACKDATA, *PLOOPBACKDATA;
+#endif
+
+struct _ADAPTER{
 	int	DriverState;// for disable driver using module, use dongle to replace module.
 	int	pid[3];//process id from UI, 0:wps, 1:hostapd, 2:dhcpcd
 	int	bDongle;//build-in module or external dongle
@@ -385,9 +427,19 @@ struct _ADAPTER{
 	struct	hostapd_priv	*phostapdpriv;		
 #endif
 
+#ifdef CONFIG_IOCTL_CFG80211
+#ifdef CONFIG_P2P
+	struct cfg80211_wifidirect_info	cfg80211_wdinfo;
+#endif //CONFIG_IOCTL_CFG80211
+#endif //CONFIG_P2P
+
 #ifdef CONFIG_P2P
 	struct wifidirect_info	wdinfo;
 #endif //CONFIG_P2P
+
+#ifdef CONFIG_TDLS
+	struct tdls_info	tdlsinfo;
+#endif //CONFIG_TDLS
 
 	PVOID			HalData;
 	u32 hal_data_sz;
@@ -447,6 +499,12 @@ struct _ADAPTER{
 	struct net_device_stats stats;
 	struct iw_statistics iwstats;
 	struct proc_dir_entry *dir_dev;// for proc directory
+
+
+#ifdef CONFIG_IOCTL_CFG80211
+	struct wireless_dev *rtw_wdev;
+#endif //CONFIG_IOCTL_CFG80211
+	
 #endif //end of PLATFORM_LINUX
 
 	int net_closed;
@@ -473,8 +531,19 @@ struct _ADAPTER{
 	struct br_ext_info		ethBrExtInfo;
 #endif	// CONFIG_BR_EXT
 
-};	
-  
+#ifdef CONFIG_INTEL_PROXIM	
+	/* intel Proximity, should be alloc mem
+	 * in intel Proximity module and can only 
+	 * be used in intel Proximity mode */
+	struct proxim proximity;
+#endif	//CONFIG_INTEL_PROXIM
+
+#ifdef RTL8723A_SDIO_LOOPBACK
+	PLOOPBACKDATA ploopback;
+#endif
+
+};
+
 __inline static u8 *myid(struct eeprom_priv *peepriv)
 {
 	return (peepriv->mac_addr);

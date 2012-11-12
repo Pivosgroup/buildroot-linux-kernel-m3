@@ -806,9 +806,10 @@ static void set_di_if1_fmt_more (int hfmt_en,
              		);
 }
 
+extern int di_vscale_skip_count;
+
 #ifdef DI_POST_SKIP_LINE
 static int di_vscale_skip_mode = 0;
-int di_vscale_skip_count = 0;
 static const u32 vpat[] = {0, 0x8, 0x9, 0xa, 0xb, 0xc};
 
 int 	l_luma0_rpt_loop_start = 0;
@@ -1659,9 +1660,6 @@ void read_mtn_info(unsigned long* mtn_info, unsigned long * reg_mtn_info)
 #ifdef DI_POST_SKIP_LINE
 MODULE_PARM_DESC(di_vscale_skip_mode, "\n di_vscale_skip_mode\n");
 module_param(di_vscale_skip_mode, uint, 0664);
-
-MODULE_PARM_DESC(di_vscale_skip_count, "\n di_vscale_skip_count\n");
-module_param(di_vscale_skip_count, uint, 0664);
 
 MODULE_PARM_DESC(l_luma0_rpt_loop_start, "\n l_luma0_rpt_loop_start\n");
 module_param(l_luma0_rpt_loop_start, uint, 0664);

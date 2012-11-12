@@ -815,21 +815,26 @@ static void process_pwrbit_data(_adapter *padapter, union recv_frame *precv_fram
 	{
 		if(pwrbit)
 		{
-			psta->state |= WIFI_SLEEP_STATE;
-			pstapriv->sta_dz_bitmap |= BIT(psta->aid);
-			//DBG_871X("to sleep, sta_dz_bitmap=%x\n", pstapriv->sta_dz_bitmap);
+			if(!(psta->state & WIFI_SLEEP_STATE))
+			{
+				//psta->state |= WIFI_SLEEP_STATE;
+				//pstapriv->sta_dz_bitmap |= BIT(psta->aid);
+			
+				stop_sta_xmit(padapter, psta);
+		
+				//DBG_871X("to sleep, sta_dz_bitmap=%x\n", pstapriv->sta_dz_bitmap);
+			}			
 		}
 		else
 		{
 			if(psta->state & WIFI_SLEEP_STATE)
 			{
-				psta->state ^= WIFI_SLEEP_STATE;
-
-				pstapriv->sta_dz_bitmap &= ~BIT(psta->aid);
-				
-				//DBG_871X("to wakeup, sta_dz_bitmap=%x\n", pstapriv->sta_dz_bitmap);
+				//psta->state ^= WIFI_SLEEP_STATE;
+				//pstapriv->sta_dz_bitmap &= ~BIT(psta->aid);				
+			
 				wakeup_sta_to_xmit(padapter, psta);
 
+				//DBG_871X("to wakeup, sta_dz_bitmap=%x\n", pstapriv->sta_dz_bitmap);			
 			}
 		}
 
@@ -849,12 +854,20 @@ static void process_wmmps_data(_adapter *padapter, union recv_frame *precv_frame
 	
 	if(!psta) return;
 
+#ifdef CONFIG_TDLS
+	if( !(psta->tdls_sta_state & TDLS_LINKED_STATE ) )
+	{
+#endif //CONFIG_TDLS
+
 	if(!psta->qos_option)
 		return;
 
 	if(!(psta->qos_info&0xf))
 		return;
 		
+#ifdef CONFIG_TDLS
+	}
+#endif //CONFIG_TDLS		
 
 	if(psta->state&WIFI_SLEEP_STATE)
 	{
@@ -905,16 +918,16 @@ static void process_wmmps_data(_adapter *padapter, union recv_frame *precv_frame
 #ifdef CONFIG_TDLS
 sint On_TDLS_Setup_Req(_adapter *adapter, union recv_frame *precv_frame)
 {
+	struct tdls_info *ptdlsinfo = &adapter->tdlsinfo;
 	u8 *psa, *pmyid;
 	struct sta_info *ptdls_sta= NULL;
    	struct sta_priv *pstapriv = &adapter->stapriv;
 	u8 *ptr = precv_frame->u.hdr.rx_data;
-	struct mlme_ext_priv	*pmlmeext = &(adapter->mlmeextpriv);	
-	struct mlme_ext_info	*pmlmeinfo = &(pmlmeext->mlmext_info);
+	struct mlme_priv *pmlmepriv = &(adapter->mlmepriv);
 	struct security_priv *psecuritypriv = &adapter->securitypriv;
 	_irqL irqL;
 	struct rx_pkt_attrib	*prx_pkt_attrib = &precv_frame->u.hdr.attrib;
-	u8 *pdialog , *prsnie, *ppairwise_cipher;
+	u8 *prsnie, *ppairwise_cipher;
 	u8 i, k, pairwise_count;
 	u8 ccmp_have=0, rsnie_have=0;
 	u16 j;
@@ -938,7 +951,12 @@ sint On_TDLS_Setup_Req(_adapter *adapter, union recv_frame *precv_frame)
 			-1
 			-FIXED_IE;
 
-	if(ptdls_sta==NULL ||(ptdls_sta->state&TDLS_LINKED_STATE)==TDLS_LINKED_STATE)
+	if(ptdlsinfo->ap_prohibited == _TRUE)
+	{
+		goto exit;
+	}
+
+	if(ptdls_sta==NULL ||(ptdls_sta->tdls_sta_state&TDLS_LINKED_STATE) )
 	{
 		if(ptdls_sta==NULL){
 			ptdls_sta = rtw_alloc_stainfo(pstapriv, psa);
@@ -951,9 +969,7 @@ sint On_TDLS_Setup_Req(_adapter *adapter, union recv_frame *precv_frame)
 		if(ptdls_sta) 
 		{
 			//copy dialog token
-			pdialog=ptr+2;
-			//rx_pkt_pattrib->frag_num is used to fill dialog token
-			_rtw_memcpy(&(prx_pkt_attrib->frag_num), pdialog, 1);
+			ptdls_sta->dialog = *(ptr+2);
 
 			//parsing information element
 			for(j=FIXED_IE; j<parsing_length;){
@@ -1006,6 +1022,11 @@ sint On_TDLS_Setup_Req(_adapter *adapter, union recv_frame *precv_frame)
 					case EID_BSSCoexistence:
 						break;
 					case _LINK_ID_IE_:
+						if(_rtw_memcmp(get_bssid(pmlmepriv), pIE->data, 6) == _FALSE)
+						{
+							//not in same BSS
+							ptdls_sta->stat_code=7;
+						}
 						break;
 					default:
 						break;
@@ -1017,8 +1038,11 @@ sint On_TDLS_Setup_Req(_adapter *adapter, union recv_frame *precv_frame)
 
 			//check status code
 			//if responder STA has/hasn't security on AP, but request hasn't/has RSNIE, it should reject
-			if((rsnie_have && (prx_pkt_attrib->encrypt))||
-			   (rsnie_have==0 && (prx_pkt_attrib->encrypt==0))){
+			if(
+				( rsnie_have && (prx_pkt_attrib->encrypt) )
+				||
+				(rsnie_have==0 && (prx_pkt_attrib->encrypt==0) ) 
+			){
 				ptdls_sta->stat_code=0;
 			}else if(rsnie_have && (prx_pkt_attrib->encrypt==0)){
 				//security disabled
@@ -1028,46 +1052,55 @@ sint On_TDLS_Setup_Req(_adapter *adapter, union recv_frame *precv_frame)
 				ptdls_sta->stat_code=38;
 			}
 			
-			ptdls_sta->state|= TDLS_INITIATOR_STATE;
-			ptdls_sta->aid=*(pdialog);
+			ptdls_sta->tdls_sta_state|= TDLS_INITIATOR_STATE;
 			if(prx_pkt_attrib->encrypt){
 				_rtw_memcpy(ptdls_sta->SNonce, SNonce, 32);
 				_rtw_memcpy(&(ptdls_sta->TDLS_PeerKey_Lifetime), timeout_interval, 4);
 			}
 			_enter_critical_bh(&(pstapriv->sta_hash_lock), &irqL);		
-			pmlmeinfo->tdls_sta_cnt++;
+			ptdlsinfo->sta_cnt++;
 			_exit_critical_bh(&(pstapriv->sta_hash_lock), &irqL);	
+			if( ptdlsinfo->sta_cnt == (NUM_STA - 1) )
+			{
+				ptdlsinfo->sta_maximum  = _TRUE;
+			}
 		}
 		else
 		{
-			goto _exit_recv_tdls_frame;
+			goto exit;
 		}
 	}
 	//already receiving TDLS setup request
-	else if(ptdls_sta->state==TDLS_INITIATOR_STATE){
+	else if(ptdls_sta->tdls_sta_state==TDLS_INITIATOR_STATE){
 		DBG_8192C("receive duplicated TDLS setup request frame in handshaking\n");
-		goto _exit_recv_tdls_frame;
+		goto exit;
 	}
 	//When receiving and sending setup_req to the same link at the same time, STA with higher MAC_addr would be initiator
 	//following is to check out MAC_addr
-	else if(ptdls_sta->state==TDLS_RESPONDER_STATE){
-		DBG_8192C("receive setup_req after sending setUP_req\n");
+	else if(ptdls_sta->tdls_sta_state==TDLS_RESPONDER_STATE){
+		DBG_8192C("receive setup_req after sending setup_req\n");
 		for (i=0;i<6;i++){
 			if(*(pmyid+i)==*(psa+i)){
 			}
 			else if(*(pmyid+i)>*(psa+i)){
-				goto _exit_recv_tdls_frame;
+				goto exit;
 			}else if(*(pmyid+i)<*(psa+i)){
-				ptdls_sta->state=TDLS_INITIATOR_STATE;
-				ptdls_sta->aid=*(pdialog);
+				ptdls_sta->tdls_sta_state=TDLS_INITIATOR_STATE;
 				break;
 			}
 		}
 	}
 
 	issue_tdls_setup_rsp(adapter, precv_frame);
+	_set_timer( &ptdls_sta->handshake_timer, TDLS_HANDSHAKE_TIME);
 
-_exit_recv_tdls_frame:
+	//status code!=0 ; setup unsuccess
+	if(ptdls_sta->stat_code!=0){
+		free_tdls_sta(adapter, ptdls_sta);
+		return _FAIL;
+	}
+	
+exit:
 	
 	return _FAIL;
 }
@@ -1075,15 +1108,14 @@ _exit_recv_tdls_frame:
 
 sint On_TDLS_Setup_Rsp(_adapter *adapter, union recv_frame *precv_frame)
 {
+	struct tdls_info *ptdlsinfo = &adapter->tdlsinfo;
 	struct sta_info *ptdls_sta= NULL;
    	struct sta_priv *pstapriv = &adapter->stapriv;
 	u8 *ptr = precv_frame->u.hdr.rx_data;
 	_irqL irqL;
 	struct rx_pkt_attrib	*prx_pkt_attrib = &precv_frame->u.hdr.attrib;
-	u8 *psa, *pdialog;
+	u8 *psa;
 	u16 stat_code;
-	struct mlme_ext_priv	*pmlmeext = &(adapter->mlmeextpriv);
-	struct mlme_ext_info	*pmlmeinfo = &(pmlmeext->mlmext_info);
 	sint parsing_length;	//frame body length, without icv_len
 	PNDIS_802_11_VARIABLE_IEs	pIE;
 	u8 FIXED_IE =7;
@@ -1105,17 +1137,8 @@ sint On_TDLS_Setup_Rsp(_adapter *adapter, union recv_frame *precv_frame)
 			-FIXED_IE;
 	_rtw_memcpy(&stat_code, ptr+2, 2);
 
-	pdialog=ptr+4;
-	//rx_pkt_pattrib->frag_num is used to fill dialog token
-	_rtw_memcpy(&(prx_pkt_attrib->frag_num), pdialog, 1);
-
 	if(stat_code!=0){
-		_enter_critical_bh(&(pstapriv->sta_hash_lock), &irqL);	
-		pmlmeinfo->tdls_sta_cnt--;
-		_exit_critical_bh(&(pstapriv->sta_hash_lock), &irqL);
-		rtw_free_stainfo(adapter,  ptdls_sta);
-		if(pmlmeinfo->tdls_sta_cnt==0)
-			pmlmeinfo->tdls_setup_state=UN_TDLS_STATE;
+		free_tdls_sta(adapter, ptdls_sta);
 		return _FAIL;
 	}
 
@@ -1185,43 +1208,56 @@ sint On_TDLS_Setup_Rsp(_adapter *adapter, union recv_frame *precv_frame)
 
 	if(prx_pkt_attrib->encrypt){
 		if(tdls_verify_mic(ptdls_sta->tpk.kck, 2, plinkid_ie, prsnie, ptimeout_ie, pftie)==0){	//0: Invalid, 1: valid
-			_enter_critical_bh(&(pstapriv->sta_hash_lock), &irqL);	
-			pmlmeinfo->tdls_sta_cnt--;
-			rtw_free_stainfo(adapter,  ptdls_sta);
-			_exit_critical_bh(&(pstapriv->sta_hash_lock), &irqL);
-			if(pmlmeinfo->tdls_sta_cnt==0)
-				pmlmeinfo->tdls_setup_state=UN_TDLS_STATE;
+			free_tdls_sta(adapter, ptdls_sta);
 			return _FAIL;
 		}
 	}
-	DBG_8192C("issue_tdls_setup_cfm\n");
+
+	DBG_871X("issue_tdls_setup_cfm\n");
 	issue_tdls_setup_cfm(adapter, precv_frame);
 
-	if((ptdls_sta->state&TDLS_RESPONDER_STATE)==TDLS_RESPONDER_STATE)
-		ptdls_sta->state |= TDLS_LINKED_STATE;
+	//status code!=0 ; setup unsuccess
+	if(ptdls_sta->stat_code!=0){
+		free_tdls_sta(adapter, ptdls_sta);
+		return _FAIL;
+	}
+	
+	ptdlsinfo->setup_state = TDLS_LINKED_STATE;
+
+	ptdls_sta->option=1;
+	rtw_tdls_cmd(adapter, ptdls_sta->hwaddr, TDLS_WRCR);
+
+	if( ptdls_sta->tdls_sta_state & TDLS_RESPONDER_STATE )
+	{
+		ptdls_sta->tdls_sta_state |= TDLS_LINKED_STATE;
+		_cancel_timer_ex( &ptdls_sta->handshake_timer);
+#ifdef CONFIG_TDLS_AUTOCHECKALIVE
+		_set_timer( &ptdls_sta->alive_timer1, TDLS_ALIVE_TIMER_PH1);
+#endif //CONFIG_TDLS_AUTOSETUP
+	}
 
 	if(prx_pkt_attrib->encrypt){
 		if(ptdls_sta->cam_entry==0){
 			ptdls_sta->dot118021XPrivacy=_AES_;
-			ptdls_sta->cam_entry=pmlmeinfo->tdls_cam_entry_to_write;
-			if(++pmlmeinfo->tdls_cam_entry_to_write>31)
-				pmlmeinfo->tdls_cam_entry_to_write=6;
+			ptdls_sta->cam_entry=ptdlsinfo->cam_entry_to_write;
+			if(++ptdlsinfo->cam_entry_to_write>31)
+				ptdlsinfo->cam_entry_to_write=6;
 		}
 		rtw_setstakey_cmd(adapter, (u8*)ptdls_sta, _TRUE);
 	}
 	
 	return _FAIL;
+
 }
 
 sint On_TDLS_Setup_Cfm(_adapter *adapter, union recv_frame *precv_frame)
 {
+	struct tdls_info *ptdlsinfo = &adapter->tdlsinfo;
 	struct sta_info *ptdls_sta= NULL;
    	struct sta_priv *pstapriv = &adapter->stapriv;
 	u8 *ptr = precv_frame->u.hdr.rx_data;
 	_irqL irqL;
 	struct rx_pkt_attrib	*prx_pkt_attrib = &precv_frame->u.hdr.attrib;
-	struct mlme_ext_priv	*pmlmeext = &(adapter->mlmeextpriv);
-	struct mlme_ext_info	*pmlmeinfo = &(pmlmeext->mlmext_info);
 	u8 *psa; 
 	u16 stat_code;
 	sint parsing_length;
@@ -1246,12 +1282,7 @@ sint On_TDLS_Setup_Cfm(_adapter *adapter, union recv_frame *precv_frame)
 	_rtw_memcpy(&stat_code, ptr+2, 2);
 
 	if(stat_code!=0){
-		_enter_critical_bh(&(pstapriv->sta_hash_lock), &irqL);	
-		pmlmeinfo->tdls_sta_cnt--;
-		_exit_critical_bh(&(pstapriv->sta_hash_lock), &irqL);
-		rtw_free_stainfo(adapter,  ptdls_sta);
-		if(pmlmeinfo->tdls_sta_cnt==0)
-			pmlmeinfo->tdls_setup_state=UN_TDLS_STATE;
+		free_tdls_sta(adapter, ptdls_sta);
 		return _FAIL;
 	}
 
@@ -1289,55 +1320,96 @@ sint On_TDLS_Setup_Cfm(_adapter *adapter, union recv_frame *precv_frame)
 
 		//verify mic in FTIE MIC field
 		if(tdls_verify_mic(ptdls_sta->tpk.kck, 3, plinkid_ie, prsnie, ptimeout_ie, pftie)==0){	//0: Invalid, 1: Valid
-			_enter_critical_bh(&(pstapriv->sta_hash_lock), &irqL);	
-			pmlmeinfo->tdls_sta_cnt--;
-			rtw_free_stainfo(adapter,  ptdls_sta);
-			_exit_critical_bh(&(pstapriv->sta_hash_lock), &irqL);
-			if(pmlmeinfo->tdls_sta_cnt==0)
-				pmlmeinfo->tdls_setup_state=UN_TDLS_STATE;
+			free_tdls_sta(adapter, ptdls_sta);
 			return _FAIL;
 		}
 
 	}
 
-	pmlmeinfo->tdls_setup_state=TDLS_LINKED_STATE;
-	if((ptdls_sta->state & TDLS_INITIATOR_STATE)==TDLS_INITIATOR_STATE)
-		ptdls_sta->state|=TDLS_LINKED_STATE;
+	ptdlsinfo->setup_state = TDLS_LINKED_STATE;
+	if( ptdls_sta->tdls_sta_state & TDLS_INITIATOR_STATE )
+	{
+		ptdls_sta->tdls_sta_state|=TDLS_LINKED_STATE;
+		_cancel_timer_ex( &ptdls_sta->handshake_timer);
+#ifdef CONFIG_TDLS_AUTOCHECKALIVE
+		_set_timer( &ptdls_sta->alive_timer1, TDLS_ALIVE_TIMER_PH1);
+#endif //CONFIG_TDLS_AUTOCHECKALIVE
+	}
 
 	ptdls_sta->option=1;	//write RCR DATA BIT
-	_set_workitem(&ptdls_sta->option_workitem);
+	rtw_tdls_cmd(adapter, ptdls_sta->hwaddr, TDLS_WRCR);
 
 	//Write cam
 	//TDLS encryption(if needed) will always be CCMP
 	if(prx_pkt_attrib->encrypt){
 		if(ptdls_sta->cam_entry==0){
 			ptdls_sta->dot118021XPrivacy=_AES_;
-			ptdls_sta->cam_entry=pmlmeinfo->tdls_cam_entry_to_write;
-			if(++pmlmeinfo->tdls_cam_entry_to_write>31)
-				pmlmeinfo->tdls_cam_entry_to_write=6;
+			ptdls_sta->cam_entry=ptdlsinfo->cam_entry_to_write;
+			if(++ptdlsinfo->cam_entry_to_write>31)
+				ptdlsinfo->cam_entry_to_write=6;
 		}
 		rtw_setstakey_cmd(adapter, (u8*)ptdls_sta, _TRUE);
 	}
 
-
 	return _FAIL;
+
 }
 
 sint On_TDLS_Dis_Req(_adapter *adapter, union recv_frame *precv_frame)
 {
 	struct rx_pkt_attrib	*prx_pkt_attrib = &precv_frame->u.hdr.attrib;
+	struct sta_priv *pstapriv = &adapter->stapriv;
+	struct sta_info *psta_ap;
 	u8 *ptr = precv_frame->u.hdr.rx_data;
-	u8 *pdialog = NULL;
+	sint parsing_length;	//frame body length, without icv_len
+	PNDIS_802_11_VARIABLE_IEs	pIE;
+	u8 FIXED_IE = 3, *dst, *pdialog = NULL;
+	u16 j;
 
-	ptr +=prx_pkt_attrib->hdrlen + prx_pkt_attrib->iv_len+8+1;
+	ptr +=prx_pkt_attrib->hdrlen + prx_pkt_attrib->iv_len + LLC_HEADER_SIZE+TYPE_LENGTH_FIELD_SIZE + 1;
 	pdialog=ptr+2;
+
+	parsing_length= ((union recv_frame *)precv_frame)->u.hdr.len
+			-prx_pkt_attrib->hdrlen
+			-prx_pkt_attrib->iv_len
+			-prx_pkt_attrib->icv_len
+			-LLC_HEADER_SIZE
+			-TYPE_LENGTH_FIELD_SIZE
+			-1
+			-FIXED_IE;
+
+	//parsing information element
+	for(j=FIXED_IE; j<parsing_length;){
+
+		pIE = (PNDIS_802_11_VARIABLE_IEs)(ptr+ j);
+
+		switch (pIE->ElementID)
+		{
+			case _LINK_ID_IE_:
+				psta_ap = rtw_get_stainfo(pstapriv, pIE->data);
+				if(psta_ap == NULL)
+				{
+					goto exit;
+				}
+				dst = pIE->data + 12;
+				if( (MacAddr_isBcst(dst) == _FALSE) && (_rtw_memcmp(myid(&(adapter->eeprompriv)), dst, 6) == _FALSE) )
+				{
+					goto exit;
+				}
+				break;
+			default:
+				break;
+		}
+
+		j += (pIE->Length + 2);
+		
+	}
 
 	//check frame contents
 
-	//rx_pkt_pattrib->frag_num is used to fill dialog token
-	_rtw_memcpy(&(prx_pkt_attrib->frag_num), pdialog, 1);
+	issue_tdls_dis_rsp(adapter, precv_frame, *(pdialog) );
 
-	issue_tdls_dis_rsp(adapter, precv_frame);
+exit:
 
 	return _FAIL;
 	
@@ -1359,24 +1431,12 @@ sint On_TDLS_Teardown(_adapter *adapter, union recv_frame *precv_frame)
 	ptdls_sta = rtw_get_stainfo(pstapriv, psa);
 	if(ptdls_sta!=NULL){
 
-		if(ptdls_sta->state & TDLS_CH_SWITCH_ON_STATE){
+		if(ptdls_sta->tdls_sta_state & TDLS_CH_SWITCH_ON_STATE){
 			ptdls_sta->option =3;
-			_set_workitem(&ptdls_sta->option_workitem);
+			rtw_tdls_cmd(adapter, ptdls_sta->hwaddr, TDLS_CS_OFF);
 		}
-		_enter_critical_bh(&(pstapriv->sta_hash_lock), &irqL);	
-		pmlmeinfo->tdls_sta_cnt--;
-		_exit_critical_bh(&(pstapriv->sta_hash_lock), &irqL);
-		//ready to clear cam
-		if(ptdls_sta->cam_entry!=0){
-			pmlmeinfo->tdls_cam_entry_to_clear=ptdls_sta->cam_entry;
-			//it will clear cam response to ptdls_sta->cam_entry
-			rtw_setstakey_cmd(adapter, (u8 *)ptdls_sta, _TRUE);
-		}
-		_set_workitem(&pmlmeext->TDLS_restore_workitem);
-		rtw_free_stainfo(adapter,  ptdls_sta);
+		free_tdls_sta(adapter, ptdls_sta);
 	}
-	if(pmlmeinfo->tdls_sta_cnt==0)
-		pmlmeinfo->tdls_setup_state=UN_TDLS_STATE;
 		
 	return _FAIL;
 	
@@ -1398,24 +1458,26 @@ u8 TDLS_check_ch_state(uint state){
 //we process buffered data for 1. U-APSD, 2. ch. switch, 3. U-APSD + ch. switch here
 sint On_TDLS_Peer_Traffic_Rsp(_adapter *adapter, union recv_frame *precv_frame)
 {
+	struct tdls_info *ptdlsinfo = &adapter->tdlsinfo;
 	struct mlme_ext_priv *pmlmeext = &adapter->mlmeextpriv;
-	struct mlme_ext_info	*pmlmeinfo = &(pmlmeext->mlmext_info);
 	struct rx_pkt_attrib	*pattrib = & precv_frame->u.hdr.attrib;
 	struct sta_priv *pstapriv = &adapter->stapriv;
 	//get peer sta infomation
 	struct sta_info *ptdls_sta = rtw_get_stainfo(pstapriv, pattrib->src);
-	u8 wmmps_ac=0, state=TDLS_check_ch_state(ptdls_sta->state);
+	u8 wmmps_ac=0, state=TDLS_check_ch_state(ptdls_sta->tdls_sta_state);
 	int i;
-	ptdls_sta->sta_stats.rx_pkts++;
+	
+	ptdls_sta->sta_stats.rx_data_pkts++;
 
 	//receive peer traffic response frame, sleeping STA wakes up
-	ptdls_sta->state &= ~(TDLS_PEER_SLEEP_STATE);
+	//ptdls_sta->tdls_sta_state &= ~(TDLS_PEER_SLEEP_STATE);
+	process_wmmps_data( adapter, precv_frame);
 
 	// if noticed peer STA wakes up by receiving peer traffic response
 	// and we want to do channel swtiching, then we will transmit channel switch request first
-	if(ptdls_sta->state & TDLS_APSD_CHSW_STATE){
+	if(ptdls_sta->tdls_sta_state & TDLS_APSD_CHSW_STATE){
 		issue_tdls_ch_switch_req(adapter, pattrib->src);
-		ptdls_sta->state &= ~(TDLS_APSD_CHSW_STATE);
+		ptdls_sta->tdls_sta_state &= ~(TDLS_APSD_CHSW_STATE);
 		return  _FAIL;
 	}
 
@@ -1424,7 +1486,7 @@ sint On_TDLS_Peer_Traffic_Rsp(_adapter *adapter, union recv_frame *precv_frame)
 		wmmps_ac=1;
 
 	//if it's a direct link and have buffered frame
-	if(ptdls_sta->state & TDLS_LINKED_STATE){
+	if(ptdls_sta->tdls_sta_state & TDLS_LINKED_STATE){
 		if(wmmps_ac && state)
 		{
 			_irqL irqL;	 
@@ -1466,10 +1528,10 @@ sint On_TDLS_Peer_Traffic_Rsp(_adapter *adapter, union recv_frame *precv_frame)
 				// we should go back to base channel
 				if(state==2){
 					ptdls_sta->option = 3;
-					_set_workitem(&ptdls_sta->option_workitem);
-				}else if(ptdls_sta->state&TDLS_SW_OFF_STATE){
-						ptdls_sta->state &= ~(TDLS_SW_OFF_STATE);
-						pmlmeinfo->tdls_candidate_ch= pmlmeext->cur_channel;
+					rtw_tdls_cmd(adapter, ptdls_sta->hwaddr, TDLS_CS_OFF);
+				}else if(ptdls_sta->tdls_sta_state&TDLS_SW_OFF_STATE){
+						ptdls_sta->tdls_sta_state &= ~(TDLS_SW_OFF_STATE);
+						ptdlsinfo->candidate_ch= pmlmeext->cur_channel;
 						issue_tdls_ch_switch_req(adapter, pattrib->src);
 						DBG_8192C("issue tdls ch switch req back to base channel\n");
 				}
@@ -1545,7 +1607,7 @@ sint On_TDLS_Ch_Switch_Req(_adapter *adapter, union recv_frame *precv_frame)
 
 	//todo: check status
 	ptdls_sta->stat_code=0;
-	ptdls_sta->state|=TDLS_CH_SWITCH_ON_STATE;
+	ptdls_sta->tdls_sta_state |= TDLS_CH_SWITCH_ON_STATE;
 
 	issue_nulldata(adapter, 1);
 
@@ -1553,14 +1615,13 @@ sint On_TDLS_Ch_Switch_Req(_adapter *adapter, union recv_frame *precv_frame)
 
 	DBG_8192C("issue tdls channel switch response\n");
 
-	if((ptdls_sta->state & TDLS_CH_SWITCH_ON_STATE) && ptdls_sta->off_ch==pmlmeext->cur_channel){
+	if((ptdls_sta->tdls_sta_state & TDLS_CH_SWITCH_ON_STATE) && ptdls_sta->off_ch==pmlmeext->cur_channel){
 		DBG_8192C("back to base channel\n");
 		ptdls_sta->option=7;
-		_set_workitem(&ptdls_sta->option_workitem);
-		
+		rtw_tdls_cmd(adapter, ptdls_sta->hwaddr, TDLS_BASE_CH);
 	}else{		
 		ptdls_sta->option=6;
-		_set_workitem(&ptdls_sta->option_workitem);
+		rtw_tdls_cmd(adapter, ptdls_sta->hwaddr, TDLS_OFF_CH);
 	}
 	return _FAIL;
 }
@@ -1583,21 +1644,21 @@ sint On_TDLS_Ch_Switch_Rsp(_adapter *adapter, union recv_frame *precv_frame)
 
 	//if channel switch is running and receiving Unsolicited TDLS Channel Switch Response,
 	//it will go back to base channel and terminate this channel switch procedure
-	if(ptdls_sta->state & TDLS_CH_SWITCH_ON_STATE ){
+	if(ptdls_sta->tdls_sta_state & TDLS_CH_SWITCH_ON_STATE ){
 		if(pmlmeext->cur_channel==ptdls_sta->off_ch){
 			DBG_8192C("back to base channel\n");
 			ptdls_sta->option=7;
-			_set_workitem(&ptdls_sta->option_workitem);
+			rtw_tdls_cmd(adapter, ptdls_sta->hwaddr, TDLS_OFF_CH);
 		}else{
 			DBG_8192C("receive unsolicited channel switch response \n");
 			ptdls_sta->option=3;
-			_set_workitem(&ptdls_sta->option_workitem);
+			rtw_tdls_cmd(adapter, ptdls_sta->hwaddr, TDLS_CS_OFF);
 		}
 		return _FAIL;
 	}
 
 	//avoiding duplicated or unconditional ch. switch. rsp
-	if((ptdls_sta->state & TDLS_CH_SW_INITIATOR_STATE) != TDLS_CH_SW_INITIATOR_STATE)
+	if((ptdls_sta->tdls_sta_state & TDLS_CH_SW_INITIATOR_STATE) != TDLS_CH_SW_INITIATOR_STATE)
 		return _FAIL;
 	
 	//[+1]: payload type
@@ -1643,12 +1704,12 @@ sint On_TDLS_Ch_Switch_Rsp(_adapter *adapter, union recv_frame *precv_frame)
 		
 	}
 
-	ptdls_sta->state &= ~(TDLS_CH_SW_INITIATOR_STATE);
-	ptdls_sta->state |=TDLS_CH_SWITCH_ON_STATE;
+	ptdls_sta->tdls_sta_state &= ~(TDLS_CH_SW_INITIATOR_STATE);
+	ptdls_sta->tdls_sta_state |=TDLS_CH_SWITCH_ON_STATE;
 
 	//goto set_channel_workitem_callback()
 	ptdls_sta->option=6;
-	_set_workitem(&ptdls_sta->option_workitem);
+	rtw_tdls_cmd(adapter, ptdls_sta->hwaddr, TDLS_OFF_CH);
 
 	return _FAIL;	
 }
@@ -1664,39 +1725,39 @@ sint OnTDLS(_adapter *adapter, union recv_frame *precv_frame)
 	
 	switch(*paction){
 		case TDLS_SETUP_REQUEST:
-			DBG_8192C("recv tdls setup request frame\n");
+			DBG_871X("recv tdls setup request frame\n");
 			ret=On_TDLS_Setup_Req(adapter, precv_frame);
 			break;
 		case TDLS_SETUP_RESPONSE:
-			DBG_8192C("recv tdls setup response frame\n");			
+			DBG_871X("recv tdls setup response frame\n");			
 			ret=On_TDLS_Setup_Rsp(adapter, precv_frame);
 			break;
 		case TDLS_SETUP_CONFIRM:
-			DBG_8192C("recv tdls setup confirm frame\n");
+			DBG_871X("recv tdls setup confirm frame\n");
 			ret=On_TDLS_Setup_Cfm(adapter, precv_frame);
 			break;
 		case TDLS_TEARDOWN:
-			DBG_8192C("recv tdls teardown, free sta_info\n");
+			DBG_871X("recv tdls teardown, free sta_info\n");
 			ret=On_TDLS_Teardown(adapter, precv_frame);
 			break;
 		case TDLS_DISCOVERY_REQUEST:
-			DBG_8192C("recv tdls discovery request frame\n");
+			DBG_871X("recv tdls discovery request frame\n");
 			ret=On_TDLS_Dis_Req(adapter, precv_frame);
 			break;
 		case TDLS_PEER_TRAFFIC_RESPONSE:
-			DBG_8192C("recv tdls discovery response frame\n");
+			DBG_871X("recv tdls peer traffic response frame\n");
 			ret=On_TDLS_Peer_Traffic_Rsp(adapter, precv_frame);
 			break;
 		case TDLS_CHANNEL_SWITCH_REQUEST:
-			DBG_8192C("recv tdls channel switch request frame\n");
+			DBG_871X("recv tdls channel switch request frame\n");
 			ret=On_TDLS_Ch_Switch_Req(adapter, precv_frame);
 			break;
 		case TDLS_CHANNEL_SWITCH_RESPONSE:
-			DBG_8192C("recv tdls channel switch response frame\n");
+			DBG_871X("recv tdls channel switch response frame\n");
 			ret=On_TDLS_Ch_Switch_Rsp(adapter, precv_frame);
 			break;
 		default:
-			DBG_8192C("receive TDLS frame but not supported\n");
+			DBG_871X("receive TDLS frame but not supported\n");
 			ret=_FAIL;
 			break;
 	}
@@ -1706,6 +1767,38 @@ exit:
 	
 }
 #endif
+
+static void count_rx_stats(_adapter *padapter, union recv_frame *prframe, struct sta_info*sta)
+{
+	int	sz;
+	struct sta_info		*psta = NULL;
+	struct stainfo_stats	*pstats = NULL;
+	struct rx_pkt_attrib	*pattrib = & prframe->u.hdr.attrib;
+	struct recv_priv		*precvpriv = &padapter->recvpriv;
+
+	sz = get_recvframe_len(prframe);
+	precvpriv->rx_bytes += sz;
+
+	padapter->mlmepriv.LinkDetectInfo.NumRxOkInPeriod++;
+
+	if( (!MacAddr_isBcst(pattrib->dst)) && (!IS_MCAST(pattrib->dst))){
+		padapter->mlmepriv.LinkDetectInfo.NumRxUnicastOkInPeriod++;
+	}
+	
+	if(sta)
+		psta = sta;
+	else
+		psta = prframe->u.hdr.psta;
+
+	if(psta)
+	{
+		pstats = &psta->sta_stats;
+
+		pstats->rx_data_pkts++;
+		pstats->rx_bytes += sz;
+	}
+
+}
 
 static sint sta2sta_data_frame(
 	_adapter *adapter,
@@ -1725,8 +1818,7 @@ static sint sta2sta_data_frame(
 	sint bmcast = IS_MCAST(pattrib->dst);
 
 #ifdef CONFIG_TDLS	
-	struct mlme_ext_priv	*pmlmeext = &(adapter->mlmeextpriv);	
-	struct mlme_ext_info	*pmlmeinfo = &(pmlmeext->mlmext_info);
+	struct tdls_info *ptdlsinfo = &adapter->tdlsinfo;
 	struct sta_info *ptdls_sta=NULL;
 	u8 *psnap_type=ptr+pattrib->hdrlen + pattrib->iv_len+SNAP_SIZE;
 	//frame body located after [+2]: ether-type, [+1]: payload type
@@ -1766,28 +1858,28 @@ _func_enter_;
 #ifdef CONFIG_TDLS
 
 		//direct link data transfer
-		if(pmlmeinfo->tdls_setup_state==TDLS_LINKED_STATE){
+		if(ptdlsinfo->setup_state & TDLS_LINKED_STATE){
 			ptdls_sta = rtw_get_stainfo(pstapriv, pattrib->src);
-			if(ptdls_sta==NULL){
+			if(ptdls_sta==NULL)
+			{
 				ret=_FAIL;
 				goto exit;
-			}else if(((ptdls_sta->state&TDLS_LINKED_STATE)!=TDLS_LINKED_STATE)&&(!_rtw_memcmp(myhwaddr, pattrib->dst, ETH_ALEN))&& (!bmcast)){
-				ret=_FAIL;
-				goto exit;
-			}else if((ptdls_sta->state&TDLS_LINKED_STATE)==TDLS_LINKED_STATE){
+			}
+			else if((ptdls_sta->tdls_sta_state&TDLS_LINKED_STATE)==TDLS_LINKED_STATE)
+			{
 
 				//drop QoS-SubType Data, including QoS NULL, excluding QoS-Data
 				if( (GetFrameSubType(ptr) & WIFI_QOS_DATA_TYPE )== WIFI_QOS_DATA_TYPE)
 				{
 					if(GetFrameSubType(ptr)&(BIT(4)|BIT(5)|BIT(6)))
 					{
-					ret= _FAIL;
-					goto exit;
+						DBG_871X("drop QoS-Sybtype Data\n");
+						ret= _FAIL;
+						goto exit;
 					}
 				}
 				// filter packets that SA is myself or multicast or broadcast
 				if (_rtw_memcmp(myhwaddr, pattrib->src, ETH_ALEN)){
-					RT_TRACE(_module_rtl871x_recv_c_,_drv_err_,(" SA==myself \n"));
 					ret= _FAIL;
 					goto exit;
 				}
@@ -1805,22 +1897,31 @@ _func_enter_;
 					ret= _FAIL;
 					goto exit;
 				}
+
+				//process UAPSD tdls sta
+				process_pwrbit_data(adapter, precv_frame);
+
 				// if NULL-frame, check pwrbit
 				if ((GetFrameSubType(ptr)) == WIFI_DATA_NULL)
 				{
 					//NULL-frame with pwrbit=1, buffer_STA should buffer frames for sleep_STA
-					if(GetPwrMgt(ptr)){
-						ptdls_sta->state|=TDLS_PEER_SLEEP_STATE;
+					if(GetPwrMgt(ptr))
+					{
+						DBG_871X("TDLS: recv peer null frame with pwr bit 1\n");
+						ptdls_sta->tdls_sta_state|=TDLS_PEER_SLEEP_STATE;
 					// it would be triggered when we are off channel and receiving NULL DATA
 					// we can confirm that peer STA is at off channel
-					}else if(ptdls_sta->state&TDLS_CH_SWITCH_ON_STATE){
-						if((ptdls_sta->state & TDLS_PEER_AT_OFF_STATE) != TDLS_PEER_AT_OFF_STATE){
+					}
+					else if(ptdls_sta->tdls_sta_state&TDLS_CH_SWITCH_ON_STATE)
+					{
+						if((ptdls_sta->tdls_sta_state & TDLS_PEER_AT_OFF_STATE) != TDLS_PEER_AT_OFF_STATE)
+						{
 							issue_nulldata_to_TDLS_peer_STA(adapter, ptdls_sta, 0);
-							ptdls_sta->state |= TDLS_PEER_AT_OFF_STATE;
+							ptdls_sta->tdls_sta_state |= TDLS_PEER_AT_OFF_STATE;
 							On_TDLS_Peer_Traffic_Rsp(adapter, precv_frame);
 						}
 					}
-					RT_TRACE(_module_rtl871x_recv_c_,_drv_info_,(" NULL frame \n"));
+
 					ret= _FAIL;
 					goto exit;
 				}
@@ -1831,18 +1932,23 @@ _func_enter_;
 				}
 				
 			}
+
+			sta_addr = pattrib->src;
+			
 		}		
 		else
 #endif
-		// For Station mode, sa and bssid should always be BSSID, and DA is my mac-address
-		if(!_rtw_memcmp(pattrib->bssid, pattrib->src, ETH_ALEN) )
 		{
-			RT_TRACE(_module_rtl871x_recv_c_,_drv_err_,("bssid != TA under STATION_MODE; drop pkt\n"));
-			ret= _FAIL;
-			goto exit;
-		}
+			// For Station mode, sa and bssid should always be BSSID, and DA is my mac-address
+			if(!_rtw_memcmp(pattrib->bssid, pattrib->src, ETH_ALEN) )
+			{
+				RT_TRACE(_module_rtl871x_recv_c_,_drv_err_,("bssid != TA under STATION_MODE; drop pkt\n"));
+				ret= _FAIL;
+				goto exit;
+			}
 
-		sta_addr = pattrib->bssid;
+			sta_addr = pattrib->bssid;
+		}
 
 	}
 	else if(check_fwstate(pmlmepriv, WIFI_AP_STATE) == _TRUE)
@@ -2120,6 +2226,9 @@ _func_enter_;
 			{
 				RT_TRACE(_module_rtl871x_recv_c_,_drv_info_,(" NULL frame \n"));
 
+				//temporily count it here
+				count_rx_stats(adapter, precv_frame, *psta);
+				
 				//process_null_data(adapter, precv_frame);
 				//process_pwrbit_data(adapter, precv_frame);
 				
@@ -2135,6 +2244,9 @@ _func_enter_;
 				if(GetFrameSubType(ptr)==WIFI_QOS_DATA_NULL)
 				{
 					RT_TRACE(_module_rtl871x_recv_c_,_drv_info_,(" QoS NULL frame \n"));
+
+					//temporily count it here
+					count_rx_stats(adapter, precv_frame, *psta);
 
 					//process_null_data(adapter, precv_frame);
 
@@ -2201,7 +2313,7 @@ static sint validate_recv_ctrl_frame(_adapter *padapter, union recv_frame *precv
 		}
 
 		//for rx pkt statistics
-		psta->sta_stats.rx_pkts++;
+		psta->sta_stats.rx_ctrl_pkts++;
 
 		switch(pattrib->priority)
 		{
@@ -2314,15 +2426,6 @@ static sint validate_recv_mgnt_frame(_adapter *adapter, union recv_frame *precv_
 {
 	struct mlme_priv *pmlmepriv = &adapter->mlmepriv;
 
-#ifdef CONFIG_TDLS
-	struct mlme_ext_priv *pmlmeext = &adapter->mlmeextpriv;
-	struct mlme_ext_info *pmlmeinfo = &pmlmeext->mlmext_info;
-
-	if(pmlmeinfo->tdls_ch_sensing==1 && pmlmeinfo->tdls_cur_channel !=0){
-		pmlmeinfo->tdls_collect_pkt_num[pmlmeinfo->tdls_cur_channel-1]++;
-	}
-#endif
-
 	RT_TRACE(_module_rtl871x_recv_c_, _drv_info_, ("+validate_recv_mgnt_frame\n"));
 
 #if 0
@@ -2340,16 +2443,66 @@ static sint validate_recv_mgnt_frame(_adapter *adapter, union recv_frame *precv_
 	}
 #endif
 
-#ifdef CONFIG_AP_MODE
 	{
 		//for rx pkt statistics
 		struct sta_info *psta = rtw_get_stainfo(&adapter->stapriv, GetAddr2Ptr(precv_frame->u.hdr.rx_data));
 		if(psta)
-			psta->sta_stats.rx_pkts++;	
+			psta->sta_stats.rx_mgnt_pkts++;
+	}
+
+
+#ifdef CONFIG_INTEL_PROXIM
+	if(adapter->proximity.proxim_on==_TRUE)
+	{
+		struct rx_pkt_attrib * pattrib=&precv_frame->u.hdr.attrib;
+		 struct recv_stat* prxstat=( struct recv_stat * )  precv_frame->u.hdr.rx_head ;
+		 u8 * pda,*psa,*pbssid,*ptr;
+		 ptr=precv_frame->u.hdr.rx_data; 
+		pda = get_da(ptr);
+		psa = get_sa(ptr);
+		pbssid = get_hdr_bssid(ptr);
+
+
+		_rtw_memcpy(pattrib->dst, pda, ETH_ALEN);
+		_rtw_memcpy(pattrib->src, psa, ETH_ALEN);
+
+		_rtw_memcpy(pattrib->bssid, pbssid, ETH_ALEN);
+
+	switch(pattrib->to_fr_ds)
+	{
+		case 0:
+			_rtw_memcpy(pattrib->ra, pda, ETH_ALEN);
+			_rtw_memcpy(pattrib->ta, psa, ETH_ALEN);
+			break;
+
+		case 1:
+			_rtw_memcpy(pattrib->ra, pda, ETH_ALEN);
+			_rtw_memcpy(pattrib->ta, pbssid, ETH_ALEN);
+			break;
+
+		case 2:
+			_rtw_memcpy(pattrib->ra, pbssid, ETH_ALEN);
+			_rtw_memcpy(pattrib->ta, psa, ETH_ALEN);
+			break;
+
+		case 3:
+			_rtw_memcpy(pattrib->ra, GetAddr1Ptr(ptr), ETH_ALEN);
+			_rtw_memcpy(pattrib->ta, GetAddr2Ptr(ptr), ETH_ALEN);
+			RT_TRACE(_module_rtl871x_recv_c_,_drv_err_,(" case 3\n"));
+			break;
+
+		default:
+			break;
+
+		}	
+			pattrib->priority=0;
+			pattrib->hdrlen = pattrib->to_fr_ds==3 ? 30 : 24;
+
+		 adapter->proximity.proxim_rx(adapter,precv_frame);
 	}
 #endif
-
 	mgt_dispatcher(adapter, precv_frame);
+
 
 	return _SUCCESS;
 
@@ -2368,9 +2521,8 @@ static sint validate_recv_data_frame(_adapter *adapter, union recv_frame *precv_
 	struct security_priv	*psecuritypriv = &adapter->securitypriv;	
 	sint ret = _SUCCESS;
 #ifdef CONFIG_TDLS
+	struct tdls_info *ptdlsinfo = &adapter->tdlsinfo;
 	struct sta_info  *ptdls_sta = NULL;
-	struct mlme_ext_priv	*pmlmeext = &(adapter->mlmeextpriv);	
-	struct mlme_ext_info	*pmlmeinfo = &(pmlmeext->mlmext_info);
 #endif
 
 _func_enter_;
@@ -2384,12 +2536,6 @@ _func_enter_;
 		ret= _FAIL;
 		goto exit;
 	}
-
-#ifdef CONFIG_TDLS
-	if(pmlmeinfo->tdls_ch_sensing==1 && pmlmeinfo->tdls_cur_channel !=0){
-		pmlmeinfo->tdls_collect_pkt_num[pmlmeinfo->tdls_cur_channel-1]++;
-	}
-#endif
 
 	_rtw_memcpy(pattrib->dst, pda, ETH_ALEN);
 	_rtw_memcpy(pattrib->src, psa, ETH_ALEN);
@@ -2476,39 +2622,22 @@ _func_enter_;
 		pattrib->hdrlen += 4;
 	}
 
-#ifdef CONFIG_TDLS
-	//checking reordering per direct link
-	if((pmlmeinfo->tdls_setup_state==TDLS_LINKED_STATE)&&(pattrib->to_fr_ds==0)){
-		ptdls_sta = rtw_get_stainfo(pstapriv, pattrib->src);
-		if(ptdls_sta==NULL){
-			ret= _FAIL;
-			goto exit;
-		}else{
-			precv_frame->u.hdr.preorder_ctrl = &ptdls_sta->recvreorder_ctrl[pattrib->priority];
+	precv_frame->u.hdr.preorder_ctrl = &psta->recvreorder_ctrl[pattrib->priority];
 
-			// decache, drop duplicate recv packets
-			if(recv_decache(precv_frame, bretry, &ptdls_sta->sta_recvpriv.rxcache) == _FAIL)
-			{
-				RT_TRACE(_module_rtl871x_recv_c_,_drv_err_,("decache : drop pkt\n"));
-				ret= _FAIL;
-				goto exit;
-			}
-		}
-		if(ptdls_sta->dot118021XPrivacy==_AES_)
-			pattrib->encrypt=ptdls_sta->dot118021XPrivacy;
-	}else
-#endif
+	// decache, drop duplicate recv packets
+	if(recv_decache(precv_frame, bretry, &psta->sta_recvpriv.rxcache) == _FAIL)
 	{
-		precv_frame->u.hdr.preorder_ctrl = &psta->recvreorder_ctrl[pattrib->priority];
-
-		// decache, drop duplicate recv packets
-		if(recv_decache(precv_frame, bretry, &psta->sta_recvpriv.rxcache) == _FAIL)
-		{
-			RT_TRACE(_module_rtl871x_recv_c_,_drv_err_,("decache : drop pkt\n"));
-			ret= _FAIL;
-			goto exit;
-		}
+		RT_TRACE(_module_rtl871x_recv_c_,_drv_err_,("decache : drop pkt\n"));
+		ret= _FAIL;
+		goto exit;
 	}
+#ifdef CONFIG_TDLS
+	if(psta->tdls_sta_state & TDLS_LINKED_STATE )
+	{
+		if(psta->dot118021XPrivacy==_AES_)
+			pattrib->encrypt=psta->dot118021XPrivacy;
+	}
+#endif //CONFIG_TDLS
 
 	if(pattrib->privacy){
 
@@ -2555,12 +2684,22 @@ static sint validate_recv_frame(_adapter *adapter, union recv_frame *precv_frame
 	struct mlme_ext_priv *pmlmeext = &adapter->mlmeextpriv;
 #endif
 
+#ifdef CONFIG_TDLS
+	struct tdls_info *ptdlsinfo = &adapter->tdlsinfo;
+#endif //CONFIG_TDLS
+
 _func_enter_;
 
 
 #ifdef CONFIG_FIND_BEST_CHANNEL
 	if (pmlmeext->sitesurvey_res.state == SCAN_PROCESS) {
 		pmlmeext->channel_set[pmlmeext->sitesurvey_res.channel_idx].rx_count++;
+	}
+#endif
+
+#ifdef CONFIG_TDLS
+	if(ptdlsinfo->ch_sensing==1 && ptdlsinfo->cur_channel !=0){
+		ptdlsinfo->collect_pkt_num[ptdlsinfo->cur_channel-1]++;
 	}
 #endif
 
@@ -2655,7 +2794,9 @@ else if(pHalData->bDumpRxPkt ==3){
 			retval = validate_recv_data_frame(adapter, precv_frame);
 			if (retval == _FAIL)
 			{
+				struct recv_priv *precvpriv = &adapter->recvpriv;
 				RT_TRACE(_module_rtl871x_recv_c_,_drv_err_,("validate_recv_data_frame fail\n"));
+				precvpriv->rx_drop++;
 			}
 			break;
 		default:
@@ -2702,11 +2843,11 @@ _func_enter_;
 	psnap_type=ptr+pattrib->hdrlen + pattrib->iv_len+SNAP_SIZE;
 	/* convert hdr + possible LLC headers into Ethernet header */
 	//eth_type = (psnap_type[0] << 8) | psnap_type[1];
-	if((_rtw_memcmp(psnap, rfc1042_header, SNAP_SIZE) &&
+	if((_rtw_memcmp(psnap, rtw_rfc1042_header, SNAP_SIZE) &&
 		(_rtw_memcmp(psnap_type, SNAP_ETH_TYPE_IPX, 2) == _FALSE) && 
 		(_rtw_memcmp(psnap_type, SNAP_ETH_TYPE_APPLETALK_AARP, 2)==_FALSE) )||
 		//eth_type != ETH_P_AARP && eth_type != ETH_P_IPX) ||
-		 _rtw_memcmp(psnap, bridge_tunnel_header, SNAP_SIZE)){
+		 _rtw_memcmp(psnap, rtw_bridge_tunnel_header, SNAP_SIZE)){
 		/* remove RFC1042 or Bridge-Tunnel encapsulation and replace EtherType */
 		bsnaphdr = _TRUE;
 	}
@@ -2880,36 +3021,6 @@ _func_exit_;
 	return ret;
 }
 #endif
-
-static void count_rx_stats(_adapter *padapter, union recv_frame *prframe)
-{
-	int	sz;
-	struct sta_info		*psta = NULL;
-	struct stainfo_stats	*pstats = NULL;
-	struct rx_pkt_attrib	*pattrib = & prframe->u.hdr.attrib;
-	struct recv_priv		*precvpriv = &padapter->recvpriv;
-
-	sz = get_recvframe_len(prframe);
-	precvpriv->rx_bytes += sz;
-
-	padapter->mlmepriv.LinkDetectInfo.NumRxOkInPeriod++;
-
-	if( (!MacAddr_isBcst(pattrib->dst)) && (!IS_MCAST(pattrib->dst))){
-		padapter->mlmepriv.LinkDetectInfo.NumRxUnicastOkInPeriod++;
-	}
-
-	psta = prframe->u.hdr.psta;
-
-	if(psta)
-	{
-		pstats = &psta->sta_stats;
-
-		pstats->rx_pkts++;
-		pstats->rx_bytes += sz;
-	}
-
-}
-
 
 //perform defrag
 static union recv_frame * recvframe_defrag(_adapter *adapter,_queue *defrag_q)
@@ -3226,9 +3337,9 @@ static int amsdu_to_msdu(_adapter *padapter, union recv_frame *prframe)
 		//eth_type = ntohs(*(u16*)&sub_skb->data[6]);
 		eth_type = RTW_GET_BE16(&sub_skb->data[6]);
 		if (sub_skb->len >= 8 &&
-			((_rtw_memcmp(sub_skb->data, rfc1042_header, SNAP_SIZE) &&
+			((_rtw_memcmp(sub_skb->data, rtw_rfc1042_header, SNAP_SIZE) &&
 			  eth_type != ETH_P_AARP && eth_type != ETH_P_IPX) ||
-			 _rtw_memcmp(sub_skb->data, bridge_tunnel_header, SNAP_SIZE) )) {
+			 _rtw_memcmp(sub_skb->data, rtw_bridge_tunnel_header, SNAP_SIZE) )) {
 			/* remove RFC1042 or Bridge-Tunnel encapsulation and replace EtherType */
 			skb_pull(sub_skb, SNAP_SIZE);
 			_rtw_memcpy(skb_push(sub_skb, ETH_ALEN), pattrib->src, ETH_ALEN);
@@ -4203,7 +4314,7 @@ static int recv_func(_adapter *padapter, void *pcontext)
 		DBG_871X("DBG_RX_DROP_FRAME %s decryptor: drop pkt\n", __FUNCTION__);
 		#endif
 		retval = _FAIL;
-		goto _exit_recv_func;
+		goto _recv_data_drop;
 	}
 
 #ifdef CONFIG_TDLS
@@ -4212,9 +4323,10 @@ static int recv_func(_adapter *padapter, void *pcontext)
 	psnap_type+=pattrib->hdrlen + pattrib->iv_len+SNAP_SIZE;
 	//[+2]: ether_type, [+1]: payload type
 	pcategory = psnap_type+2+1;
+
 	if((_rtw_memcmp(psnap_type, SNAP_ETH_TYPE_TDLS, 2))&&((*pcategory==0x0c))){
 		retval = OnTDLS(padapter, prframe);	//all of functions will return _FAIL
-		goto _exit_recv_func;
+		goto _recv_data_drop;
 	}
 #endif
 
@@ -4224,7 +4336,7 @@ static int recv_func(_adapter *padapter, void *pcontext)
 		#ifdef DBG_RX_DROP_FRAME
 		DBG_871X("DBG_RX_DROP_FRAME %s recvframe_chk_defrag: drop pkt\n", __FUNCTION__);
 		#endif
-		goto _exit_recv_func;		
+		goto _recv_data_drop;		
 	}
 
 	prframe=portctrl(padapter, prframe);
@@ -4234,10 +4346,10 @@ static int recv_func(_adapter *padapter, void *pcontext)
 		DBG_871X("DBG_RX_DROP_FRAME %s portctrl: drop pkt\n", __FUNCTION__);
 		#endif
 		retval = _FAIL;
-		goto _exit_recv_func;
+		goto _recv_data_drop;
 	}
 
-	count_rx_stats(padapter, prframe);
+	count_rx_stats(padapter, prframe, NULL);
 
 #ifdef CONFIG_80211N_HT
 
@@ -4249,7 +4361,7 @@ static int recv_func(_adapter *padapter, void *pcontext)
 		DBG_871X("DBG_RX_DROP_FRAME %s recv_func: process_recv_indicatepkts fail!\n", __FUNCTION__);
 		#endif
 		rtw_free_recvframe(orig_prframe, pfree_recv_queue);//free this recv_frame
-		goto _exit_recv_func;
+		goto _recv_data_drop;
 	}
 
 #else
@@ -4264,7 +4376,7 @@ static int recv_func(_adapter *padapter, void *pcontext)
 			DBG_871X("DBG_RX_DROP_FRAME %s wlanhdr_to_ethhdr: drop pkt\n", __FUNCTION__);
 			#endif
 			rtw_free_recvframe(orig_prframe, pfree_recv_queue);//free this recv_frame
-			goto _exit_recv_func;
+			goto _recv_data_drop;
 		}
 
 		if ((padapter->bDriverStopped == _FALSE) && (padapter->bSurpriseRemoved == _FALSE))
@@ -4277,7 +4389,7 @@ static int recv_func(_adapter *padapter, void *pcontext)
 				#ifdef DBG_RX_DROP_FRAME
 				DBG_871X("DBG_RX_DROP_FRAME %s rtw_recv_indicatepkt fail!\n", __FUNCTION__);
 				#endif
-				goto _exit_recv_func;
+				goto _recv_data_drop;
 			}
 		}
 		else
@@ -4303,7 +4415,7 @@ static int recv_func(_adapter *padapter, void *pcontext)
 			DBG_871X("DBG_RX_DROP_FRAME %s amsdu_to_msdu fail\n", __FUNCTION__);
 			#endif
 			rtw_free_recvframe(orig_prframe, pfree_recv_queue);
-			goto _exit_recv_func;
+			goto _recv_data_drop;
 		}
 	}
 	else
@@ -4313,7 +4425,8 @@ static int recv_func(_adapter *padapter, void *pcontext)
 		#endif
 	}
 #endif
-
+_recv_data_drop:
+	precvpriv->rx_drop++;
 
 _exit_recv_func:
 
@@ -4388,7 +4501,7 @@ _func_exit_;
 _recv_entry_drop:
 
 
-	precvpriv->rx_drop++;
+	//precvpriv->rx_drop++;
 
 #ifdef CONFIG_MP_INCLUDED
 	padapter->mppriv.rx_pktloss = precvpriv->rx_drop;

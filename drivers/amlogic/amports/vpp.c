@@ -126,6 +126,7 @@ static u32 vpp_wide_mode;
 static u32 vpp_zoom_ratio = 100;
 static s32 vpp_zoom_center_x, vpp_zoom_center_y;
 static s32 video_layer_top, video_layer_left, video_layer_width, video_layer_height;
+static u32 video_source_crop_top, video_source_crop_left, video_source_crop_bottom, video_source_crop_right;
 
 #define ZOOM_BITS       18
 #define PHASE_BITS      8
@@ -259,6 +260,19 @@ vpp_set_filters2(u32 width_in,
     u32 height_after_ratio;
     u32 aspect_factor;
     s32 ini_vphase;
+    u32 w_in = width_in;
+    u32 h_in = height_in;
+    bool h_crop_enable = false, v_crop_enable = false;
+
+    if (likely(w_in > (video_source_crop_left + video_source_crop_right))) {
+        w_in -= video_source_crop_left + video_source_crop_right;
+        h_crop_enable = true;
+    }
+
+    if (likely(h_in > (video_source_crop_top + video_source_crop_bottom))) {
+        h_in -= video_source_crop_top + video_source_crop_bottom;
+        v_crop_enable = true;
+    }
 
 #ifdef CONFIG_AM_DEINTERLACE
     int deinterlace_mode = get_deinterlace_mode();
@@ -296,11 +310,11 @@ RESTART:
     if ((aspect_factor == 0) || (wide_mode == VIDEO_WIDEOPTION_FULL_STRETCH)) {
         aspect_factor = 0x100;
     } else {
-        aspect_factor = (width_in * height_out * aspect_factor << 3) /
-                        ((width_out * height_in * aspect_ratio_out) >> 5);
+        aspect_factor = (w_in * height_out * aspect_factor << 3) /
+                        ((width_out * h_in * aspect_ratio_out) >> 5);
     }
 
-    height_after_ratio = (height_in * aspect_factor) >> 8;
+    height_after_ratio = (h_in * aspect_factor) >> 8;
 
     /* if we have ever set a cropped display area for video layer
      * (by checking video_layer_width/video_height), then
@@ -324,8 +338,8 @@ RESTART:
     screen_width = video_width * vpp_zoom_ratio / 100;
     screen_height = video_height * vpp_zoom_ratio / 100;
 
-    ratio_x = (width_in << 18) / screen_width;
-    if (ratio_x * screen_width < (width_in << 18)) {
+    ratio_x = (w_in << 18) / screen_width;
+    if (ratio_x * screen_width < (w_in << 18)) {
         ratio_x++;
     }
 
@@ -357,11 +371,11 @@ RESTART:
     /* vertical */
     ini_vphase = vpp_zoom_center_y & 0xff;
 
-    next_frame_par->VPP_pic_in_height_ = height_in / (next_frame_par->vscale_skip_count + 1);
+    next_frame_par->VPP_pic_in_height_ = h_in / (next_frame_par->vscale_skip_count + 1);
 
     /* screen position for source */
-    start = video_top + video_height / 2 - ((height_in << 17) + (vpp_zoom_center_y << 10)) / ratio_y;
-    end   = (height_in << 18) / ratio_y + start - 1;
+    start = video_top + video_height / 2 - ((h_in << 17) + (vpp_zoom_center_y << 10)) / ratio_y;
+    end   = (h_in << 18) / ratio_y + start - 1;
 
     /* calculate source vertical clip */
     if (video_top < 0) {
@@ -383,12 +397,18 @@ RESTART:
         }
     }
 
+    temp = next_frame_par->VPP_vd_start_lines_ + (video_height * ratio_y >> 18);
+    next_frame_par->VPP_vd_end_lines_ = (temp <= (h_in - 1)) ? temp : (h_in - 1);
+
+    if (v_crop_enable) {
+        next_frame_par->VPP_vd_start_lines_ += video_source_crop_top;
+        next_frame_par->VPP_vd_end_lines_ += video_source_crop_top;
+    }
+
     if (vpp_flags & VPP_FLAG_INTERLACE_IN) {
         next_frame_par->VPP_vd_start_lines_ &= ~1;
     }
 
-    temp = next_frame_par->VPP_vd_start_lines_ + (video_height * ratio_y >> 18);
-    next_frame_par->VPP_vd_end_lines_ = (temp <= (height_in - 1)) ? temp : (height_in - 1);
     /* find overlapped region between
      * [start, end], [0, height_out-1], [video_top, video_top+video_height-1]
      */
@@ -456,8 +476,8 @@ RESTART:
     }
 
     /* screen position for source */
-    start = video_left + video_width / 2 - ((width_in << 17) + (vpp_zoom_center_x << 10)) / ratio_x;
-    end   = (width_in << 18) / ratio_x + start - 1;
+    start = video_left + video_width / 2 - ((w_in << 17) + (vpp_zoom_center_x << 10)) / ratio_x;
+    end   = (w_in << 18) / ratio_x + start - 1;
     /* calculate source horizontal clip */
     if (video_left < 0) {
         if (start < 0) {
@@ -479,7 +499,13 @@ RESTART:
     }
 
     temp = next_frame_par->VPP_hd_start_lines_ + (video_width * ratio_x >> 18);
-    next_frame_par->VPP_hd_end_lines_ = (temp <= (width_in - 1)) ? temp : (width_in - 1);
+    next_frame_par->VPP_hd_end_lines_ = (temp <= (w_in - 1)) ? temp : (w_in - 1);
+
+    if (h_crop_enable) {
+        next_frame_par->VPP_hd_start_lines_ += video_source_crop_left;
+        next_frame_par->VPP_hd_end_lines_ += video_source_crop_left;
+    }
+
     next_frame_par->VPP_line_in_length_ = next_frame_par->VPP_hd_end_lines_ - next_frame_par->VPP_hd_start_lines_ + 1;
     /* find overlapped region between
      * [start, end], [0, width_out-1], [video_left, video_left+video_width-1]
@@ -588,6 +614,22 @@ vpp_set_filters(u32 wide_mode,
                      (vinfo->aspect_ratio_den << 8) / vinfo->aspect_ratio_num,
                      vpp_flags,
                      next_frame_par);
+}
+
+void vpp_set_video_source_crop(u32 t, u32 l, u32 b, u32 r)
+{
+    video_source_crop_top = t;
+    video_source_crop_left = l;
+    video_source_crop_bottom = b;
+    video_source_crop_right = r;
+}
+
+void vpp_get_video_source_crop(u32 *t, u32 *l, u32 *b, u32 *r)
+{
+    *t = video_source_crop_top;
+    *l = video_source_crop_left;
+    *b = video_source_crop_bottom;
+    *r = video_source_crop_right;
 }
 
 void vpp_set_video_layer_position(s32 x, s32 y, s32 w, s32 h)

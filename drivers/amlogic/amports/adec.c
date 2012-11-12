@@ -147,12 +147,12 @@ static struct uio_info astream_uio_info = {
     .irq = UIO_IRQ_NONE,
 
     .mem = {
-        [1] = {
+        [0] = {
             .memtype = UIO_MEM_PHYS,
             .addr = (IO_CBUS_PHY_BASE + CBUS_REG_OFFSET(AIU_AIFIFO_CTRL)),
             .size = (AIU_MEM_AIFIFO_LEVEL - AIU_AIFIFO_CTRL + 1) * 4,
         },
-        [0] = { 
+        [1] = { 
             .memtype = UIO_MEM_PHYS,
             .addr = (IO_CBUS_PHY_BASE + CBUS_REG_OFFSET(VCOP_CTRL_REG)),
             .size = (VC1_BITPLANE_CTL - VCOP_CTRL_REG + 1)*4,
