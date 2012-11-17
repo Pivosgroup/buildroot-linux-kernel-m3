@@ -851,8 +851,7 @@ static int aml_m3_codec_set_dai_fmt(struct snd_soc_dai *codec_dai,
 
 #define AML_RATES SNDRV_PCM_RATE_8000_96000
 
-#define AML_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | \
-	SNDRV_PCM_FMTBIT_S24_LE)
+#define AML_FORMATS (SNDRV_PCM_FMTBIT_S16_LE)
 
 
 static struct snd_soc_dai_ops aml_m3_codec_dai_ops = {
