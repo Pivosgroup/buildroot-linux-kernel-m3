@@ -1043,7 +1043,7 @@ CONFIG_MALI=m
 #
 # AMLOGIC DVB driver
 #
-# CONFIG_AM_DVB is not set
+CONFIG_AM_DVB=y
 
 #
 # AMLOGIC Post Process Manager driver
