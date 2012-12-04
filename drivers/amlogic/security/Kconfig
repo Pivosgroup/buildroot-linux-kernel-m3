@@ -1,0 +1,7 @@
+menu 	"Amlogic IPTV Security Support"
+config  AM_IPTV_SECURITY
+	tristate  "iptv security support"
+	default n
+	help 
+		iptv security support
+endmenu

@@ -40,11 +40,35 @@
 #define OSD2_ADDR_START		U_ALIGN(OSD1_ADDR_END)
 #define OSD2_ADDR_END		(OSD2_ADDR_START +OSD2_MAX_MEM -1)
 
+#if defined(CONFIG_AM_FB_EXT)
+/******** OSD3 OSD4 begin ***************/
+#if defined(CONFIG_FB_OSD2_ENABLE)
+#define OSD3_ADDR_START	U_ALIGN(OSD2_ADDR_END)
+#else
+#define OSD3_ADDR_START	U_ALIGN(OSD1_ADDR_END)
+#endif
+
+#define OSD3_MAX_MEM		U_ALIGN(OSD_PANEL_PIX*B32BpP*DOUBLE_BUFFER)
+#define OSD4_MAX_MEM		U_ALIGN(32*32*B32BpP)
+#define OSD3_ADDR_END		(OSD3_ADDR_START+OSD3_MAX_MEM - 1)
+#define OSD4_ADDR_START		U_ALIGN(OSD3_ADDR_END)
+#define OSD4_ADDR_END		(OSD4_ADDR_START +OSD4_MAX_MEM -1)
+
+#if defined(CONFIG_FB_OSD2_ENABLE)
+#define PMEM_START		U_ALIGN(OSD4_ADDR_END)
+#else
+#define PMEM_START		U_ALIGN(OSD3_ADDR_END)
+#endif
+/******** OSD3 OSD4 end ***************/
+#else
 #if defined(CONFIG_FB_OSD2_ENABLE)
 #define PMEM_START		U_ALIGN(OSD2_ADDR_END)
 #else
 #define PMEM_START		U_ALIGN(OSD1_ADDR_END)
 #endif
+#endif
+
+
 #ifdef CONFIG_ANDROID_PMEM
 #define PMEM_SIZE               (32*SZ_1M)
 #else

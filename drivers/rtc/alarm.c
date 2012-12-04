@@ -386,7 +386,7 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 
 	hrtimer_cancel(&alarms[ANDROID_ALARM_RTC_WAKEUP].timer);
 	hrtimer_cancel(&alarms[
-			ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP_MASK].timer);
+			ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP].timer);
 
 	tmp_queue = &alarms[ANDROID_ALARM_RTC_WAKEUP];
 	if (tmp_queue->first)
@@ -408,9 +408,13 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 			hrtimer_get_expires(&wakeup_queue->timer)),
 			rtc_delta).tv_sec;
 
+		if (rtc_current_time + 3 >= rtc_alarm_time) {
+			rtc_alarm_time = rtc_current_time+5;
+		}
 		rtc_time_to_tm(rtc_alarm_time, &rtc_alarm.time);
 		rtc_alarm.enabled = 1;
 		rtc_set_alarm(alarm_rtc_dev, &rtc_alarm);
+		/*
 		rtc_read_time(alarm_rtc_dev, &rtc_current_rtc_time);
 		rtc_tm_to_time(&rtc_current_rtc_time, &rtc_current_time);
 		pr_alarm(SUSPEND,
@@ -433,6 +437,7 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 			err = -EBUSY;
 			spin_unlock_irqrestore(&alarm_slock, flags);
 		}
+		*/
 	}
 	return err;
 }

@@ -107,6 +107,7 @@ typedef enum vframe_source_type_e {
     VFRAME_SOURCE_TYPE_CVBS,
     VFRAME_SOURCE_TYPE_COMP,
     VFRAME_SOURCE_TYPE_PPMGR,
+    VFRAME_SOURCE_TYPE_OSD,
 } vframe_source_type_t;
 typedef struct vframe_s {
     u32 index;

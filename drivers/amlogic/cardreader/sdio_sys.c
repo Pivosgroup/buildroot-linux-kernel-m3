@@ -14,6 +14,7 @@
 #include <linux/device.h>
 #include <linux/err.h>
 #include <linux/slab.h>
+#include <linux/pm_runtime.h>
 
 #include <linux/cardreader/sdio.h>
 #include <linux/cardreader/card_block.h>
@@ -163,6 +164,24 @@ static int sdio_bus_remove(struct device *dev)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+extern int pm_generic_suspend(struct device *dev);
+extern int pm_generic_resume(struct device *dev);
+static const struct dev_pm_ops sdio_bus_pm_ops = {
+    .suspend = pm_generic_suspend,
+    .resume = pm_generic_resume,
+    SET_RUNTIME_PM_OPS(
+        pm_generic_runtime_suspend,
+        pm_generic_runtime_resume,
+        pm_generic_runtime_idle
+    )
+};
+
+#define SDIO_PM_OPS_PTR        (&sdio_bus_pm_ops)
+#else /* !CONFIG_PM_RUNTIME */
+#define SDIO_PM_OPS_PTR        NULL
+#endif /*CONFIG_PM*/
+
 static struct bus_type sdio_bus_type = {
 	.name		= "sdio",
 	.dev_attrs	= sdio_dev_attrs,
@@ -170,6 +189,7 @@ static struct bus_type sdio_bus_type = {
 	.uevent		= sdio_bus_uevent,
 	.probe		= sdio_bus_probe,
 	.remove		= sdio_bus_remove,
+	.pm             = SDIO_PM_OPS_PTR,
 };
 
 int sdio_register_bus(void)

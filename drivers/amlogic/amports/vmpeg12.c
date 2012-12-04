@@ -93,6 +93,8 @@ MODULE_AMLOG(LOG_LEVEL_ERROR, 0, LOG_LEVEL_DESC, LOG_DEFAULT_MASK_DESC);
 #define DEC_CONTROL_FLAG_FORCE_3000_704_480_INTERLACE  0x0004
 #define DEC_CONTROL_FLAG_FORCE_2500_704_576_INTERLACE  0x0008
 #define DEC_CONTROL_FLAG_FORCE_2500_544_576_INTERLACE  0x0010
+#define DEC_CONTROL_FLAG_FORCE_2500_480_576_INTERLACE  0x0020
+
 
 static vframe_t *vmpeg_vf_peek(void*);
 static vframe_t *vmpeg_vf_get(void*);
@@ -257,6 +259,12 @@ static irqreturn_t vmpeg12_isr(int irq, void *dev_id)
         }
         else if ((dec_control & DEC_CONTROL_FLAG_FORCE_2500_544_576_INTERLACE) &&
             (frame_width == 544) &&
+            (frame_height == 576) &&
+            (frame_dur == 3840)) {
+            frame_prog = 0;
+        }
+	else if ((dec_control & DEC_CONTROL_FLAG_FORCE_2500_480_576_INTERLACE) &&
+            (frame_width == 480) &&
             (frame_height == 576) &&
             (frame_dur == 3840)) {
             frame_prog = 0;

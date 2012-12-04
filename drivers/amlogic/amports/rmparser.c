@@ -174,7 +174,8 @@ static ssize_t _rmparser_write(const char __user *buf, size_t count)
 
         wmb();
 
-        WRITE_MPEG_REG(PARSER_FETCH_ADDR, fetchbuf);
+        WRITE_MPEG_REG(PARSER_FETCH_ADDR, virt_to_phys((u8 *)fetchbuf));
+        
         WRITE_MPEG_REG(PARSER_FETCH_CMD,
                        (7 << FETCH_ENDIAN) | len);
 

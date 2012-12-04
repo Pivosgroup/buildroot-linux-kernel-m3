@@ -1038,7 +1038,7 @@ static int __init clk81_clock_setup(char *ptr)
     int baudrate;
 
 	clk = clk_util_clk_msr(CLK81);
-    printk("CLK81(from MSR_CLK_REG) = %ldMHz, a9_clk(from args) = %ld\n", (clk*1000000), clock);
+    printk("CLK81(from MSR_CLK_REG) = %ldMHz, a9_clk(from args) = %d\n", (clk*1000000), clock);
 
     if (!ddr_pll_clk){
     	ddr_pll_clk = clk_util_clk_msr(CTS_DDR_CLK);

@@ -34,4 +34,6 @@ obj-$(CONFIG_AML_TCON_Y7)  += lcd_ttl/y7.o
 
 obj-$(CONFIG_AML_TCON_S7)  += lcd_ttl/s7.o
 
+obj-$(CONFIG_AML_TCON_TM070)  += lcd_ttl/tm070.o
+
 #EXTRA_CFLAGS += -DCONFIG_PM

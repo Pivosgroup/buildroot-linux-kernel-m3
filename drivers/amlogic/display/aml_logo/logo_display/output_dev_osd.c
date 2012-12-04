@@ -80,7 +80,10 @@ static int osd_hw_setup(logo_object_t *plogo)
 	osd_init_hw(0);
 	DisableVideoLayer();
 	setup_color_mode(color,osd_ctl.index==0?VIU_OSD1_BLK0_CFG_W0:VIU_OSD2_BLK0_CFG_W0);
-	
+	if(!plogo->para.loaded)
+	{
+	    SET_MPEG_REG_MASK(VPP_MISC,VPP_OSD1_POSTBLEND|VPP_OSD2_POSTBLEND);
+	}
 	osd_setup(&osd_ctl, \
 					0, \
 					0, \

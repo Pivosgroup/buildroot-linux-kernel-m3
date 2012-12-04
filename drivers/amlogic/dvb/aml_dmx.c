@@ -128,6 +128,7 @@ static int dmx_add_feed(struct aml_dmx *dmx, struct dvb_demux_feed *feed);
 static u32 video_pts = 0;
 static u32 audio_pts = 0;
 static int demux_skipbyte = 0;
+static bool error_sendcmd = false;
 
 /*Section buffer watchdog*/
 static void section_buffer_watchdog_func(unsigned long arg)
@@ -169,7 +170,8 @@ static void section_buffer_watchdog_func(unsigned long arg)
 							demux_channel_activity32,
 							section_busy32);
 
-				dmx_reset_hw(dvb);
+				error_sendcmd = true;
+				//dmx_reset_hw(dvb);
 				goto end;
 			}
 #else
@@ -237,6 +239,12 @@ static void section_buffer_watchdog_func(unsigned long arg)
 	}
 
 end:
+	if(error_sendcmd){
+		pr_error("error_sendcmd call and reset hw\n");
+		error_sendcmd = false;
+		dmx_reset_hw(dvb);
+	}
+	
 	spin_unlock_irqrestore(&dvb->slock, flags);
 #ifdef ENABLE_SEC_BUFF_WATCHDOG
 	mod_timer(&dvb->watchdog_timer, jiffies+msecs_to_jiffies(WATCHDOG_TIMER));
@@ -351,7 +359,7 @@ static void process_section(struct aml_dmx *dmx)
 			DMX_WRITE_REG(dmx->id, SEC_BUFF_NUMBER, i);
 			sec_num = (DMX_READ_REG(dmx->id, SEC_BUFF_NUMBER) >> 8);
 			
-			dma_sync_single_for_cpu(NULL, dmx->sec_pages_map+(sec_num<<0x0c), (1<<0x0c), DMA_FROM_DEVICE);
+			dma_sync_single_for_cpu(NULL, dmx->sec_pages_map+(i<<0x0c), (1<<0x0c), DMA_FROM_DEVICE);
 
 			sec_data_notify(dmx, sec_num, i);
 
@@ -495,7 +503,7 @@ static irqreturn_t dmx_irq_handler(int irq_number, void *para)
 	if(status & (1<<AUDIO_SPLICING_POINT)) {
 	}
 	if(status & (1<<TS_ERROR_PIN)) {
-		//pr_error("TS_ERROR_PIN\n");
+		pr_error("TS_ERROR_PIN\n");
 	}
 	 if (status & (1 << NEW_PDTS_READY)) {
 		 u32 pdts_status = DMX_READ_REG(dmx->id, STB_PTS_DTS_STATUS);
@@ -561,19 +569,21 @@ static irqreturn_t dvr_irq_handler(int irq_number, void *para)
 	struct aml_dmx *dmx;
 	u32 size;
 	u8 *p;
-	int i;
+	int i, factor;
 
-	//pr_dbg("dvr irq: fifo %d, dmx %d\n", afifo->id, afifo->source);
+	pr_dbg("dvr irq: fifo %d, dmx %d\n", afifo->id, afifo->source);
 	if (dvb && afifo->source >= AM_DMX_0 && afifo->source < AM_DMX_MAX) {
 		dmx = &dvb->dmx[afifo->source];
 		if (dmx->init && dmx->record) {
+			factor = (afifo->buf_len/afifo->flush_size)>>1;
 			for(i=0; i<CHANNEL_COUNT; i++) {
 				if(dmx->channel[i].used && dmx->channel[i].dvr_feed) {
-					size = afifo->buf_len >> 1;
+					size = afifo->buf_len >> factor;
 					p = (u8*)afifo->pages + afifo->buf_toggle * size;
 			
-					afifo->buf_toggle ^= 1;
-					//pr_dbg("write data to dvr: buf %p, size %u\n", p, size);
+					afifo->buf_toggle++;
+					afifo->buf_toggle %= (1 << factor);
+					pr_dbg("write data to dvr: buf %p, size %u\n", p, size);
 					dmx->channel[i].dvr_feed->cb.ts(p, size, NULL, 0, &dmx->channel[i].dvr_feed->feed.ts, DMX_OK);
 					break;
 				}
@@ -873,6 +883,10 @@ static int asyncfifo_alloc_buffer(struct aml_asyncfifo *afifo)
 
 	afifo->buf_toggle = 0;
 	afifo->buf_len = 512*1024;
+	pr_error("async fifo %d buf size %d, flush size %d\n", afifo->id, afifo->buf_len, afifo->flush_size);
+	if (afifo->flush_size <= 0) {
+		afifo->flush_size = afifo->buf_len>>1;
+	}
 	afifo->pages = __get_free_pages(GFP_KERNEL, get_order(afifo->buf_len));
 	if(!afifo->pages) {
 		pr_error("cannot allocate async fifo buffer\n");
@@ -884,9 +898,10 @@ static int asyncfifo_alloc_buffer(struct aml_asyncfifo *afifo)
 
 int async_fifo_init(struct aml_asyncfifo *afifo)
 {
+	if (afifo->init) 
+		return 0;
 	afifo->source  = AM_DMX_MAX;
 	afifo->pages = 0;
-	afifo->buf_len = 0;
 	afifo->buf_toggle = 0;
 
 	if (afifo->asyncfifo_irq == -1) {
@@ -907,6 +922,8 @@ int async_fifo_init(struct aml_asyncfifo *afifo)
 
 int async_fifo_deinit(struct aml_asyncfifo *afifo)
 {
+	if (! afifo->init)
+		return 0;
 	CLEAR_ASYNC_FIFO_REG_MASK(afifo->id, REG1, 1 << ASYNC_FIFO_FLUSH_EN);
 	CLEAR_ASYNC_FIFO_REG_MASK(afifo->id, REG2, 1 << ASYNC_FIFO_FILL_EN);
 	if (afifo->pages) {
@@ -914,14 +931,14 @@ int async_fifo_deinit(struct aml_asyncfifo *afifo)
 		afifo->pages = 0;
 	}
 	afifo->source  = AM_DMX_MAX;
-	afifo->buf_len = 0;
 	afifo->buf_toggle = 0;
 	
 	if (afifo->asyncfifo_irq != -1) {
 		free_irq(afifo->asyncfifo_irq, afifo);
 		tasklet_kill(&afifo->asyncfifo_tasklet);
-		afifo->asyncfifo_irq = -1;
 	}
+	
+	afifo->init = 0;
 
 	return 0;
 }
@@ -1338,7 +1355,8 @@ static int dmx_set_chan_regs(struct aml_dmx *dmx, int cid)
 	pr_dbg("write fm comp %x\n", data|(max>>1));
 	
 	if(DMX_READ_REG(dmx->id, OM_CMD_STATUS)&0x8e00) {
-		pr_error("error send cmd %x\n", DMX_READ_REG(dmx->id, OM_CMD_STATUS));
+		pr_error("chan error send cmd %x\n", DMX_READ_REG(dmx->id, OM_CMD_STATUS));
+		error_sendcmd = true;
 	}
 	
 	return 0;
@@ -1495,7 +1513,8 @@ static int dmx_set_filter_regs(struct aml_dmx *dmx, int fid)
 	pr_dbg("write fm comp %x\n", data|((max>>1)<<4));
 	
 	if(DMX_READ_REG(dmx->id, OM_CMD_STATUS)&0x8e00) {
-		pr_error("error send cmd %x\n",DMX_READ_REG(dmx->id, OM_CMD_STATUS));
+		pr_error("filter error send cmd %x\n",DMX_READ_REG(dmx->id, OM_CMD_STATUS));
+		error_sendcmd = true;
 	}
 	
 	return 0;
@@ -1530,9 +1549,11 @@ static void async_fifo_set_regs(struct aml_asyncfifo *afifo, int source_val)
 {
 	u32 start_addr = virt_to_phys((void*)afifo->pages);
 	u32 size = afifo->buf_len;
+	u32 flush_size = afifo->flush_size;
+	int factor = (size/flush_size)>>1;
 
-	pr_dbg("ASYNC FIFO id=%d, link to DMX%d, start_addr %x, buf_size %d, source value 0x%x\n",
-			afifo->id, afifo->source, start_addr, size, source_val);
+	pr_dbg("ASYNC FIFO id=%d, link to DMX%d, start_addr %x, buf_size %d, source value 0x%x, factor %d\n",
+			afifo->id, afifo->source, start_addr, size, source_val, factor);
 	/* Destination address*/
 	WRITE_ASYNC_FIFO_REG(afifo->id, REG0, start_addr);
 
@@ -1558,7 +1579,7 @@ static void async_fifo_set_regs(struct aml_asyncfifo *afifo, int source_val)
 					(0 << ASYNC_FIFO_FILL_CNT_LSB));   // forever FILL;
 	WRITE_ASYNC_FIFO_REG(afifo->id, REG2, READ_ASYNC_FIFO_REG(afifo->id, REG2) | (1 <<  ASYNC_FIFO_FILL_EN));       // Enable fill path
 
-	WRITE_ASYNC_FIFO_REG(afifo->id, REG3, READ_ASYNC_FIFO_REG(afifo->id, REG3) | ((((size >> 8) - 1) & 0x7fff) << ASYNC_FLUSH_SIZE_IRQ_LSB)); // generate flush interrupt
+	WRITE_ASYNC_FIFO_REG(afifo->id, REG3, (READ_ASYNC_FIFO_REG(afifo->id, REG3)&0xffff0000) | ((((size >> (factor + 7)) - 1) & 0x7fff) << ASYNC_FLUSH_SIZE_IRQ_LSB)); // generate flush interrupt
 
 	/* Connect the STB DEMUX to ASYNC_FIFO*/
 	WRITE_ASYNC_FIFO_REG(afifo->id, REG2, READ_ASYNC_FIFO_REG(afifo->id, REG2) | (source_val << ASYNC_FIFO_SOURCE_LSB));
@@ -2174,6 +2195,28 @@ int aml_asyncfifo_hw_deinit(struct aml_asyncfifo *afifo)
 	int ret;
 	spin_lock_irqsave(&afifo->slock, flags);
 	ret = async_fifo_deinit(afifo);
+	spin_unlock_irqrestore(&afifo->slock, flags);
+	
+	return ret;
+}
+
+int aml_asyncfifo_hw_reset(struct aml_asyncfifo *afifo)
+{
+	unsigned long flags;
+	int ret, src = -1;
+	spin_lock_irqsave(&afifo->slock, flags);
+	if (afifo->init) {
+		src = afifo->source;
+		async_fifo_deinit(afifo);
+	}
+	ret = async_fifo_init(afifo);
+	/* restore the source */
+	if (src != -1) {
+		afifo->source = src;
+	}
+	if(ret==0 && afifo->dvb) {
+		reset_async_fifos(afifo->dvb);
+	}
 	spin_unlock_irqrestore(&afifo->slock, flags);
 	
 	return ret;

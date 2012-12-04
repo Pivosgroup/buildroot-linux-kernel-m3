@@ -84,5 +84,6 @@ int query_video_status(int type , int* value);
 void v4l_reg_provider(const vframe_provider_t *p);
 void v4l_unreg_provider(void);
 const vframe_provider_t * v4l_get_vfp(void);
+void get_video_keep_buffer(unsigned long *addr, unsigned long *phys_addr);
 #endif /* VFRAME_PROVIDER_H */
 

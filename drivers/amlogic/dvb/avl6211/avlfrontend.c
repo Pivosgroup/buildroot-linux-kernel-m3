@@ -82,6 +82,7 @@ module_param(frontend_demod_addr, int, S_IRUGO);
 
 static int frontend_LNB = -1;
 static int frontend_PWR = -1;
+static int frontend_ANT = -1;
 
 static struct aml_fe avl6211_fe[FE_DEV_COUNT];
 
@@ -113,7 +114,10 @@ static int AVL6211_Tuner_Power_Ctrl(int tunerpwr)
 	return 0;
 }
 
-
+static int AVL6211_Ant_Overload_Ctrl(void)
+{
+	return gpio_get_value(frontend_ANT);
+}
 
 static int	AVL6211_Diseqc_Reset_Overload(struct dvb_frontend* fe)
 {
@@ -127,7 +131,7 @@ static int	AVL6211_Diseqc_Send_Master_Cmd(struct dvb_frontend* fe, struct dvb_di
 	int j=100;
 	struct AVL_DVBSx_Diseqc_TxStatus TxStatus;
 	int i;
-	printk("msg_len is %d,\n data is",cmd->msg_len);
+	pr_dbg("msg_len is %d,\n data is",cmd->msg_len);
 	for(i=0;i<cmd->msg_len;i++){
 		ucData[i]=cmd->msg[i];
 		printk("%x ",cmd->msg[i]);
@@ -136,7 +140,7 @@ static int	AVL6211_Diseqc_Send_Master_Cmd(struct dvb_frontend* fe, struct dvb_di
 	r=AVL_DVBSx_IDiseqc_SendModulationData(ucData, cmd->msg_len, pAVLChip_all);
 	if(r != AVL_DVBSx_EC_OK)
 	{
-		printf("AVL_DVBSx_IDiseqc_SendModulationData failed !\n");
+		pr_dbg("AVL_DVBSx_IDiseqc_SendModulationData failed !\n");
 	}
 	else
 	{
@@ -152,7 +156,7 @@ static int	AVL6211_Diseqc_Send_Master_Cmd(struct dvb_frontend* fe, struct dvb_di
 		}
 		else
 		{
-			printf("AVL_DVBSx_IDiseqc_SendModulationData Err. !\n");
+			pr_dbg("AVL_DVBSx_IDiseqc_SendModulationData Err. !\n");
 		}		
 	}
 	return r;
@@ -179,7 +183,7 @@ static int	AVL6211_Diseqc_Send_Burst(struct dvb_frontend* fe, fe_sec_mini_cmd_t 
   	r = AVL_DVBSx_IDiseqc_SendTone(ucTone, TONE_COUNT, pAVLChip_all);
 	if(AVL_DVBSx_EC_OK != r)
 	{
-		printf("\rSend tone %d --- Fail!\n",ucTone);
+		pr_dbg("\rSend tone %d --- Fail!\n",ucTone);
 	}
 	else
 	{
@@ -192,7 +196,7 @@ static int	AVL6211_Diseqc_Send_Burst(struct dvb_frontend* fe, fe_sec_mini_cmd_t 
 	    while((1 != sTxStatus.m_TxDone)&&i);			//Wait until operation finished.
 	    if(AVL_DVBSx_EC_OK != r)
 	    {
-		    printf("\rOutput tone %d --- Fail!\n",ucTone);
+		    pr_dbg("\rOutput tone %d --- Fail!\n",ucTone);
 	    }
 	}
 	return (r);
@@ -216,7 +220,7 @@ static int	AVL6211_Set_Tone(struct dvb_frontend* fe, fe_sec_tone_mode_t tone)
 	}
 	if(r!=AVL_DVBSx_EC_OK)
 	{
-		printf("[AVL6211_22K_Control] Err:0x%x\n",r);
+		pr_dbg("[AVL6211_22K_Control] Err:0x%x\n",r);
 	}	
 	
 	return r;
@@ -242,7 +246,7 @@ static int	AVL6211_Set_Voltage(struct dvb_frontend* fe, fe_sec_voltage_t voltage
 	r=AVL_DVBSx_IDiseqc_SetLNBOut(nValue,pAVLChip_all);
 	if(r!=AVL_DVBSx_EC_OK)
 	{
-		printf("[AVL6211_LNB_PIO_Control] set nPIN_Index:0x%x,Err\n",r);
+		pr_dbg("[AVL6211_LNB_PIO_Control] set nPIN_Index:0x%x,Err\n",r);
 	}
 	return r;
 }
@@ -287,7 +291,7 @@ static int AVL6211_Blindscan_Scan(struct dvb_frontend* fe, struct dvbsx_blindsca
 		r |=AVL_DVBSx_IBlindScan_Scan(&pbsParaZ,340, pAVLChip_all);
 		if(r== AVL_DVBSx_EC_OK)
 		{
-			printf("AVL_DVBSx_IBlindScan_Scan,OK\n");
+			pr_dbg("AVL_DVBSx_IBlindScan_Scan,OK\n");
 		}
 		return r;
 }
@@ -299,15 +303,15 @@ static int AVL6211_Blindscan_Getscanstatus(struct dvb_frontend* fe, struct dvbsx
 		if(100==pbsinfo->m_uiProgress)
                 {
 		   //   r |= AVL_DVBSx_IBase_SetFunctionalMode(pAVLChip_all,AVL_DVBSx_FunctMode_Demod);
-		      printk("pbsinfo->m_uiProgress is %d, pbsinfo->m_uiChannelCount is %d,pbsinfo->m_uiNextStartFreq_100kHz is %d,pbsinfo->m_uiResultCode is %d\n",pbsinfo->m_uiProgress,pbsinfo->m_uiChannelCount,pbsinfo->m_uiNextStartFreq_100kHz,pbsinfo->m_uiResultCode);
+		      pr_dbg("pbsinfo->m_uiProgress is %d, pbsinfo->m_uiChannelCount is %d,pbsinfo->m_uiNextStartFreq_100kHz is %d,pbsinfo->m_uiResultCode is %d\n",pbsinfo->m_uiProgress,pbsinfo->m_uiChannelCount,pbsinfo->m_uiNextStartFreq_100kHz,pbsinfo->m_uiResultCode);
                 }
                 else
                 {
-                  printk("Blindscan Waiting...\n");
+                  pr_dbg("Blindscan Waiting...\n");
                 }
 		if(r!= AVL_DVBSx_EC_OK)
 		{
-			printf("AVL_DVBSx_IBlindScan_GetScanStatus,fail\n");
+			pr_dbg("AVL_DVBSx_IBlindScan_GetScanStatus,fail\n");
 		}
 		return r;
 }
@@ -318,14 +322,14 @@ static int AVL6211_Blindscan_Cancel(struct dvb_frontend* fe)
 		r = AVL_DVBSx_IBase_SetFunctionalMode(pAVLChip_all, AVL_DVBSx_FunctMode_Demod);//set demod mode
 		if(r!= AVL_DVBSx_EC_OK)
 		{
-			printf("avl6211_blindscan_cancel,fail\n");
+			pr_dbg("avl6211_blindscan_cancel,fail\n");
 		
 		}
 		return r;
 }
 
 
-static int AVL6211_Blindscan_Readchannelinfo(struct dvb_frontend* fe, struct dvb_frontend_parameters *pchannel)
+static int AVL6211_Blindscan_Readchannelinfo(struct dvb_frontend* fe, struct dvbsx_frontend_parameters *pchannel)
 {
 		struct AVL_DVBSx_BlindScanAPI_Setting  pBSsetting;
 		unsigned short pChannelCount;
@@ -337,12 +341,12 @@ static int AVL6211_Blindscan_Readchannelinfo(struct dvb_frontend* fe, struct dvb
 		r=AVL_DVBSx_IBlindScan_ReadChannelInfo(0, &pChannelCount, &(pBSsetting.channels_Temp), pAVLChip_all);
 		if(r!= AVL_DVBSx_EC_OK)
 		{
-			printf("AVL_DVBSx_IBlindScan_ReadChannelInfo,fail\n");
+			pr_dbg("AVL_DVBSx_IBlindScan_ReadChannelInfo,fail\n");
 		
 		}
 		for( i1=0; i1<pChannelCount; i1++ ){
-		pchannel[i1].frequency=pBSsetting.channels_Temp[i1].m_uiFrequency_kHz;
-		pchannel[i1].u.qam.symbol_rate=pBSsetting.channels_Temp[i1].m_uiSymbolRate_Hz;
+		pchannel->parameters[i1].frequency=pBSsetting.channels_Temp[i1].m_uiFrequency_kHz;
+		pchannel->parameters[i1].u.qam.symbol_rate=pBSsetting.channels_Temp[i1].m_uiSymbolRate_Hz;
 		}
 		return r;
 }
@@ -355,7 +359,7 @@ static int AVL6211_Blindscan_Reset(struct dvb_frontend* fe)
 		r |= AVL_DVBSx_IBlindScan_Reset(pAVLChip_all);
 		if(r== AVL_DVBSx_EC_OK)
 		{
-			printf("AVL_DVBSx_IBlindScan_Reset,OK\n");
+			pr_dbg("AVL_DVBSx_IBlindScan_Reset,OK\n");
 		}
 		return r;
 
@@ -375,7 +379,7 @@ static int initflag=-1;
 static int AVL6211_Init(struct dvb_frontend *fe)
 {
 	AVL_DVBSx_ErrorCode r = AVL_DVBSx_EC_OK;
-	printk("frontend_reset is %d\n",frontend_reset);
+	pr_dbg("frontend_reset is %d\n",frontend_reset);
 	//init sema
 	AVL_DVBSx_IBSP_InitSemaphore( &blindscanSem );
 	//reset
@@ -464,7 +468,7 @@ static int AVL6211_Set_Frontend(struct dvb_frontend *fe, struct dvb_frontend_par
 {
 	if(initflag!=0)
 	{
-		printk("[%s] avl6211 init fail\n",__FUNCTION__);
+		pr_dbg("[%s] avl6211 init fail\n",__FUNCTION__);
 		return;	
 	}
 //	printk("[AVL6211_Set_Frontend],blindstart is %d\n",blindstart);
@@ -472,6 +476,11 @@ static int AVL6211_Set_Frontend(struct dvb_frontend *fe, struct dvb_frontend_par
 	if(1==blindstart)
 		return;
 	AVL_DVBSx_IBSP_WaitSemaphore(&blindscanSem);
+	if((850000>p->frequency)||(p->frequency>2300000))
+	{
+			p->frequency =945000;
+			pr_dbg("freq is out of range,force to set 945000khz\n");
+	}
 	struct avl6211_state *state = fe->demodulator_priv;
 	struct AVL_DVBSx_Channel Channel;
 	AVL_DVBSx_ErrorCode r = AVL_DVBSx_EC_OK;
@@ -495,10 +504,14 @@ static int AVL6211_Set_Frontend(struct dvb_frontend *fe, struct dvb_frontend_par
 	r=avl6211pTuner->m_pLockFunc(avl6211pTuner);
 	if (AVL_DVBSx_EC_OK != r)
 	{
- 		printf("Tuner test failed !\n");
+		state->freq=p->frequency;
+		state->mode=p->u.qam.modulation ;
+		state->symbol_rate=p->u.qam.symbol_rate;
+		
+ 		pr_dbg("Tuner test failed !\n");
 		return (r);
 	}
-	printf("Tuner test ok !\n");
+	pr_dbg("Tuner test ok !\n");
 	msleep(50);
 	#if 0
 	Channel.m_uiSymbolRate_Hz = p->u.qam.symbol_rate;      //Change the value defined by macro when we want to lock a new channel.
@@ -530,23 +543,54 @@ static int AVL6211_Set_Frontend(struct dvb_frontend *fe, struct dvb_frontend_par
 	r = AVL_DVBSx_IRx_LockChannel(&Channel, pAVLChip_all);  
 	if (AVL_DVBSx_EC_OK != r)
 	{
-		printf("Lock channel failed !\n");
+		state->freq=p->frequency;
+		state->mode=p->u.qam.modulation ;
+		state->symbol_rate=p->u.qam.symbol_rate;	
+		
+		pr_dbg("Lock channel failed !\n");
 		return (r);
 	}
 	AVL_DVBSx_IBSP_ReleaseSemaphore(&blindscanSem);
+	if (AVL_DVBSx_EC_OK != r)
+	{
+		printf("Lock channel failed !\n");
+		return (r);
+	}
 	int waittime=150;//3s 
+	//Channel lock time increase while symbol rate decrease.Give the max waiting time for different symbolrates.
+	if(p->u.qam.symbol_rate<5000000)
+	{
+		waittime = 250;       //The max waiting time is 5000ms,considering the IQ swapped status the time should be doubled.
+	}
+	else if(p->u.qam.symbol_rate<10000000)
+	{
+        waittime = 30;        //The max waiting time is 600ms,considering the IQ swapped status the time should be doubled.
+	}
+	else
+	{
+        waittime = 15;        //The max waiting time is 300ms,considering the IQ swapped status the time should be doubled.
+	} 
 	int lockstatus = 0;
 	while(waittime)
 	{
 		lockstatus=AVL6211_GETLockStatus();
-		if(1==lockstatus)
+		if(1==lockstatus){
+			pr_dbg("lock success !\n");
 			break;
+		}
 		msleep(20);
 		waittime--;
 	}
+	if(!AVL6211_GETLockStatus())
+		pr_dbg("lock timeout !\n");
+	
 	r=AVL_DVBSx_IRx_ResetErrorStat(pAVLChip_all);
 	if (AVL_DVBSx_EC_OK != r)
 	{
+		state->freq=p->frequency;
+		state->mode=p->u.qam.modulation ;
+		state->symbol_rate=p->u.qam.symbol_rate;
+		
 		printf("Reset error status failed !\n");
 		return (r);
 	}
@@ -556,7 +600,7 @@ static int AVL6211_Set_Frontend(struct dvb_frontend *fe, struct dvb_frontend_par
 	state->mode=p->u.qam.modulation ;
 	state->symbol_rate=p->u.qam.symbol_rate; //these data will be writed to eeprom
 
-//	pr_dbg("avl6211=>frequency=%d,symbol_rate=%d\r\n",p->frequency,p->u.qam.symbol_rate);
+	pr_dbg("avl6211=>frequency=%d,symbol_rate=%d\r\n",p->frequency,p->u.qam.symbol_rate);
 	return  0;
 }
 
@@ -577,6 +621,23 @@ static void AVL6211_Release(struct dvb_frontend *fe)
 	struct avl6211_state *state = fe->demodulator_priv;
 	kfree(state);
 }
+
+static ssize_t avl_frontend_show_short_circuit(struct class* class, struct class_attribute* attr, char* buf)
+{
+	int ant_overload_status = AVL6211_Ant_Overload_Ctrl();
+	
+	return sprintf(buf, "%d\n", ant_overload_status);
+}
+
+static struct class_attribute avl_frontend_class_attrs[] = {
+	__ATTR(short_circuit,  S_IRUGO | S_IWUSR, avl_frontend_show_short_circuit, NULL),
+	__ATTR_NULL
+};
+
+static struct class avl_frontend_class = {
+	.name = "avl_frontend",
+	.class_attrs = avl_frontend_class_attrs,
+};
 
 static struct dvb_frontend_ops avl6211_ops;
 
@@ -752,6 +813,17 @@ static int avl6211_fe_init(struct aml_dvb *advb, struct platform_device *pdev, s
 			goto err_resource;
 		}
 		frontend_PWR = res->start;
+
+		snprintf(buf, sizeof(buf), "frontend%d_ANTOVERLOAD", id);
+		res = platform_get_resource_byname(pdev, IORESOURCE_MEM, buf);
+		if (!res) {
+			pr_error("cannot get resource \"%s\"\n", buf);
+			ret = -EINVAL;
+			goto err_resource;
+		}
+		frontend_ANT = res->start;
+
+		gpio_direction_input(frontend_ANT);
 	
 
 	frontend_reset = cfg->reset_pin;
@@ -805,20 +877,35 @@ int avl6211_get_fe_config(struct avl6211_fe_config *cfg)
 
 static int avl6211_fe_probe(struct platform_device *pdev)
 {
+	int ret = 0;
 	struct aml_dvb *dvb = aml_get_dvb_device();
 	
 	if(avl6211_fe_init(dvb, pdev, &avl6211_fe[0], 0)<0)
 		return -ENXIO;
 
 	platform_set_drvdata(pdev, &avl6211_fe[0]);
+
+	if((ret = class_register(&avl_frontend_class))<0) {
+		pr_error("register class error\n");
+
+		struct aml_fe *drv_data = platform_get_drvdata(pdev);
+		
+		platform_set_drvdata(pdev, NULL);
 	
-	return 0;
+		avl6211_fe_release(dvb, drv_data);
+
+		return ret;
+	}
+	
+	return ret;
 }
 
 static int avl6211_fe_remove(struct platform_device *pdev)
 {
 	struct aml_fe *drv_data = platform_get_drvdata(pdev);
 	struct aml_dvb *dvb = aml_get_dvb_device();
+
+	class_unregister(&avl_frontend_class);
 
 	platform_set_drvdata(pdev, NULL);
 	
@@ -827,9 +914,44 @@ static int avl6211_fe_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static int avl6211_fe_resume(struct platform_device *pdev)
+{
+	pr_dbg("avl6211_fe_resume \n");
+	AVL_DVBSx_ErrorCode r = AVL_DVBSx_EC_OK;
+	//init sema
+	AVL_DVBSx_IBSP_InitSemaphore( &blindscanSem );
+	//reset
+	AVL6211_Reset();
+	msleep(100);
+	//LBNON
+//	AVL6211_Lnb_Power_Ctrl(1);
+	//tunerpower
+	AVL6211_Tuner_Power_Ctrl(0);
+	//init
+	r=AVL6211_LockSignal_Init();
+//	r=AVL_DVBSx_IDiseqc_StopContinuous(pAVLChip_all);
+	if(AVL_DVBSx_EC_OK != r)
+	{
+		return r;
+	}
+	initflag =0;
+	pr_dbg("0x%x(ptuner),0x%x(pavchip)=========================demod init\r\n",avl6211pTuner->m_uiSlaveAddress,pAVLChip_all->m_SlaveAddr);
+	msleep(200);
+	return 0;
+
+}
+
+static int avl6211_fe_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	return 0;
+}
+
+
 static struct platform_driver aml_fe_driver = {
 	.probe		= avl6211_fe_probe,
-	.remove		= avl6211_fe_remove,	
+	.remove		= avl6211_fe_remove,
+	.resume		= avl6211_fe_resume,
+	.suspend	= avl6211_fe_suspend,
 	.driver		= {
 		.name	= "avl6211",
 		.owner	= THIS_MODULE,

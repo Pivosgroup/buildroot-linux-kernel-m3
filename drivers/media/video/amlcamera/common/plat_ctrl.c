@@ -35,14 +35,14 @@
 /****************************************************************
  *   i2c functions
  * **************************************************************/
-static int camera_read_buff(struct i2c_client *client,char *buf, int len)
+static int camera_read_buff(struct i2c_client *client,char *buf, int len, int addr_len)
 {
     int  i2c_flag = -1;
 	struct i2c_msg msgs[] = {
 		{
 			.addr	= client->addr,
 			.flags	= 0,
-			.len	= 2,
+			.len	= addr_len,
 			.buf	= buf,
 		},
 		{
@@ -84,7 +84,7 @@ int i2c_get_byte(struct i2c_client *client,unsigned short addr)
     buff[0] = (unsigned char)((addr >> 8) & 0xff);
     buff[1] = (unsigned char)(addr & 0xff);
        
-	if (camera_read_buff(client, buff, 1) <0)
+	if (camera_read_buff(client, buff, 1, 2) <0)
 		return -1;
 	return buff[0];
 }
@@ -94,7 +94,7 @@ int i2c_get_byte_add8(struct i2c_client *client,unsigned short addr)
 	unsigned char buff[4];
     buff[0] = (unsigned char)(addr & 0xff);
        
-	if (camera_read_buff(client, buff, 1) <0)
+	if (camera_read_buff(client, buff, 1, 1) <0)
 		return -1;
 	return buff[0];
 }
@@ -106,7 +106,7 @@ int i2c_get_word(struct i2c_client *client,unsigned short addr)
     buff[0] = (unsigned char)((addr >> 8) & 0xff);
     buff[1] = (unsigned char)(addr & 0xff);
     
-	if (camera_read_buff(client, buff, 2) <0)
+	if (camera_read_buff(client, buff, 2, 2) <0)
 		return -1;
     else
     {
@@ -139,6 +139,17 @@ int i2c_put_word(struct i2c_client *client, unsigned short addr, unsigned short 
 		return -1;
 	return 0;
 }
+
+int i2c_put_byte_add8_new(struct i2c_client *client, unsigned char addr, unsigned char data)
+{
+	unsigned char buff[4];
+	buff[0] = (unsigned char)(addr & 0xff);
+	buff[1] = (unsigned char)(data & 0xff);
+	if (camera_write_buff(client, buff, 2) <0)
+		return -1;
+	return  0;
+}
+
 int i2c_put_byte_add8(struct i2c_client *client,char *buf, int len)
 {
 	if (camera_write_buff(client, buf, len) <0)

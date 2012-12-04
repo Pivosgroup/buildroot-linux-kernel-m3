@@ -305,8 +305,9 @@ void kernel_restart_prepare(char *cmd)
  *	Shutdown everything and perform a clean reboot.
  *	This is not safe to call in interrupt context.
  */
+
 void kernel_restart(char *cmd)
-{
+{	
 	kernel_restart_prepare(cmd);
 	if (!cmd)
 		printk(KERN_EMERG "Restarting system.\n");

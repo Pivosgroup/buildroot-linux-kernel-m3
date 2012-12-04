@@ -140,8 +140,10 @@ static int card_blk_open(struct block_device *bdev, fmode_t mode)
 			check_disk_change(bdev);
 		ret = 0;
 
-		if ((mode & FMODE_WRITE) && card_data->read_only)
+		if ((mode & FMODE_WRITE) && card_data->read_only){
+                             card_blk_put(bdev->bd_disk->private_data);
 			ret = -EROFS;
+                   }
 	}
 
 	return ret;
@@ -183,7 +185,7 @@ static int card_prep_request(struct request_queue *q, struct request *req)
 	int ret = BLKPREP_KILL;
 
 	if (!cq) {
-		printk(KERN_ERR "[card_prep_request] %s: killing request - no device/host\n", req->rq_disk->disk_name);
+		//printk(KERN_ERR "[card_prep_request] %s: killing request - no device/host\n", req->rq_disk->disk_name);
 		return BLKPREP_KILL;
 	}
 	
@@ -302,6 +304,7 @@ static int card_queue_thread(void *d)
 		}
               set_current_state(TASK_RUNNING);
 		cq->issue_fn(cq, req);
+		cond_resched();
 	} while (1);
 	up(&cq->thread_sem);
 	return 0;
@@ -468,7 +471,7 @@ int card_init_queue(struct card_queue *cq, struct memory_card *card,
 {
 	struct card_host *host = card->host;
 	u64 limit = BLK_BOUNCE_HIGH;
-	int ret=0, card_quene_num;
+	int ret=0;
 
 	if (host->parent->dma_mask && *host->parent->dma_mask)
 		limit = *host->parent->dma_mask;
@@ -543,6 +546,8 @@ static struct card_blk_data *card_blk_alloc(struct memory_card *card)
 
 	memset(card_data, 0, sizeof(struct card_blk_data));
 
+	if(card->state & CARD_STATE_READONLY)
+		card_data->read_only = 1;
 	card_data->block_bits = 9;
 
 	card_data->disk = alloc_disk(1 << CARD_SHIFT);
@@ -610,6 +615,7 @@ static int card_blk_issue_rq(struct card_queue *cq, struct request *req)
 		spin_lock_irq(&card_data->lock);
 		ret = 1;
 		while (ret) {
+			req->cmd_flags |= REQ_QUIET;
 			ret = __blk_end_request(req, -EIO, (1 << card_data->block_bits));
 		}
 		spin_unlock_irq(&card_data->lock);
@@ -647,6 +653,7 @@ static int card_blk_issue_rq(struct card_queue *cq, struct request *req)
 			spin_lock_irq(&card_data->lock);
 			ret = 1;
 			while (ret) {
+			    req->cmd_flags |= REQ_QUIET;
 				ret = __blk_end_request(req, -EIO, (1 << card_data->block_bits));
 			}
 			spin_unlock_irq(&card_data->lock);
@@ -693,9 +700,9 @@ static void card_blk_remove(struct memory_card *card)
 		/*
 		 * I think this is needed.
 		 */
-		queue_flag_set_unlocked(QUEUE_FLAG_DEAD, card_data->queue.queue);
-		queue_flag_set_unlocked(QUEUE_FLAG_STOPPED, card_data->queue.queue);
-		card_data->queue.queue->queuedata = NULL;
+		//queue_flag_set_unlocked(QUEUE_FLAG_DEAD, card_data->queue.queue);
+		//queue_flag_set_unlocked(QUEUE_FLAG_STOPPED, card_data->queue.queue);
+		//card_data->queue.queue->queuedata = NULL;
 		card_cleanup_queue(&card_data->queue);
 		//card_data->disk->queue = NULL;
 
@@ -856,13 +863,15 @@ int add_card_partition(struct gendisk * disk, struct mtd_partition * part,
 		if (part[i].size == MTDPART_SIZ_FULL)
 			size = disk->part0.nr_sects - offset;
 		ret = add_partition(disk, 1+i, offset, size, 0);
+#ifdef  CONFIG_INAND
+		printk("[%s%d] %20s  offset 0x%012llx, len 0x%012llx %s\n", 
+				disk->disk_name, 1+i, part[i].name,offset<<9, size<<9, 
+				IS_ERR(ret) ? "add fail":"");
+#else
 		printk("[%s] %20s  offset 0x%012llx, len 0x%012llx %s\n", 
 				disk->disk_name, part[i].name, offset<<9, size<<9, 
 				IS_ERR(ret) ? "add fail":"");
-		//if(IS_ERR(ret)){
-		//	printk("errno = %d, offset = %x, size = %x, disk->part0.nr_sects = %x\n", ret, offset, size);
-		//	return ERR_PTR(ret);
-		//}
+#endif
 		cur_offset = offset + size;
 		
 		card_table[i] = &part[i];

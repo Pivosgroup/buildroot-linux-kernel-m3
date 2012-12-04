@@ -275,7 +275,11 @@ int tvoutc_setmode(tvmode_t mode)
 #endif
     
     WRITE_MPEG_REG(VPP_POSTBLEND_H_SIZE, tvinfoTab[mode].xres);
-    
+
+#ifdef CONFIG_MACH_MESON3_REFF16_DONGLE
+	/*disable  YUV*/
+	WRITE_MPEG_REG(VENC_VDAC_SETTING, 0x07);
+#endif   
 // For debug only
 #if 0
 printk(" clk_util_clk_msr 6 = %d\n", clk_util_clk_msr(6));

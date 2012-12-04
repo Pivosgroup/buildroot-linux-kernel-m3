@@ -216,7 +216,7 @@ static void __init meson_clocksource_init(void)
     clocksource_timer_e.shift = clocksource_hz2shift(32, 1000000);
     clocksource_timer_e.mult =
     clocksource_khz2mult(1000, clocksource_timer_e.shift);
-    
+
     clocksource_timer_f.shift = clocksource_timer_e.shift;
     //clocksource_timer_f.mult = ((clocksource_timer_e.mult)>>6)*40;
     clocksource_timer_f.mult = ((clocksource_timer_e.mult)>>6)*64;

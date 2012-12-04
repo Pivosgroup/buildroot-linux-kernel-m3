@@ -906,7 +906,9 @@ static struct mtd_blktrans_ops aml_nftl_tr = {
 	.blksize 	= 512,
 	.open		= aml_nftl_open,
 	.release	= aml_nftl_release,
+#if 0	//removed for cost too much time while count free sectors at the time of mounting FS.
 	.update_blktrans_sysinfo = aml_nftl_update_blktrans_sysinfo,
+#endif
 	.do_blktrans_request = do_nftltrans_request,
 	.writesect	= aml_nftl_writesect,
 	.flush		= aml_nftl_flush,

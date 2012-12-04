@@ -111,6 +111,12 @@ int set_usb_phy_clk(int rate)
     i = 0;
     while (i++ < time_dly) {};
 
+#ifdef CONFIG_USB_DPLINE_PULLUP_DISABLE
+		SET_CBUS_REG_MASK(PREI_USB_PHY_A_REG1, 1<<0);
+    i=0;
+    while(i++<time_dly){};
+#endif
+    
     // ------------------------------------------------------------
     // Reset the PHY A by setting POR high for 10uS.
     SET_CBUS_REG_MASK(PREI_USB_PHY_REG, PREI_USB_PHY_A_POR);
@@ -142,6 +148,11 @@ int set_usb_phy_clk(int rate)
     i = 0;
     while (i++ < time_dly) {};
 
+#ifdef CONFIG_USB_DPLINE_PULLUP_DISABLE
+		SET_CBUS_REG_MASK(PREI_USB_PHY_B_REG1, 1<<0);
+    i=0;
+    while(i++<time_dly){};
+#endif
     // ------------------------------------------------------------
     // Reset the PHY B by setting POR high for 10uS.
     SET_CBUS_REG_MASK(PREI_USB_PHY_REG, PREI_USB_PHY_B_POR);

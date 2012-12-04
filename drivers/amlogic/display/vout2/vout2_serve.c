@@ -59,6 +59,7 @@ SET_VOUT2_CLASS_ATTR(axis,set_vout_window)
 
 
 static  vout_info_t	vout_info;
+static int s_venc_mux = 0;
 
 /*****************************************************************
 **
@@ -166,12 +167,44 @@ static void  set_vout_window(char *para)
 **	sysfs  declare part 
 **
 ******************************************************************/
+static const char *venc_mux_help = {
+	"venc_mux:\n"
+	"    0. single display, viu1->panel, viu2->null\n"
+	"    2. dual display, viu1->hdmi, viu1->panel\n"
+};
+
+static ssize_t venc_mux_show(struct class *class, struct class_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%s\ncurrent venc_mux: %d\r\n", venc_mux_help, s_venc_mux);
+}
+
+static ssize_t venc_mux_store(struct class *class, struct class_attribute *attr, const char *buf, size_t count)
+{
+	unsigned int mux = 0;
+
+	mux = simple_strtoul(buf, NULL, 0);
+	printk("set venc_mux: %d->%d\n", s_venc_mux, mux);
+	switch (mux) {
+	case 0x0:
+	case 0x2:
+	case 0x8:
+	case 0xa:
+		s_venc_mux = mux;
+		mux = WRITE_CBUS_REG_BITS(VPU_VIU_VENC_MUX_CTRL, mux, 0, 4);
+		break;
+	default:
+		printk("set venc_mux error\n");
+	}
+
+	return count;
+}
 
 static  struct  class_attribute   *vout_attr[]={
 &class_vout2_attr_enable,
 &class_vout2_attr_mode,	
 &class_vout2_attr_axis ,
 };
+static CLASS_ATTR(venc_mux, S_IWUSR | S_IRUGO, venc_mux_show, venc_mux_store);
 
 static int  create_vout_attr(void)
 {
@@ -192,6 +225,9 @@ static int  create_vout_attr(void)
 			amlog_mask_level(LOG_MASK_INIT,LOG_LEVEL_HIGH,"create disp2 attribute %s fail\r\n",vout_attr[i]->attr.name);
 		}
 	}
+	if (class_create_file(vout_info.base_class, &class_attr_venc_mux))
+		amlog_mask_level(LOG_MASK_INIT,LOG_LEVEL_HIGH,"create disp2 attribute venc_mux fail\r\n");
+
 	return   0;
 }
 

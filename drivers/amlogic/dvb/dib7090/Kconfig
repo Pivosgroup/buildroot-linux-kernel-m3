@@ -1,0 +1,22 @@
+#
+# Dib7090 driver configuration
+#
+
+menuconfig AM_DIB7090P
+	bool "DiB7090P demod driver"
+       depends on AM_DVB
+	default n
+        help
+        	Select to enable DiB7090P demod driver.
+
+if AM_DIB7090P
+
+config DIB7090_OUTPUT_SERIAL
+	bool "Serial Output Mode"
+	depends on AM_DIB7090P
+	default n
+	help
+	 data default on DATA7
+
+endif
+

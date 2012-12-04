@@ -577,7 +577,8 @@ static void vvc1_local_init(void)
 {
     int i;
 
-    vvc1_ratio = vvc1_amstream_dec_info.ratio;
+    //vvc1_ratio = vvc1_amstream_dec_info.ratio;
+    vvc1_ratio = 0x100;
 
     avi_flag = (u32)vvc1_amstream_dec_info.param;
 

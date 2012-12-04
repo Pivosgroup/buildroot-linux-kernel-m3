@@ -79,6 +79,7 @@ static spinlock_t lock = SPIN_LOCK_UNLOCKED;
 static bool ppmgr_blocking = false ;
 static int video_vf_lock = 0;
 static bool ppmgr_inited = false;
+static int ppmgr_reset_type = 0;
 
 static struct ppframe_s vfp_pool[VF_POOL_SIZE];
 static struct vframe_s *vfp_pool_free[VF_POOL_SIZE+1];
@@ -91,7 +92,7 @@ static DEFINE_MUTEX(ppmgr_mutex);
 
 const vframe_receiver_op_t* vf_ppmgr_reg_provider(void);
 void vf_ppmgr_unreg_provider(void);
-void vf_ppmgr_reset(void);
+void vf_ppmgr_reset(int type);
 static inline void ppmgr_vf_put_dec(vframe_t *vf);
 
 #define to_ppframe(vf)	\
@@ -281,7 +282,7 @@ static int ppmgr_receiver_event_fun(int type, void *data, void *private_data)
             case VFRAME_EVENT_PROVIDER_RESET       :
             	video_vf_lock  = 1;
             	vf_light_unreg_provider(&ppmgr_vf_prov);
-            	vf_ppmgr_reset();
+            	vf_ppmgr_reset(0);
             	break;
         default:
             break;        
@@ -353,10 +354,11 @@ void vf_ppmgr_unreg_provider(void)
     mutex_unlock(&ppmgr_mutex);
 }
 
-void vf_ppmgr_reset(void)
+void vf_ppmgr_reset(int type)
 {
     if(ppmgr_inited){
         ppmgr_blocking = true;
+        ppmgr_reset_type = type ;
         up(&thread_sem);
     }
 }
@@ -447,6 +449,11 @@ static void vf_rotate_adjust(vframe_t *vf, vframe_t *new_vf, int angle)
         else
             w = (ar * h) >> 8;
 
+        if(w > ppmgr_device.disp_width ){           
+            h = (h * ppmgr_device.disp_width)/w ;
+            w = ppmgr_device.disp_width;
+        }
+
         new_vf->ratio_control = DISP_RATIO_PORTRAIT_MODE;
 
     } else {
@@ -469,7 +476,24 @@ static void vf_rotate_adjust(vframe_t *vf, vframe_t *new_vf, int angle)
     new_vf->width = w;
     new_vf->height = h;
 }
-
+static void vf_ratio_adjust(vframe_t *vf, int* left ,int* top, int* width ,int* height)
+{
+    int w, h ,ww,hh;
+    
+    ww = w = *width;
+    hh = h = *height;
+    if ((vf->width * hh) > (ww * vf->height)) {
+        w = ww;
+        h = ww * vf->height / vf->width;
+    } else {
+        h = hh;
+        w = hh * vf->width / vf->height;
+    }
+    *top +=(hh-h)/2;
+    *left += (ww-w)/2;
+    *width = w;
+    *height =h;
+}
 static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para_ex_t *ge2d_config)
 {
     vframe_t *new_vf;
@@ -527,7 +551,8 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
         vf_rotate_adjust(vf, new_vf, cur_angle);
         scale_clear_count = 0;
     }else{
-        pp_vf->angle = 0;
+        pp_vf->angle = vf->orientation%4;
+        cur_angle = vf->orientation%4;
         new_vf->width = ppmgr_device.disp_width;
         new_vf->height = ppmgr_device.disp_height;
         new_vf->ratio_control = DISP_RATIO_FORCECONFIG|DISP_RATIO_NO_KEEPRATIO;
@@ -752,20 +777,19 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
     ge2d_config->dst_para.y_rev = 0;
     ge2d_config->dst_xy_swap=0;
 
-    if(!mode){
-        if(cur_angle==1){
-            ge2d_config->dst_xy_swap=1;
-            ge2d_config->dst_para.x_rev = 1;
-        }
-        else if(cur_angle==2){
-            ge2d_config->dst_para.x_rev = 1;
-            ge2d_config->dst_para.y_rev=1;        
-        }
-        else if(cur_angle==3)  {
-            ge2d_config->dst_xy_swap=1;
-            ge2d_config->dst_para.y_rev=1;
-        }
+    if(cur_angle==1){
+        ge2d_config->dst_xy_swap=1;
+        ge2d_config->dst_para.x_rev = 1;
     }
+    else if(cur_angle==2){
+        ge2d_config->dst_para.x_rev = 1;
+        ge2d_config->dst_para.y_rev=1;        
+    }
+    else if(cur_angle==3)  {
+        ge2d_config->dst_xy_swap=1;
+        ge2d_config->dst_para.y_rev=1;
+    }
+
     ge2d_config->dst_para.color = 0;
     ge2d_config->dst_para.top = 0;
     ge2d_config->dst_para.left = 0;
@@ -777,8 +801,8 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
         vfq_push(&q_free, new_vf);
         return;
     }
-    if(!mode)
-        pp_vf->angle = cur_angle ;
+
+    pp_vf->angle = cur_angle ;
 
 #ifdef CONFIG_POST_PROCESS_MANAGER_PPSCALER
     if(mode){
@@ -809,7 +833,12 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
             else
                 dw = rect_w;
         }
-
+        if(cur_angle>0){   // for hdmi mode player
+            sx = 0;
+            dx = rect_x;
+            sw = vf->width;
+            dw = rect_w;
+        }
         if(rect_y<0){
             sy = ((0-rect_y)*ratio_y)>>8;
             sy = sy&(0xfffffffe);
@@ -833,6 +862,15 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
                 dh = rect_h+rect_y;
             else
                 dh = rect_h;
+        }
+        if(cur_angle>0){    // for hdmi mode player
+            sy = 0;
+            dy = rect_y;
+            sh = vf->height;
+            dh = rect_h;
+        }
+        if((dx >=0)&&(dy>=0)){
+            vf_ratio_adjust(vf, &dx,&dy,&dw,&dh);
         }
         //if(scale_clear_count==3)
         //    printk("--ppmgr scale rect: src x:%d, y:%d, w:%d, h:%d. dst x:%d, y:%d, w:%d, h:%d.\n", sx, sy, sw, sh,dx,dy,dw,dh);
@@ -1043,8 +1081,10 @@ static int process_vf_adjust(vframe_t *vf, ge2d_context_t *context, config_para_
     int sx,sy,sw,sh, dx,dy,dw,dh;
     unsigned ratio_x;
     unsigned ratio_y;
+    ppframe_t *pp_vf = to_ppframe(vf);
     u32 mode = amvideo_get_scaler_para(&rect_x, &rect_y, &rect_w, &rect_h, &ratio);
-    
+    unsigned cur_angle = pp_vf->angle;
+
     if(!mode){
         //printk("--ppmgr adjust: scaler mode is disabled.\n");
         return -1;
@@ -1211,6 +1251,13 @@ static int process_vf_adjust(vframe_t *vf, ge2d_context_t *context, config_para_
             dw = rect_w;
     }
 
+    if(cur_angle>0){   // for hdmi mode player
+        sx = 0;
+        dx = rect_x;
+        sw = backup_content_w;
+        dw = rect_w;
+    }
+
     if(rect_y<0){
         sy = ((0-rect_y)*ratio_y)>>8;
         sy = sy&(0xfffffffe);
@@ -1234,6 +1281,13 @@ static int process_vf_adjust(vframe_t *vf, ge2d_context_t *context, config_para_
             dh = rect_h+rect_y;
         else
             dh = rect_h;
+    }
+
+    if(cur_angle>0){    // for hdmi mode player
+        sy = 0;
+        dy = rect_y;
+        sh = backup_content_h;
+        dh = rect_h;
     }
     //printk("--ppmgr adjust: src x:%d, y:%d, w:%d, h:%d. dst x:%d, y:%d, w:%d, h:%d.\n", sx, sy, sw, sh,dx,dy,dw,dh);
 
@@ -1366,7 +1420,10 @@ static int ppmgr_task(void *data)
         }
         
         if (ppmgr_blocking) {
-            vf_notify_provider(PROVIDER_NAME,VFRAME_EVENT_RECEIVER_RESET,NULL);
+        	if(ppmgr_reset_type){
+            	vf_notify_provider(PROVIDER_NAME,VFRAME_EVENT_RECEIVER_RESET,NULL);
+            	ppmgr_reset_type = 0 ;            	
+        	}
             //vf_light_unreg_provider(&ppmgr_vf_prov);
             vf_local_init();
             //vf_reg_provider(&ppmgr_vf_prov);
@@ -1475,6 +1532,7 @@ int ppmgr_buffer_init(void)
 #endif
     ppmgr_blocking = false;
     ppmgr_inited = true;
+    ppmgr_reset_type = 0 ;
     set_buff_change(0);
     init_MUTEX(&thread_sem);
     return 0;

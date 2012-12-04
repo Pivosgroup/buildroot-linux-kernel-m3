@@ -95,6 +95,7 @@ extern void osddev_set_enforce_progressive(u32 index, u32 enforce_progressive);
 extern int osddev_select_mode(struct myfb_dev *fbdev);
 extern void osddev_enable_3d_mode(u32 index ,u32 enable);
 extern void osddev_set_2x_scale(u32 index,u16 h_scale_enable,u16 v_scale_enable);
+extern void osddev_get_flush_rate(u32 *break_rate);
 extern void osddev_set_canvas_conf(u32 index, u32 canvas_conf);
 extern void osddev_set(struct myfb_dev *fbdev);
 extern void osddev_update_disp_axis(struct myfb_dev *fbdev,int  mode_change) ;

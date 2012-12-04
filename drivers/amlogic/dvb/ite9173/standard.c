@@ -1700,7 +1700,7 @@ check_lock:
 	demod->statistic.signalStrength = 0;
 
     channels = 2;
-	while (emptyLoop < 4) {
+	while (emptyLoop < 40) {
 		error = Standard_readRegister (demodulator, Processor_OFDM, empty_channel_status, &channels);
 		if (error) goto exit;
 		if (channels == 1) {
@@ -1716,8 +1716,8 @@ check_lock:
 	}
 
 	if (emptyChannel == 1) goto exit;
-#if 0 
-	while (tpsLoop < 5) {
+
+	while (tpsLoop < 50) {
 		/** Empty channel */
 		error = Standard_isTpsLocked (demodulator, &demod->statistic.signalPresented);
 		if (error) goto exit;
@@ -1733,8 +1733,8 @@ check_lock:
 	}
 
 	if (tpsLocked == 0) goto exit;
-#endif
-	while (mpeg2Loop < 4) {
+
+	while (mpeg2Loop < 40) {
 		error = Standard_isMpeg2Locked (demodulator, &demod->statistic.signalLocked);
 		if (error) goto exit;
 		if (demod->statistic.signalLocked == True) {
@@ -1748,7 +1748,7 @@ check_lock:
 	}
 	demod->statistic.signalQuality = 0;
 	demod->statistic.signalStrength = 20;
-//	printk("good");
+
 exit:
 	if(*locked == False && retry == True){
         retry=False;
@@ -1766,7 +1766,6 @@ exit:
     	if (error) goto exit;
         goto check_lock;     
     }   
-//	printk("emptyLoop = %d, mpeg2Loop = %d\n", emptyLoop, mpeg2Loop);
 	return (error);
 }
 

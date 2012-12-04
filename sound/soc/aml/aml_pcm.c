@@ -314,11 +314,13 @@ static int aml_pcm_hw_params(struct snd_pcm_substream *substream,
 		aml_iec958_playback_size = runtime->dma_bytes*4;
 	s->I2S_addr = runtime->dma_addr;
 
-
-    if(substream->stream == SNDRV_PCM_STREAM_PLAYBACK){
+    /*
+     * Both capture and playback need to reset the last ptr to the start address
+     * */
+    //if(substream->stream == SNDRV_PCM_STREAM_PLAYBACK){
         /* s->last_ptr must initialized as dma buffer's start addr */
         s->last_ptr = runtime->dma_addr;
-    }
+    //}
 	
 	return 0;
 }
@@ -377,16 +379,14 @@ static void iec958_notify_hdmi_info()
 {
 	unsigned audio_type = AOUT_EVENT_IEC_60958_PCM;
 	if(playback_substream_handle){
-		if(IEC958_mode_raw == 1 && IEC958_mode_codec == 2) //dd
+		if(IEC958_mode_codec == 2) //dd
 			audio_type = AOUT_EVENT_RAWDATA_AC_3;
-		else if(IEC958_mode_raw == 2 && IEC958_mode_codec == 2)//dd+
+		else if(IEC958_mode_codec == 4)//dd+
 			audio_type = AOUT_EVENT_RAWDATA_DOBLY_DIGITAL_PLUS;
-		else if(IEC958_mode_raw&&(IEC958_mode_codec == 1|| IEC958_mode_codec == 3))//dts
+		else if(IEC958_mode_codec == 1|| IEC958_mode_codec == 3)//dts
 			audio_type = AOUT_EVENT_RAWDATA_DTS;
-		else if(IEC958_mode_codec == 0)
+		else 
 			audio_type = AOUT_EVENT_IEC_60958_PCM;
-		else
-			printk("not implement the audio format \n");
 		printk("iec958 nodify hdmi audio type %d\n",	audio_type);
 		audio_notify_hdmi_info(audio_type, (struct snd_pcm_substream *)playback_substream_handle);
 	}
@@ -410,10 +410,10 @@ static void aml_hw_iec958_init(void)
 	memset((void*)(&chstat), 0, sizeof(chstat));
 	set.chan_stat = &chstat;
    	/* case 1,raw mode enabled */
-	if(IEC958_mode_raw >= 1 && IEC958_mode_codec){
+	if(IEC958_mode_codec){
 	  if(IEC958_mode_codec == 1){ //dts, use raw sync-word mode
 	    	IEC958_MODE = AIU_958_MODE_RAW;
-		printk("iec958 mode RAW\n");
+			printk("iec958 mode RAW\n");
 	  }	
 	  else{ //ac3,use the same pcm mode as i2s configuration
 		IEC958_MODE = AIU_958_MODE_PCM_RAW;
@@ -452,7 +452,7 @@ static void aml_hw_iec958_init(void)
 		
 	}
 	audio_set_958_mode(IEC958_MODE, &set);
-	if(IEC958_MODE == AIU_958_MODE_PCM_RAW && IEC958_mode_raw == 2 &&IEC958_mode_codec == 2)  //dd+
+	if(IEC958_mode_codec == 4)  //dd+
 		WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 0, 4, 2); // 4x than i2s
 	else
 		WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 3, 4, 2);
@@ -542,7 +542,7 @@ static int aml_pcm_prepare(struct snd_pcm_substream *substream)
             }
 	}
     if( IEC958_MODE == AIU_958_MODE_PCM_RAW){
-		if(IEC958_mode_raw == 2 &&IEC958_mode_codec == 2 ){ // need Over clock for dd+
+		if(IEC958_mode_codec == 4 ){ // need Over clock for dd+
 		    WRITE_MPEG_REG_BITS(AIU_CLK_CTRL, 0, 4, 2);	// 4x than i2s
 		    audio_notify_hdmi_info(AOUT_EVENT_RAWDATA_DOBLY_DIGITAL_PLUS, substream);
 		}else if(IEC958_mode_codec == 3 ||IEC958_mode_codec == 1 ){ // no-over clock for dts pcm mode
@@ -551,10 +551,10 @@ static int aml_pcm_prepare(struct snd_pcm_substream *substream)
 		else  //dd
 			audio_notify_hdmi_info(AOUT_EVENT_RAWDATA_AC_3, substream);
 			
-    }else if( IEC958_MODE == AIU_958_MODE_RAW){
+    }else if(IEC958_mode_codec == 1){
         audio_notify_hdmi_info(AOUT_EVENT_RAWDATA_DTS, substream);
     }else{
-	audio_notify_hdmi_info(AOUT_EVENT_IEC_60958_PCM, substream);
+	    audio_notify_hdmi_info(AOUT_EVENT_IEC_60958_PCM, substream);
     }
 
 #if 0

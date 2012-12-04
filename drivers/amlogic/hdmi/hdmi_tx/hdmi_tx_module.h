@@ -1,6 +1,8 @@
 #ifndef _HDMI_TX_MODULE_H
 #define _HDMI_TX_MODULE_H
 #include "hdmi_info_global.h"
+#include <linux/hdmi/hdmi_config.h>
+
 /*****************************
 *    hdmitx attr management 
 ******************************/
@@ -52,13 +54,15 @@ typedef struct hdmi_tx_dev_s {
         void (*SetPacket)(int type, unsigned char* DB, unsigned char* HB);
         void (*SetAudioInfoFrame)(unsigned char* AUD_DB, unsigned char* CHAN_STAT_BUF);
         unsigned char (*GetEDIDData)(struct hdmi_tx_dev_s* hdmitx_device);
-        int (*SetDispMode)(Hdmi_tx_video_para_t *param);
+        int (*SetDispMode)(struct hdmi_tx_dev_s* hdmitx_device, Hdmi_tx_video_para_t *param);
         int (*SetAudMode)(struct hdmi_tx_dev_s* hdmitx_device, Hdmi_tx_audio_para_t* audio_param);
         void (*SetupIRQ)(struct hdmi_tx_dev_s* hdmitx_device);
         void (*DebugFun)(struct hdmi_tx_dev_s* hdmitx_device, const char * buf);
         void (*UnInit)(struct hdmi_tx_dev_s* hdmitx_device);
         int (*Cntl)(struct hdmi_tx_dev_s* hdmitx_device, int cmd, unsigned arg);
     }HWOp;
+    
+    struct hdmi_phy_set_data **brd_phy_data;      // board related phy setting
     
     //wait_queue_head_t   wait_queue;            /* wait queues */
     /*EDID*/
@@ -103,7 +107,7 @@ typedef struct hdmi_tx_dev_s {
 #endif        
 
 
-#define HDMITX_VER "2012Jun15a"
+#define HDMITX_VER "2012Aug29a"
 
 /************************************
 *    hdmitx protocol level interface
@@ -113,6 +117,8 @@ extern void hdmitx_init_parameters(HDMI_TX_INFO_t *info);
 extern int hdmitx_edid_parse(hdmitx_dev_t* hdmitx_device);
 
 HDMI_Video_Codes_t hdmitx_edid_get_VIC(hdmitx_dev_t* hdmitx_device,const char* disp_mode, char force_flag);
+
+HDMI_Video_Codes_t hdmitx_get_VIC(hdmitx_dev_t* hdmitx_device,const char* disp_mode);
 
 extern int hdmitx_edid_dump(hdmitx_dev_t* hdmitx_device, char* buffer, int buffer_len);
 
@@ -158,6 +164,10 @@ extern unsigned char hdmi_audio_off_flag;
 #define HDMITX_FORCE_480P_CLK                0x8
 #define HDMITX_OUTPUT_ENABLE                 0x9
 #define HDMITX_GET_AUTHENTICATE_STATE        0xa
+#define HDMITX_HWCMD_5V_CTL                  0xb
+#define HDMITX_HWCMD_3V3_CTL                 0xc
+#define HDMITX_HWCMD_PLL_AVDD_CTL            0xd
+#define HDMITX_HWCMD_SSPLL_CTL               0xe
 
 
 #endif

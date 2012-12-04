@@ -25,4 +25,5 @@ obj-$(CONFIG_USB_NET_INT51X1)	+= int51x1.o
 obj-$(CONFIG_USB_CDC_PHONET)	+= cdc-phonet.o
 obj-$(CONFIG_USB_IPHETH)	+= ipheth.o
 obj-$(CONFIG_USB_SIERRA_NET)	+= sierra_net.o
-
+obj-$(CONFIG_USB_NET_QF9700)	+= qf9700.o
+obj-$(CONFIG_USB_NET_SR9600)	+= sr9600.o

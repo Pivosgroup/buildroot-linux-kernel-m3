@@ -743,7 +743,7 @@ static int vdin_remove(struct platform_device *pdev)
 
     for (i = 0; i < VDIN_COUNT; ++i)
     {
-        mutex_destroy(vdin_devp[i]->mm_lock);
+        mutex_destroy(&vdin_devp[i]->mm_lock);
         tasklet_kill(&vdin_devp[i]->isr_tasklet);
         del_timer_sync(&vdin_devp[i]->timer);
         free_irq(vdin_devp[i]->irq,(void *)vdin_devp[i]);

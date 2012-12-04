@@ -4,6 +4,7 @@
 #include <linux/fiq_bridge.h>
 
 //remote config  ioctl  cmd
+#define   REMOTE_IOC_SET_MOUSEDRAW              _IOW_BAD('I',139,sizeof(short))
 #define   REMOTE_IOC_UNFCODE_CONFIG              _IOW_BAD('I',12,sizeof(short))
 #define   REMOTE_IOC_INFCODE_CONFIG              _IOW_BAD('I',13,sizeof(short))
 #define   REMOTE_IOC_RESET_KEY_MAPPING	    _IOW_BAD('I',3,sizeof(short))
@@ -106,8 +107,11 @@ struct kp {
 	unsigned int repeate_flag;
 	unsigned int repeat_enable;
 	unsigned int debounce;
+	unsigned int mouse_lefft;
 	unsigned int custom_code[2];
 	unsigned int release_delay;
+	unsigned int tmp_release_delay;
+	unsigned int function_flag;
 	unsigned int debug_enable;
 //sw
 	unsigned int delay;

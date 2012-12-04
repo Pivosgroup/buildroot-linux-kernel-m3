@@ -62,6 +62,9 @@ void sd_open(struct memory_card *card)
 	card->sdio_funcs  = sd_mmc_info->sdio_function_nums;
 	memcpy(card->raw_cid, &(sd_mmc_info->raw_cid), sizeof(card->raw_cid));
 
+      if(sd_mmc_info->write_protected_flag)
+            card->state |= CARD_STATE_READONLY;
+      
 	if(ret)
 		card->unit_state = CARD_UNIT_READY;
 	else
@@ -343,6 +346,8 @@ int inand_probe(struct memory_card *card)
 	card->card_insert_process = sd_open;
 	card->card_remove_process = sd_close;
 	card->card_request_process = sd_request;
+	card->card_suspend = sd_suspend;
+	card->card_resume = sd_resume;
 
 	if (aml_card_info->card_extern_init)
 		aml_card_info->card_extern_init();

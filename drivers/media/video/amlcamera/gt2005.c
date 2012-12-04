@@ -41,6 +41,7 @@
 #include <mach/pinmux.h>
 #include <linux/tvin/tvin.h>
 #include "common/plat_ctrl.h"
+#include "common/vmapi.h"
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 static struct early_suspend gt2005_early_suspend;
@@ -137,12 +138,12 @@ static struct v4l2_queryctrl gt2005_qctrl[] = {
 		.flags         = V4L2_CTRL_FLAG_SLIDER,
 	},*/{
 		.id            = V4L2_CID_DO_WHITE_BALANCE,
-		.type          = V4L2_CTRL_TYPE_INTEGER,
+		.type          = V4L2_CTRL_TYPE_MENU,
 		.name          = "white balance",
-		.minimum       = 0,
-		.maximum       = 6,
+		.minimum       = CAM_WB_AUTO,
+		.maximum       = CAM_WB_FLUORESCENT ,
 		.step          = 0x1,
-		.default_value = 0,
+		.default_value = CAM_WB_AUTO,
 		.flags         = V4L2_CTRL_FLAG_SLIDER,
 	},{
 		.id            = V4L2_CID_EXPOSURE,
@@ -163,13 +164,13 @@ static struct v4l2_queryctrl gt2005_qctrl[] = {
 		.default_value = 0,
 		.flags         = V4L2_CTRL_FLAG_SLIDER,
 	},{
-		.id            = V4L2_CID_WHITENESS,
-		.type          = V4L2_CTRL_TYPE_INTEGER,
+		.id            = V4L2_CID_POWER_LINE_FREQUENCY,
+		.type          = V4L2_CTRL_TYPE_MENU,
 		.name          = "banding",
-		.minimum       = 0,
-		.maximum       = 1,
+		.minimum       = CAM_BANDING_50HZ,
+		.maximum       = CAM_BANDING_60HZ,
 		.step          = 0x1,
-		.default_value = 0,
+		.default_value = CAM_BANDING_50HZ,
 		.flags         = V4L2_CTRL_FLAG_SLIDER,
 	},{
 		.id            = V4L2_CID_BLUE_BALANCE,
@@ -180,8 +181,102 @@ static struct v4l2_queryctrl gt2005_qctrl[] = {
 		.step          = 0x1,
 		.default_value = 0,
 		.flags         = V4L2_CTRL_FLAG_SLIDER,
+	},{
+		.id		= V4L2_CID_ROTATE,
+		.type		= V4L2_CTRL_TYPE_INTEGER,
+		.name		= "Rotate",
+		.minimum	= 0,
+		.maximum	= 270,
+		.step		= 90,
+		.default_value	= 0,
+		.flags         = V4L2_CTRL_FLAG_SLIDER,
 	}
 };
+
+struct v4l2_querymenu gt2005_qmenu_wbmode[] = {
+    {
+        .id         = V4L2_CID_DO_WHITE_BALANCE,
+        .index      = CAM_WB_AUTO,
+        .name       = "auto",
+        .reserved   = 0,
+    },{
+        .id         = V4L2_CID_DO_WHITE_BALANCE,
+        .index      = CAM_WB_CLOUD,
+        .name       = "cloudy-daylight",
+        .reserved   = 0,
+    },{
+        .id         = V4L2_CID_DO_WHITE_BALANCE,
+        .index      = CAM_WB_INCANDESCENCE,
+        .name       = "incandescent",
+        .reserved   = 0,
+    },{
+        .id         = V4L2_CID_DO_WHITE_BALANCE,
+        .index      = CAM_WB_DAYLIGHT,
+        .name       = "daylight",
+        .reserved   = 0,
+    },{
+        .id         = V4L2_CID_DO_WHITE_BALANCE,
+        .index      = CAM_WB_FLUORESCENT,
+        .name       = "fluorescent", 
+        .reserved   = 0,
+    },{
+        .id         = V4L2_CID_DO_WHITE_BALANCE,
+        .index      = CAM_WB_WARM_FLUORESCENT,
+        .name       = "warm-fluorescent",
+        .reserved   = 0,
+    },
+};
+
+struct v4l2_querymenu gt2005_qmenu_anti_banding_mode[] = {
+    {
+        .id         = V4L2_CID_POWER_LINE_FREQUENCY,
+        .index      = CAM_BANDING_50HZ, 
+        .name       = "50hz",
+        .reserved   = 0,
+    },{
+        .id         = V4L2_CID_POWER_LINE_FREQUENCY,
+        .index      = CAM_BANDING_60HZ, 
+        .name       = "60hz",
+        .reserved   = 0,
+    },
+};
+
+typedef struct {
+    __u32   id;
+    int     num;
+    struct v4l2_querymenu* gt2005_qmenu;
+}gt2005_qmenu_set_t;
+
+gt2005_qmenu_set_t gt2005_qmenu_set[] = {
+    {
+        .id         	= V4L2_CID_DO_WHITE_BALANCE,
+        .num            = ARRAY_SIZE(gt2005_qmenu_wbmode),
+        .gt2005_qmenu   = gt2005_qmenu_wbmode,
+    },{
+        .id         	= V4L2_CID_POWER_LINE_FREQUENCY,
+        .num            = ARRAY_SIZE(gt2005_qmenu_anti_banding_mode),
+        .gt2005_qmenu   = gt2005_qmenu_anti_banding_mode,
+    },
+};
+
+static int vidioc_querymenu(struct file *file, void *priv,
+                struct v4l2_querymenu *a)
+{
+	int i, j;
+
+	for (i = 0; i < ARRAY_SIZE(gt2005_qmenu_set); i++)
+	if (a->id && a->id == gt2005_qmenu_set[i].id) {
+	    for(j = 0; j < gt2005_qmenu_set[i].num; j++)
+		if (a->index == gt2005_qmenu_set[i].gt2005_qmenu[j].index) {
+			memcpy(a, &( gt2005_qmenu_set[i].gt2005_qmenu[j]),
+				sizeof(*a));
+			return (0);
+		}
+	}
+
+	return -EINVAL;
+}
+
 
 #define dprintk(dev, level, fmt, arg...) \
 	v4l2_dbg(level, debug, &dev->v4l2_dev, fmt, ## arg)
@@ -227,6 +322,10 @@ static struct gt2005_fmt formats[] = {
 		.name     = "YUV420P",
 		.fourcc   = V4L2_PIX_FMT_YUV420,
 		.depth    = 12,
+	},{
+		.name     = "YVU420P",
+		.fourcc   = V4L2_PIX_FMT_YVU420,
+		.depth    = 12,
 	}
 #if 0
 	{
@@ -251,6 +350,7 @@ static struct gt2005_fmt formats[] = {
 	},
 #endif
 };
+
 
 static struct gt2005_fmt *get_format(struct v4l2_format *f)
 {
@@ -1146,7 +1246,7 @@ void GT2005_set_param_wb(struct gt2005_device *dev,enum  camera_wb_flip_e para)/
 			i2c_put_byte(client,0x0444 , 0x30);
 			break;
 
-		case CAM_WB_TUNGSTEN:
+		case CAM_WB_WARM_FLUORESCENT:
 			i2c_put_byte(client,0x0320 , 0x02);
 			i2c_put_byte(client,0x0321 , 0x02);
 			i2c_put_byte(client,0x0322 , 0x02);
@@ -1170,6 +1270,8 @@ void GT2005_set_param_wb(struct gt2005_device *dev,enum  camera_wb_flip_e para)/
 
 		case CAM_WB_MANUAL:
 		    	// TODO
+			break;
+	default:
 			break;
 	}
 
@@ -1320,7 +1422,6 @@ void GT2005_set_param_exposure(struct gt2005_device *dev,enum camera_exposure_e 
 			i2c_put_byte(client,0x0301 , 0x90);
 			i2c_put_byte(client,0x0201 , 0x0c);
 			break;
-			break;
 
 
 
@@ -1420,7 +1521,7 @@ void GT2005_set_night_mode(struct gt2005_device *dev,enum  camera_night_mode_fli
 	}
 
 }    /* GT2005_NightMode */
-void GT2005_set_param_banding(struct gt2005_device *dev,enum  camera_night_mode_flip_e banding)
+void GT2005_set_param_banding(struct gt2005_device *dev,enum  camera_banding_flip_e banding)
 {
     struct i2c_client *client = v4l2_get_subdevdata(&dev->sd);
 	unsigned char buf[4];
@@ -1433,7 +1534,8 @@ void GT2005_set_param_banding(struct gt2005_device *dev,enum  camera_night_mode_
 		case CAM_BANDING_60HZ:
 			i2c_put_byte(client,0x0315,0x56);
 			break;
-
+		default:
+			break;
 		}
 
 }
@@ -1443,7 +1545,7 @@ void GT2005_set_resolution(struct gt2005_device *dev,int height,int width)
 
 	int ret;
 	struct i2c_client *client = v4l2_get_subdevdata(&dev->sd);
-	if((width<1600)&&(height<1200)){
+	if (width*height<1600*1200){
 		//800*600
 
 		i2c_put_byte(client,0x0109 ,  0x00);
@@ -1459,8 +1561,7 @@ void GT2005_set_resolution(struct gt2005_device *dev,int height,int width)
         mdelay(100);
 		gt2005_h_active=800;
 		gt2005_v_active=600;
-		}
-		else	if(width>=1600&&height>=1200 ){
+	} else if(width*height>=1600*1200){
 		//1600x1200
 
 		i2c_put_byte(client,0x0109 ,  0x01);
@@ -1552,7 +1653,6 @@ static int gt2005_setting(struct gt2005_device *dev,int PROP_ID,int value )
 	case V4L2_CID_EXPOSURE:
 		ret=i2c_put_byte(client,0x0201, value);
 		break;
-#endif
 	case V4L2_CID_HFLIP:    /* set flip on H. */
 		ret=i2c_get_byte(client,0x0101);
 		if(ret>0) {
@@ -1580,6 +1680,7 @@ static int gt2005_setting(struct gt2005_device *dev,int PROP_ID,int value )
 			dprintk(dev, 1, "vertical read error\n");
 		}
 		break;
+#endif
 	case V4L2_CID_DO_WHITE_BALANCE:
         if(gt2005_qctrl[0].default_value!=value){
 			gt2005_qctrl[0].default_value=value;
@@ -1601,8 +1702,8 @@ static int gt2005_setting(struct gt2005_device *dev,int PROP_ID,int value )
 			printk(KERN_INFO " set camera  effect=%d. \n ",value);
         	}
 		break;
-	case V4L2_CID_WHITENESS:
-		 if(gt2005_qctrl[3].default_value!=value){
+	case V4L2_CID_POWER_LINE_FREQUENCY:
+		if(gt2005_qctrl[3].default_value!=value){
 			gt2005_qctrl[3].default_value=value;
 			GT2005_set_param_banding(dev,value);
 			printk(KERN_INFO " set camera  banding=%d. \n ",value);
@@ -1614,6 +1715,12 @@ static int gt2005_setting(struct gt2005_device *dev,int PROP_ID,int value )
 			GT2005_set_night_mode(dev,value);
 			printk(KERN_INFO " set camera  scene mode=%d. \n ",value);
         	}
+		break;
+	case V4L2_CID_ROTATE:
+		if(gt2005_qctrl[5].default_value!=value){
+			gt2005_qctrl[5].default_value=value;
+			printk(" set camera  rotate =%d. \n ",value);
+		}
 		break;
 	default:
 		ret=-1;
@@ -1634,7 +1741,6 @@ static void power_down_gt2005(struct gt2005_device *dev)
 	DMA and thread functions
    ------------------------------------------------------------------*/
 
-extern   int vm_fill_buffer(struct videobuf_buffer* vb , int v4l2_format , int magic,void* vaddr);
 #define TSTAMP_MIN_Y	24
 #define TSTAMP_MAX_Y	(TSTAMP_MIN_Y + 15)
 #define TSTAMP_INPUT_X	10
@@ -1644,11 +1750,18 @@ static void gt2005_fillbuff(struct gt2005_fh *fh, struct gt2005_buffer *buf)
 {
 	struct gt2005_device *dev = fh->dev;
 	void *vbuf = videobuf_to_vmalloc(&buf->vb);
+	vm_output_para_t para = {0};
 	dprintk(dev,1,"%s\n", __func__);
 	if (!vbuf)
 		return;
- /*  0x18221223 indicate the memory type is MAGIC_VMAL_MEM*/
-    vm_fill_buffer(&buf->vb,fh->fmt->fourcc ,0x18221223,vbuf);
+	/*  0x18221223 indicate the memory type is MAGIC_VMAL_MEM*/
+	para.mirror = -1;// not set
+	para.v4l2_format = fh->fmt->fourcc;
+	para.v4l2_memory = 0x18221223;
+	para.zoom = -1;
+	para.angle = gt2005_qctrl[5].default_value;
+	para.vaddr = (unsigned)vbuf;
+	vm_fill_buffer(&buf->vb,&para);
 	buf->vb.state = VIDEOBUF_DONE;
 }
 
@@ -1815,7 +1928,7 @@ static void free_buffer(struct videobuf_queue *vq, struct gt2005_buffer *buf)
 }
 
 #define norm_maxw() 1920
-#define norm_maxh() 1200
+#define norm_maxh() 1600
 static int
 buffer_prepare(struct videobuf_queue *vq, struct videobuf_buffer *vb,
 						enum v4l2_field field)
@@ -2131,7 +2244,11 @@ static int vidioc_enum_framesizes(struct file *file, void *fh,struct v4l2_frmsiz
 	}
 	if (fmt == NULL)
 		return -EINVAL;
-	if (fmt->fourcc == V4L2_PIX_FMT_NV21){
+	if ((fmt->fourcc == V4L2_PIX_FMT_NV21)
+		||(fmt->fourcc == V4L2_PIX_FMT_NV12)
+		||(fmt->fourcc == V4L2_PIX_FMT_YVU420)
+		||(fmt->fourcc == V4L2_PIX_FMT_YUV420))
+	{
 		if (fsize->index >= ARRAY_SIZE(gt2005_prev_resolution))
 			return -EINVAL;
 		frmsize = &gt2005_prev_resolution[fsize->index];
@@ -2365,13 +2482,13 @@ static int gt2005_close(struct file *file)
 #if 1
 	gt2005_h_active=800;
 	gt2005_v_active=600;
-	gt2005_qctrl[0].default_value=0;
+	gt2005_qctrl[0].default_value= CAM_WB_AUTO;
 	gt2005_qctrl[1].default_value=4;
 	gt2005_qctrl[2].default_value=0;
-	gt2005_qctrl[3].default_value=0;
+	gt2005_qctrl[3].default_value=CAM_BANDING_50HZ;
 	gt2005_qctrl[4].default_value=0;
 
-
+	gt2005_qctrl[5].default_value=0;
 	power_down_gt2005(dev);
 #endif
 	msleep(10);
@@ -2437,6 +2554,7 @@ static const struct v4l2_ioctl_ops gt2005_ioctl_ops = {
 	.vidioc_g_input       = vidioc_g_input,
 	.vidioc_s_input       = vidioc_s_input,
 	.vidioc_queryctrl     = vidioc_queryctrl,
+	.vidioc_querymenu     = vidioc_querymenu,
 	.vidioc_g_ctrl        = vidioc_g_ctrl,
 	.vidioc_s_ctrl        = vidioc_s_ctrl,
 	.vidioc_streamon      = vidioc_streamon,

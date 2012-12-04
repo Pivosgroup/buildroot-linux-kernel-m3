@@ -43,11 +43,26 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Zhou Zhi <zhi.zhou@amlogic.com>");
 MODULE_VERSION("1.0.0");
 
+int format_change_flag=0;
 extern unsigned IEC958_mode_raw;
 extern unsigned IEC958_mode_codec;
 extern int decopt;
 static int IEC958_mode_raw_last = 0;
 static int IEC958_mode_codec_last = 0;
+
+/* code for DD/DD+ DRC control  */
+/* Dynamic range compression mode */
+typedef enum {
+    GBL_COMP_CUSTOM_0 = 0, /* custom mode, analog  dialnorm */
+    GBL_COMP_CUSTOM_1,     /* custom mode, digital dialnorm */
+    GBL_COMP_LINE,         /* line out mode (default)       */
+    GBL_COMP_RF            /* RF mode                       */
+} DDP_DEC_DRC_MODE;
+#define DRC_MODE_BIT  0
+#define DRC_HIGH_CUT_BIT 3
+#define DRC_LOW_BST_BIT 16
+static unsigned ac3_drc_control = (GBL_COMP_LINE<<DRC_MODE_BIT)|(100<<DRC_HIGH_CUT_BIT)|(100<<DRC_LOW_BST_BIT);
+	
 extern struct audio_info * get_audio_info(void);
 extern void	aml_alsa_hw_reprepare();
 void audiodsp_moniter(unsigned long);
@@ -85,6 +100,7 @@ int audiodsp_start(void)
 	struct audiodsp_microcode *pmcode;
 	struct audio_info *audio_info;
 	int ret,i;
+	unsigned int decopt_reg;
 	priv->frame_format.valid=0;
 	priv->decode_error_count=0;
 	priv->last_valid_pts=0;
@@ -113,7 +129,8 @@ int audiodsp_start(void)
 	   (pmcode->fmt == MCODEC_FMT_PCM)  ||
 	   (pmcode->fmt == MCODEC_FMT_WMAPRO)||
 	   (pmcode->fmt == MCODEC_FMT_ALAC)||
-	  (pmcode->fmt == MCODEC_FMT_AC3) ||
+	   (pmcode->fmt & MCODEC_FMT_AC3) ||
+	   (pmcode->fmt & MCODEC_FMT_EAC3) ||	  
 	  (pmcode->fmt == MCODEC_FMT_APE) ||
 	  (pmcode->fmt == MCODEC_FMT_FLAC))
 
@@ -141,6 +158,10 @@ int audiodsp_start(void)
     }
 #endif
      }
+	decopt_reg = DSP_RD(DSP_DECODE_OPTION);
+	decopt_reg = (decopt_reg&(~0x00000018));
+	DSP_WD(DSP_DECODE_OPTION, decopt_reg);
+	DSP_PRNT("dsp set decopt_reg 3-4 bits: decopt_reg=0x%x \n",decopt_reg);
 	return ret;
 }
 
@@ -169,16 +190,24 @@ static int audiodsp_ioctl(struct inode *node, struct file *file, unsigned int cm
 		{
 		case AUDIODSP_SET_FMT:
 			priv->stream_fmt=args;
-			if(IEC958_mode_raw){		
+			if(IEC958_mode_raw){// raw data pass through		
 				if(args == MCODEC_FMT_DTS)
-					IEC958_mode_codec = 1;
+					IEC958_mode_codec = ((decopt>>5)&1)?3:1;//dts PCM/RAW mode
 				else if(args == MCODEC_FMT_AC3)
-					IEC958_mode_codec = 2; 	
+					IEC958_mode_codec = 2; 	//ac3
+				else if(args == MCODEC_FMT_EAC3){
+					if(IEC958_mode_raw == 2)
+						IEC958_mode_codec = 4; //958 dd+ package
+					else
+						IEC958_mode_codec =2;// 958 dd package
+				}	
 				else
 					IEC958_mode_codec = 0;
 			}	
 			else
 				IEC958_mode_codec = 0;
+			if(args == MCODEC_FMT_AC3||args == MCODEC_FMT_EAC3) //for dd+ certification
+				DSP_WD(DSP_AC3_DRC_INFO,ac3_drc_control|(1<<31));
 			break;
 		case AUDIODSP_START:
 			if(IEC958_mode_codec || (IEC958_mode_codec_last != IEC958_mode_codec))
@@ -248,7 +277,8 @@ static int audiodsp_ioctl(struct inode *node, struct file *file, unsigned int cm
 						if(priv->format_wait_count > 5){						
 							if(audio_format->channels&&audio_format->sample_rate){
 								priv->frame_format.channel_num = audio_format->channels>2?2:audio_format->channels;
-								if(audio_format->channels == 1 && (priv->stream_fmt == MCODEC_FMT_AC3 ||priv->stream_fmt == MCODEC_FMT_DTS)) //ac3/dts decoder use Lt/Rt 2ch dmx mode
+								if(audio_format->channels == 1 && (priv->stream_fmt == MCODEC_FMT_AC3  \
+									||priv->stream_fmt == MCODEC_FMT_EAC3||priv->stream_fmt == MCODEC_FMT_DTS)) //ac3/dts decoder use Lt/Rt 2ch dmx mode
                                 	priv->frame_format.channel_num = 2; // force stereo
 								priv->frame_format.sample_rate = audio_format->sample_rate;
 								priv->frame_format.data_width = 16;
@@ -269,22 +299,23 @@ static int audiodsp_ioctl(struct inode *node, struct file *file, unsigned int cm
 								ch = 2;
 							else
 								ch = audio_format->channels;
-							if(ch != priv->frame_format.channel_num){
+							if(!AUDIOINFO_FROM_AUDIODSP(priv->stream_fmt)&&ch != priv->frame_format.channel_num){
 								DSP_PRNT(" ch num info from dsp and header not match,[dsp %d ch],[header %d ch]", \
 									priv->frame_format.channel_num,ch);
-								priv->frame_format.channel_num = ch;
+								//priv->frame_format.channel_num = ch;
 							}	
 							
 						}
                         /**
                          * force to stereo for ac3/dts decoder
                          * */
-						if(priv->frame_format.channel_num == 1 && (priv->stream_fmt == MCODEC_FMT_AC3 ||priv->stream_fmt == MCODEC_FMT_DTS)) //ac3/dts decoder use Lt/Rt 2ch dmx mode
+						if(priv->frame_format.channel_num == 1 && (priv->stream_fmt == MCODEC_FMT_AC3 \
+							||priv->stream_fmt == MCODEC_FMT_EAC3||priv->stream_fmt == MCODEC_FMT_DTS)) //ac3/dts decoder use Lt/Rt 2ch dmx mode
                         	priv->frame_format.channel_num = 2; // force stereo                         
-						if(audio_format->sample_rate&&audio_format->sample_rate != priv->frame_format.sample_rate){
+						if(!AUDIOINFO_FROM_AUDIODSP(priv->stream_fmt)&&audio_format->sample_rate&&audio_format->sample_rate != priv->frame_format.sample_rate){
 								DSP_PRNT(" sr num info from dsp and header not match,[dsp %d ],[header %d ]", \
 									priv->frame_format.sample_rate,audio_format->sample_rate);
-							priv->frame_format.sample_rate  = audio_format->sample_rate;
+							//priv->frame_format.sample_rate  = audio_format->sample_rate;
 						}
 						DSP_PRNT("applied audio sr %d,ch num %d\n",priv->frame_format.sample_rate,priv->frame_format.channel_num);
 						
@@ -434,6 +465,14 @@ static int audiodsp_ioctl(struct inode *node, struct file *file, unsigned int cm
 			/*val=-1 is not valid*/
 			*val=dsp_codec_get_current_pts(priv);
 			break;
+                case AUDIODSP_LOOKUP_APTS:
+                {
+                        u32 pts, offset;
+                        offset=*val;
+                        pts_lookup_offset(PTS_TYPE_AUDIO, offset, &pts, 300);
+                        *val=pts;
+                }
+                        break;
 		case AUDIODSP_GET_FIRST_PTS_FLAG:
 			if(priv->stream_fmt == MCODEC_FMT_COOK || priv->stream_fmt == MCODEC_FMT_RAAC)
 				*val = 1;
@@ -797,12 +836,124 @@ static ssize_t dec_option_store(struct class* class, struct class_attribute* att
     dec_opt = 2;	// mute ac3
   }else if(buf[0] == '3'){
   	dec_opt = 3; //with noise
+  }else if(buf[0] == '4'){
+  	  printk("digital mode :PCM-raw  \n"); 
+	  decopt |= (1<<5); 
+  }else if(buf[0] == '5'){
+	  printk("digital mode :raw \n"); 
+	  decopt &= ~(1<<5);
   }
   decopt = 	(decopt&(~3))|dec_opt;
   printk("dec option=%d\n", dec_opt);
   return count;
 }
+static ssize_t ac3_drc_control_show(struct class*cla, struct class_attribute* attr, char* buf)
+{
+	char *drcmode[] = {"CUSTOM_0","CUSTOM_1","LINE","RF"};
+	char *pbuf = buf;
+	pbuf += sprintf(pbuf, "\tdd+ drc mode : %s\n", drcmode[ac3_drc_control&0x3]);
+	pbuf += sprintf(pbuf, "\tdd+ drc high cut scale : %d%\n", (ac3_drc_control>>DRC_HIGH_CUT_BIT)&0xff);
+	pbuf += sprintf(pbuf, "\tdd+ drc low boost scale : %d%\n", (ac3_drc_control>>DRC_LOW_BST_BIT)&0xff);
+	return (pbuf-buf);
+}
+static ssize_t ac3_drc_control_store(struct class* class, struct class_attribute* attr,
+   const char* buf, size_t count )
+{
+    char tmpbuf[128];
+	char *drcmode[] = {"CUSTOM_0","CUSTOM_1","LINE","RF"};	
+    int i=0;
+	unsigned val;
+    while((buf[i])&&(buf[i]!=',')&&(buf[i]!=' ')){
+        tmpbuf[i]=buf[i];
+        i++;    
+    }
+    tmpbuf[i]=0;
+ 	if(strncmp(tmpbuf, "drcmode", 7)==0){
+        val=simple_strtoul(buf+i+1, NULL, 16); 
+		val = val&0x3;
+		printk("drc mode set to %s\n",drcmode[val]);
+		ac3_drc_control = (ac3_drc_control&(~3))|val;
+ 	}
+ 	else if(strncmp(tmpbuf, "drchighcutscale", 15)==0){
+        val=simple_strtoul(buf+i+1, NULL, 16); 	
+		val = val&0xff;
+		printk("drc high cut scale set to %d%\n",val);
+		ac3_drc_control = (ac3_drc_control&(~(0xff<<DRC_HIGH_CUT_BIT)))|(val<<DRC_HIGH_CUT_BIT);
+ 	}
+ 	else if(strncmp(tmpbuf, "drclowboostscale", 16)==0){
+        val=simple_strtoul(buf+i+1, NULL, 16); 	
+		val = val&0xff;
+		printk("drc low boost scale set to %d%\n",val);
+		ac3_drc_control = (ac3_drc_control&(~(0xff<<DRC_LOW_BST_BIT)))|(val<<DRC_LOW_BST_BIT);
+ 	}
+	else
+		printk("invalid args\n");
+	return count;
+}
 
+//------------------------------------------------
+static ssize_t file_read_end_flag_show(struct class*cla, struct class_attribute* attr, char* buf)
+{
+    char* pbuf = buf;
+    unsigned end_flag = DSP_RD(DSP_DECODE_OPTION);
+    end_flag = (end_flag & 0x00000018)>>3;
+    if(end_flag==0){
+	pbuf += sprintf(pbuf, "F_NEND\n");
+    }else if(end_flag==1){
+	pbuf += sprintf(pbuf, "F_END\n");
+    }else if(end_flag==2){
+	pbuf += sprintf(pbuf, "DSP_END\n");
+    }
+    return (pbuf-buf);
+}
+static ssize_t file_read_end_flag_store(struct class* class, struct class_attribute* attr,const char* buf, size_t count )
+{
+    unsigned decopt_reg;
+    unsigned end_flag = 0x0;
+    if(buf[0] == '0'){
+	end_flag = 0;	// not arrive at the end of file
+    }else if(buf[0] == '1'){
+	end_flag = 1;	// has arrived at the end of file
+    }else if(buf[0] == '2')
+	end_flag = 2;
+    decopt_reg = DSP_RD(DSP_DECODE_OPTION);
+    decopt_reg = (decopt_reg&(~0x00000018))| (end_flag<<3);
+    DSP_WD(DSP_DECODE_OPTION, decopt_reg);
+    printk("decopt_reg = 0x%x, end_flag = 0x%x\n", decopt_reg, end_flag);
+    return count;
+}
+static ssize_t pcm_left_len_show(struct class* cla, struct class_attribute* attr, char* buf)
+{
+	struct audiodsp_priv *priv = audiodsp_privdata();
+	char *pbuf = 	buf;
+	pbuf += sprintf(pbuf, "%d\n", dsp_codec_get_bufer_data_len(priv));
+	return (pbuf- buf);
+}
+static ssize_t format_changed_flag_show(struct class*cla, struct class_attribute* attr, char* buf)
+{
+	char* pbuf = buf;
+	unsigned end_flag = DSP_RD(DSP_DECODE_OPTION);
+	end_flag = (end_flag & 0x00000018)>>3;
+	if(format_change_flag==0){
+	   pbuf += sprintf(pbuf, "0\n");
+	}else if(format_change_flag==1){
+	   pbuf += sprintf(pbuf, "1\n");
+	}
+	return (pbuf-buf);
+}
+
+static ssize_t format_changed_flag_store(struct class* class, struct class_attribute* attr,const char* buf, size_t count )
+{
+
+    if(buf[0] == '0'){
+	   format_change_flag = 0;	// not arrive at the end of file
+    }else if(buf[0] == '1'){
+	   format_change_flag = 1;	// has arrived at the end of file
+    }
+    return count;
+}
+
+//------------------------------------------------
 
 static struct class_attribute audiodsp_attrs[]={
     __ATTR_RO(codec_fmt),
@@ -810,9 +961,13 @@ static struct class_attribute audiodsp_attrs[]={
     __ATTR_RO(codec_fatal_err),
     __ATTR_RO(swap_buf_ptr),
     __ATTR_RO(dsp_working_status),
+    __ATTR_RO(pcm_left_len),
     __ATTR(digital_raw, S_IRUGO | S_IWUSR, digital_raw_show, digital_raw_store),
 	__ATTR(dec_option, S_IRUGO | S_IWUSR, dec_option_show, dec_option_store),    
-	__ATTR(print_flag, S_IRUGO | S_IWUSR, print_flag_show, print_flag_store),	 
+	__ATTR(print_flag, S_IRUGO | S_IWUSR, print_flag_show, print_flag_store),	
+	__ATTR(ac3_drc_control, S_IRUGO | S_IWUSR, ac3_drc_control_show, ac3_drc_control_store),
+    __ATTR(fread_end_flag, S_IRUGO | S_IWUSR, file_read_end_flag_show, file_read_end_flag_store),
+    __ATTR(format_change_flag, S_IRUGO | S_IWUSR,  format_changed_flag_show, format_changed_flag_store),
     __ATTR_NULL
 };
 

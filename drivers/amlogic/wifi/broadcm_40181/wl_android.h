@@ -55,3 +55,6 @@ int wifi_set_power(int on, unsigned long msec);
 int wifi_get_mac_addr(unsigned char *buf);
 void *wifi_get_country_code(char *ccode);
 #endif /* CONFIG_WIFI_CONTROL_FUNC */
+extern int g_wifi_on;
+#define          G_WLAN_SET_ON	TRUE
+#define          G_WLAN_SET_OFF	FALSE

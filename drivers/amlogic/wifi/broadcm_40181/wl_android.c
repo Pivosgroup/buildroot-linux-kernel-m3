@@ -141,7 +141,7 @@ extern char iface_name[IFNAMSIZ];
  * time (only) in dhd_open, subsequential wifi on will be handled by
  * wl_android_wifi_on
  */
-static int g_wifi_on = TRUE;
+int g_wifi_on = G_WLAN_SET_ON;
 
 /**
  * Local (static) function definitions
@@ -359,14 +359,14 @@ int wl_android_wifi_on(struct net_device *dev)
 	}
 
 	dhd_net_if_lock(dev);
-	if (!g_wifi_on) {
+	if (g_wifi_on == G_WLAN_SET_OFF) {
 		dhd_customer_gpio_wlan_ctrl(WLAN_RESET_ON);
 		sdioh_start(NULL, 0);
 		ret = dhd_dev_reset(dev, FALSE);
 		sdioh_start(NULL, 1);
 		if (!ret)
 			dhd_dev_init_ioctl(dev);
-		g_wifi_on = 1;
+		g_wifi_on = G_WLAN_SET_ON;
 	}
 	dhd_net_if_unlock(dev);
 
@@ -384,11 +384,11 @@ int wl_android_wifi_off(struct net_device *dev)
 	}
 
 	dhd_net_if_lock(dev);
-	if (g_wifi_on) {
+	if (g_wifi_on == G_WLAN_SET_ON) {
 		ret = dhd_dev_reset(dev, TRUE);
 		sdioh_stop(NULL);
 		dhd_customer_gpio_wlan_ctrl(WLAN_RESET_OFF);
-		g_wifi_on = 0;
+		g_wifi_on = G_WLAN_SET_OFF;
 	}
 	dhd_net_if_unlock(dev);
 
@@ -450,7 +450,7 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 		bytes_written = wl_android_set_fwpath(net, command, priv_cmd.total_len);
 	}
 
-	if (!g_wifi_on) {
+	if (g_wifi_on == G_WLAN_SET_OFF) {
 		DHD_ERROR(("%s: Ignore private cmd \"%s\" - iface %s is down\n",
 			__FUNCTION__, command, ifr->ifr_name));
 		ret = 0;
@@ -613,7 +613,7 @@ void wl_android_post_init(void)
 	if (!dhd_download_fw_on_driverload) {
 		/* Call customer gpio to turn off power with WL_REG_ON signal */
 		dhd_customer_gpio_wlan_ctrl(WLAN_RESET_OFF);
-		g_wifi_on = 0;
+		g_wifi_on = G_WLAN_SET_OFF;
 	}
 }
 /**

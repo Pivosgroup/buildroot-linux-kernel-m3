@@ -52,6 +52,9 @@
 static struct early_suspend early_suspend;
 static int early_suspend_flag = 0;
 #endif
+#ifdef CONFIG_SCREEN_ON_EARLY
+static int early_resume_flag = 0;
+#endif
 
 MODULE_AMLOG(AMLOG_DEFAULT_LEVEL, 0x0, LOG_LEVEL_DESC, LOG_MASK_DESC);
 
@@ -268,8 +271,8 @@ osd_ioctl(struct fb_info *info, unsigned int cmd,
 	 s32  osd_axis[4] = {0};
 	 u32  block_windows[8] = {0};
 	 u32  block_mode;
-
-    	switch (cmd)
+	 u32  flush_rate;
+	switch (cmd)
   	{
    		case  FBIOPUT_OSD_SRCKEY_ENABLE:
 			copy_from_user(&srckey_enable,argp,sizeof(u32));
@@ -282,6 +285,9 @@ osd_ioctl(struct fb_info *info, unsigned int cmd,
 			break;
 		case FBIOPUT_OSD_SCALE_AXIS:
 			copy_from_user(&osd_axis, argp, 4 * sizeof(s32));
+			break;
+		case FBIOGET_OSD_FLUSH_RATE:
+			copy_from_user(&flush_rate, argp, sizeof(u32));
 			break;
 		case FBIOGET_OSD_SCALE_AXIS:
 		case FBIOPUT_OSD_ORDER:
@@ -337,6 +343,11 @@ osd_ioctl(struct fb_info *info, unsigned int cmd,
     		case FBIOPUT_OSD_2X_SCALE: //arg :higher 16 bit h_scale_enable, lower 16 bit v_scale_enable
 		osddev_set_2x_scale(info->node,arg&0xffff0000?1:0,arg&0xffff?1:0);
 		break;		
+		case FBIOGET_OSD_FLUSH_RATE:
+		osddev_get_flush_rate(&flush_rate);
+		if(copy_to_user(argp, &flush_rate, sizeof(u32)))
+			return -EFAULT;
+		break;
 		case FBIOPUT_OSD_CANVAS_CONF:
 			osddev_set_canvas_conf(info->node, arg);
     		case FBIOPUT_OSD_SRCCOLORKEY:
@@ -1123,6 +1134,15 @@ static ssize_t store_canvas_conf(struct device *device, struct device_attribute 
 	return count;
 }
 
+static ssize_t show_flush_rate(struct device *device, struct device_attribute *attr,
+			 char *buf)
+{
+	u32 flush_rate = 0;
+	osddev_get_flush_rate(&flush_rate);
+	return snprintf(buf, PAGE_SIZE, "flush_rate:[%d]\n", flush_rate);
+
+}
+
 static struct device_attribute osd_attrs[] = {
 	__ATTR(scale, S_IRUGO|S_IWUSR, show_scale, store_scale),
 	__ATTR(order, S_IRUGO|S_IWUSR, show_order, store_order),	
@@ -1143,6 +1163,7 @@ static struct device_attribute osd_attrs[] = {
 	__ATTR(video_hole, S_IRUGO|S_IWUSR, show_video_hole, store__video_hole),
 	__ATTR(enforce_progressive, S_IRUGO| S_IWUSR, show_enforce_progressive, store_enforce_progressive),
 	__ATTR(canvas_conf, S_IRUGO|S_IWUSR, show_canvas_conf, store_canvas_conf),
+	__ATTR(flush_rate, S_IRUGO|S_IWUSR, show_flush_rate, NULL),
 };		
 
 #ifdef  CONFIG_PM
@@ -1158,6 +1179,13 @@ static int osd_suspend(struct platform_device *pdev, pm_message_t state)
 
 static int osd_resume(struct platform_device *pdev)
 {
+#ifdef CONFIG_SCREEN_ON_EARLY
+	if (early_resume_flag) {
+		early_resume_flag = 0;
+		return 0;
+	}
+#endif
+
 #ifdef CONFIG_HAS_EARLYSUSPEND
     if (early_suspend_flag)
         return 0;
@@ -1172,7 +1200,8 @@ static void osd_early_suspend(struct early_suspend *h)
 {
     if (early_suspend_flag)
         return;
-    osd_suspend((struct platform_device *)h->param, PMSG_SUSPEND);
+    //osd_suspend((struct platform_device *)h->param, PMSG_SUSPEND);
+    osddev_suspend();
     early_suspend_flag = 1;
 }
 
@@ -1181,11 +1210,26 @@ static void osd_late_resume(struct early_suspend *h)
     if (!early_suspend_flag)
         return;
     early_suspend_flag = 0;
-    osd_resume((struct platform_device *)h->param);
+    //osd_resume((struct platform_device *)h->param);
+    osddev_resume();
 }
 #endif
 
-#if defined(CONFIG_MACH_MESON3_REFF16) || defined(CONFIG_MACH_MESON3_STV_MBX_MC) //add by steven
+#ifdef CONFIG_SCREEN_ON_EARLY
+void osd_resume_early(void)
+{
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	osddev_resume();
+	early_suspend_flag = 0;
+#endif
+	early_resume_flag = 1;
+	return ;
+}
+EXPORT_SYMBOL(osd_resume_early);
+#endif
+
+
+#if 0 // def CONFIG_MACH_MESON3_REFF16
 int  __init  get_resolution(char *str)
 {
     if(strncmp("480", str, 3) == 0)
@@ -1263,6 +1307,7 @@ osd_probe(struct platform_device *pdev)
 		osddev_init();
     	}
 	vinfo = get_current_vinfo();
+       
     	for (index=0;index<OSD_COUNT;index++)
     	{
     		//platform resource 
@@ -1312,7 +1357,8 @@ osd_probe(struct platform_device *pdev)
 		 amlog_level(LOG_LEVEL_HIGH,"Frame buffer memory assigned at phy:0x%08x, vir:0x%p, size=%dK\n",
 	    	fbdev->fb_mem_paddr, fbdev->fb_mem_vaddr, fbdev->fb_len >> 10);
 		 
-
+              mydef_var[index].width=vinfo->screen_real_width;
+              mydef_var[index].height=vinfo->screen_real_height;
 		if(init_logo_obj && index==logo_osd_index ) //adjust default var info
 		{
 			int  bpp=init_logo_obj->dev->output_dev.osd.color_depth;//bytes per pixel
@@ -1329,7 +1375,7 @@ osd_probe(struct platform_device *pdev)
 				mydef_var[index].bits_per_pixel=32;
 			}
 		} else {
-			amlog_level(LOG_LEVEL_HIGH,"---------------clear framebuffer%d memory  \r\n",index);
+			amlog_level(LOG_LEVEL_HIGH,"---------------clear framebuffer%d memory size=%x. \r\n",index, fbdev->fb_len);
 			memset((char*)fbdev->fb_mem_vaddr, 0x80, fbdev->fb_len);	
 		}
 	

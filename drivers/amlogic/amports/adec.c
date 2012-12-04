@@ -67,6 +67,7 @@ static char *astream_format[] = {
     "amadec_vorbis",
     "amadec_aac_latm",
     "amadec_ape",
+	"amadec_eac3",
 
 
 };

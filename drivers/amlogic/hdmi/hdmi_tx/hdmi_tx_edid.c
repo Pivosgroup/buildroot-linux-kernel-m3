@@ -933,7 +933,18 @@ static int hdmitx_edid_block_parse(hdmitx_dev_t* hdmitx_device, unsigned char *B
     return 0 ;
 }
 
-
+// add default VICs for DVI case
+static void hdmitx_edid_set_default_vic(hdmitx_dev_t* hdmitx_device)
+{
+    rx_cap_t* pRXCap = &(hdmitx_device->RXCap);
+    pRXCap->VIC_count = 0x3;
+    pRXCap->VIC[0] = 2;
+    pRXCap->VIC[1] = 4;
+    pRXCap->VIC[2] = 16;
+    pRXCap->native_VIC = 4;
+    hdmitx_device->vic_count = pRXCap->VIC_count;
+    printk("HDMI: set default vic\n");
+}
 
 int hdmitx_edid_parse(hdmitx_dev_t* hdmitx_device)
 {
@@ -941,6 +952,7 @@ int hdmitx_edid_parse(hdmitx_dev_t* hdmitx_device)
     unsigned char BlockCount ;
     unsigned char* EDID_buf = hdmitx_device->EDID_buf;
     int i, j, ret_val ;
+    rx_cap_t* pRXCap = &(hdmitx_device->RXCap);
     hdmi_print(0, "EDID Parser:\n");
     ret_val = Edid_DecodeHeader(&hdmitx_device->hdmi_info, &EDID_buf[0]);
 
@@ -968,6 +980,7 @@ int hdmitx_edid_parse(hdmitx_dev_t* hdmitx_device)
     if( BlockCount == 0 ){
         hdmitx_device->hdmi_info.output_state = CABLE_PLUGIN_DVI_OUT;
         hdmi_print(0, "EDID BlockCount=0\n");
+        hdmitx_edid_set_default_vic(hdmitx_device);
         return 0 ; // do nothing.
     }
 
@@ -1018,6 +1031,11 @@ int hdmitx_edid_parse(hdmitx_dev_t* hdmitx_device)
             }
         }
     }
+    
+    if((pRXCap->IEEEOUI != 0x0c03) || (pRXCap->IEEEOUI == 0x0)){
+        hdmitx_edid_set_default_vic(hdmitx_device);
+    }    
+
 #if 1    
     i=hdmitx_edid_dump(hdmitx_device, (char*)(hdmitx_device->tmp_buf), HDMI_TMP_BUF_SIZE);
     hdmitx_device->tmp_buf[i]=0;
@@ -1052,6 +1070,22 @@ static dispmode_vic_t dispmode_VIC_tab[]=
     {"1080i50hz", HDMI_1080i50},
     {"1080p50hz", HDMI_1080p50},
 };    
+
+HDMI_Video_Codes_t hdmitx_get_VIC(hdmitx_dev_t* hdmitx_device, const char* disp_mode)
+{
+    HDMI_Video_Codes_t vic=HDMI_720p60;
+    int count=ARRAY_SIZE(dispmode_VIC_tab);
+    int  i;
+    for(i=0;i<count;i++)
+    {
+        if(strncmp(disp_mode, dispmode_VIC_tab[i].disp_mode, strlen(dispmode_VIC_tab[i].disp_mode))==0)
+        {
+            vic = dispmode_VIC_tab[i].VIC;
+        }
+    }
+    hdmitx_device->vic_count = vic;
+    return vic;
+}
 
 HDMI_Video_Codes_t hdmitx_edid_get_VIC(hdmitx_dev_t* hdmitx_device, const char* disp_mode, char force_flag)
 {

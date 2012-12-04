@@ -85,9 +85,7 @@ int meson_power_suspend()
 
 	flush_cache_all();
 
-#ifdef CONFIG_AML_SUSPEND
 	addr = phys_to_virt(PHYS_OFFSET + CONFIG_AML_SUSPEND_FIRMWARE_BASE);
-#endif
 	addr += entry_offset;
 	pwrtest_entry = (void (*)(unsigned,unsigned,unsigned,unsigned))addr;
 	if(test_flag != 1234){

@@ -30,6 +30,9 @@ enum {
 static int debug_mask = DEBUG_USER_STATE | DEBUG_SUSPEND;
 module_param_named(debug_mask, debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
 
+static DEFINE_MUTEX(suspend_mutex);
+
+
 static DEFINE_MUTEX(early_suspend_lock);
 static LIST_HEAD(early_suspend_handlers);
 static void early_suspend(struct work_struct *work);
@@ -79,6 +82,9 @@ static void early_suspend(struct work_struct *work)
 	int i;
 	if (debug_mask & DEBUG_SUSPEND)
 		pr_info("Start: early_suspend_work\n");
+#ifdef CONFIG_SCREEN_ON_EARLY
+	mutex_lock(&suspend_mutex);
+#endif
 	mutex_lock(&early_suspend_lock);
 	spin_lock_irqsave(&state_lock, irqflags);
 	if (state == SUSPEND_REQUESTED)
@@ -122,6 +128,9 @@ abort:
 	if (state == SUSPEND_REQUESTED_AND_SUSPENDED)
 		wake_unlock(&main_wake_lock);
 	spin_unlock_irqrestore(&state_lock, irqflags);
+#ifdef CONFIG_SCREEN_ON_EARLY
+	mutex_unlock(&suspend_mutex);
+#endif
 }
 
 static void late_resume(struct work_struct *work)
@@ -167,6 +176,7 @@ void request_suspend_state(suspend_state_t new_state)
 {
 	unsigned long irqflags;
 	int old_sleep;
+	int wait_flag = 0;
 
 	spin_lock_irqsave(&state_lock, irqflags);
 	old_sleep = state & SUSPEND_REQUESTED;
@@ -193,10 +203,21 @@ void request_suspend_state(suspend_state_t new_state)
 			pr_info("Queue work: late_resume_work\n");
 		state &= ~SUSPEND_REQUESTED;
 		wake_lock(&main_wake_lock);
+#ifdef CONFIG_SCREEN_ON_EARLY
+		extern void wakeup_early_suspend_proc(void);
+		wakeup_early_suspend_proc();
+		wait_flag = 1;
+#endif
 		queue_work(suspend_work_queue, &late_resume_work);
 	}
 	requested_suspend_state = new_state;
 	spin_unlock_irqrestore(&state_lock, irqflags);
+#ifdef CONFIG_SCREEN_ON_EARLY
+	if (wait_flag) {
+		mutex_lock(&suspend_mutex);
+		mutex_unlock(&suspend_mutex);
+	}
+#endif
 }
 
 suspend_state_t get_suspend_state(void)

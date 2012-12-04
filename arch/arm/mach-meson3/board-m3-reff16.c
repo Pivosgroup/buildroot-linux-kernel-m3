@@ -20,6 +20,7 @@
 #include <linux/mtd/nand.h>
 #include <linux/mtd/nand_ecc.h>
 #include <linux/mtd/partitions.h>
+#include <linux/aml_eth.h>
 #include <linux/device.h>
 #include <linux/spi/flash.h>
 #include <mach/hardware.h>
@@ -78,6 +79,10 @@
 
 #ifdef CONFIG_EFUSE
 #include <linux/efuse.h>
+#endif
+
+#ifdef CONFIG_AML_HDMI_TX
+#include <linux/hdmi/hdmi_config.h>
 #endif
 
 #ifdef CONFIG_SUSPEND
@@ -303,6 +308,11 @@ static struct mtd_partition spi_partition_info[] = {
         .offset = 0x80000,
         .size = 0x2000,
 },
+    {
+	.name = "hashtable",
+	.offset = 0x100000,
+	.size = 0x2000,
+    },
     /* Hide recovery partition
             {
                     .name = "recovery",
@@ -337,6 +347,20 @@ static struct platform_device amlogic_spi_nor_device = {
 #endif
 
 #ifdef CONFIG_USB_DWC_OTG_HCD
+#ifdef CONFIG_USB_DPLINE_PULLUP_DISABLE
+static set_vbus_valid_ext_fun(unsigned int id,char val)
+{
+	unsigned int  reg = (PREI_USB_PHY_A_REG1 + id);
+	if(val == 1)
+	{
+		SET_CBUS_REG_MASK(reg,1<<0);
+	}
+	else
+	{
+		CLEAR_CBUS_REG_MASK(reg,1<<0);
+	}
+}
+#endif
 static void set_usb_a_vbus_power(char is_power_on)
 {
 }
@@ -368,8 +392,11 @@ static struct lm_device usb_ld_a = {
     .dma_mask_room = DMA_BIT_MASK(32),
     .port_type = USB_PORT_TYPE_OTG,
     .port_speed = USB_PORT_SPEED_DEFAULT,
-    .dma_config = USB_DMA_BURST_SINGLE,
+    .dma_config = USB_DMA_BURST_INCR16,
     .set_vbus_power = set_usb_a_vbus_power,
+#ifdef CONFIG_USB_DPLINE_PULLUP_DISABLE	
+	.set_vbus_valid_ext = set_vbus_valid_ext_fun,
+#endif
 };
 static struct lm_device usb_ld_b = {
     .type = LM_DEVICE_TYPE_USB,
@@ -380,8 +407,11 @@ static struct lm_device usb_ld_b = {
     .dma_mask_room = DMA_BIT_MASK(32),
     .port_type = USB_PORT_TYPE_HOST,
     .port_speed = USB_PORT_SPEED_DEFAULT,
-    .dma_config = USB_DMA_BURST_SINGLE , //   USB_DMA_DISABLE,
+    .dma_config = USB_DMA_BURST_INCR16, //   USB_DMA_DISABLE,
     .set_vbus_power = set_usb_b_vbus_power,
+#ifdef CONFIG_USB_DPLINE_PULLUP_DISABLE	
+	.set_vbus_valid_ext = set_vbus_valid_ext_fun,
+#endif	
 };
 
 #endif
@@ -457,6 +487,197 @@ static struct platform_device vdin_device = {
 };
 #endif
 
+#if defined(CONFIG_AM_NAND)||defined(CONFIG_INAND)
+static struct mtd_partition multi_partition_info_512M[] = 
+{
+   
+#if defined(CONFIG_INAND)
+	   {
+		   .name = "bootloader",
+		   .offset = BOOTLOADER_OFFSET,
+		   .size = BOOTLOADER_SIZE,
+	   },
+	   {
+		   .name = "boot_env",
+		   .offset = CONFIG_ENV_OFFSET,
+		   .size = CONFIG_ENV_SIZE,
+	   },
+#endif
+    {
+	.name = "aml_logo",
+	.offset = 8*1024*1024,
+	.size=8*1024*1024,
+    },
+    {
+        .name = "recovery",
+        .offset = 16*1024*1024,
+        .size = 16*1024*1024,
+    },
+    {
+        .name = "boot",
+        .offset = 32*1024*1024,
+        .size = 16*1024*1024,
+    },
+    {
+        .name = "system",
+        .offset = 48*1024*1024,
+        .size = 256*1024*1024,
+    },
+    {
+        .name = "cache",
+        .offset = 304*1024*1024,
+        .size = 128*1024*1024,
+    },
+#ifdef CONFIG_AML_NFTL
+   {
+        .name = "userdata",
+        .offset=432*1024*1024,
+        .size=512*1024*1024,
+    },
+    {
+	.name = "NFTL_Part",
+	.offset = MTDPART_OFS_APPEND,
+	.size = MTDPART_SIZ_FULL,
+    },
+#else
+    {
+        .name = "userdata",
+        .offset=MTDPART_OFS_APPEND,
+        .size=MTDPART_SIZ_FULL,
+    },
+#endif
+};
+
+static struct mtd_partition multi_partition_info_1G_or_More[] = 
+{
+#ifdef CONFIG_AML_NAND_ENV
+    {
+	.name = "ubootenv",
+	.offset = 8*1024*1024,
+	.size = 4*1024*1024,
+    },
+#endif
+    {
+	.name = "aml_logo",
+	.offset = 12*1024*1024,
+	.size = 16*1024*1024,
+    },
+    {
+        .name = "recovery",
+        .offset = 28*1024*1024,
+        .size = 16*1024*1024,
+    },
+    {
+        .name = "boot",
+        .offset = 44*1024*1024,
+        .size = 20*1024*1024,
+    },
+	{
+        .name = "system",
+        .offset = 64*1024*1024,
+        .size = 512*1024*1024,
+    },
+    {
+        .name = "cache",
+        .offset = 576*1024*1024,
+        .size = 192*1024*1024,
+    },
+#ifdef CONFIG_AML_NFTL
+   {
+        .name = "userdata",
+        .offset = 768*1024*1024,
+        .size = 512*1024*1024,
+    },
+    {
+	.name = "NFTL_Part",
+	.offset = MTDPART_OFS_APPEND,
+	.size = MTDPART_SIZ_FULL,
+    },
+#else
+    {
+        .name = "userdata",
+        .offset = MTDPART_OFS_APPEND,
+        .size = MTDPART_SIZ_FULL,
+    },
+#endif
+};
+
+static void nand_set_parts(uint64_t size, struct platform_nand_chip *chip)
+{
+    printk("set nand parts for chip %lldMB\n", (size/(1024*1024)));
+
+    if (size/(1024*1024) == 512) {
+        chip->partitions = multi_partition_info_512M;
+        chip->nr_partitions = ARRAY_SIZE(multi_partition_info_512M);
+        }
+    else if (size/(1024*1024) >= 1024) {
+        chip->partitions = multi_partition_info_1G_or_More;
+        chip->nr_partitions = ARRAY_SIZE(multi_partition_info_1G_or_More);
+        }
+    else {
+        chip->partitions = multi_partition_info_512M;
+        chip->nr_partitions = ARRAY_SIZE(multi_partition_info_512M);
+        }
+    return;
+}
+
+static struct aml_nand_platform aml_nand_mid_platform[] = {
+#ifdef CONFIG_AML_NAND_ENV
+{
+		.name = NAND_BOOT_NAME,
+		.chip_enable_pad = AML_NAND_CE0,
+		.ready_busy_pad = AML_NAND_CE0,
+		.platform_nand_data = {
+			.chip =  {
+				.nr_chips = 1,
+				.options = (NAND_TIMING_MODE5 | NAND_ECC_BCH60_1K_MODE),
+			},
+    	},
+			.T_REA = 20,
+			.T_RHOH = 15,
+	},
+#endif
+{
+		.name = NAND_MULTI_NAME,
+		.chip_enable_pad = (AML_NAND_CE0 | (AML_NAND_CE1 << 4) | (AML_NAND_CE2 << 8) | (AML_NAND_CE3 << 12)),
+		.ready_busy_pad = (AML_NAND_CE0 | (AML_NAND_CE0 << 4) | (AML_NAND_CE1 << 8) | (AML_NAND_CE1 << 12)),
+		.platform_nand_data = {
+			.chip =  {
+				.nr_chips = 4,
+				.nr_partitions = ARRAY_SIZE(multi_partition_info_512M),
+				.partitions = multi_partition_info_512M,
+				.set_parts = nand_set_parts,
+				.options = (NAND_TIMING_MODE5 | NAND_ECC_BCH60_1K_MODE | NAND_TWO_PLANE_MODE),
+			},
+    	},
+			.T_REA = 20,
+			.T_RHOH = 15,
+	}
+};
+
+struct aml_nand_device aml_nand_mid_device = {
+	.aml_nand_platform = aml_nand_mid_platform,
+	.dev_num = ARRAY_SIZE(aml_nand_mid_platform),
+};
+
+static struct resource aml_nand_resources[] = {
+    {
+        .start = 0xc1108600,
+        .end = 0xc1108624,
+        .flags = IORESOURCE_MEM,
+    },
+};
+
+static struct platform_device aml_nand_device = {
+    .name = "aml_m3_nand",
+    .id = 0,
+    .num_resources = ARRAY_SIZE(aml_nand_resources),
+    .resource = aml_nand_resources,
+    .dev = {
+		.platform_data = &aml_nand_mid_device,
+    },
+};
+#endif
 #if defined(CONFIG_SDIO_DHD_CDC_WIFI_40181_MODULE_MODULE)
 /******************************
 *WL_REG_ON	-->GPIOC_8
@@ -542,7 +763,7 @@ void sdio_extern_init(void)
 	SET_CBUS_REG_MASK(PAD_PULL_UP_REG4, (1<<11));
 	gpio_direction_input(GPIO_WIFI_HOSTWAKE);
 #if defined(CONFIG_BCM40181_WIFI)
-	gpio_enable_level_int(gpio_to_idx(GPIO_WIFI_HOSTWAKE), 0, 4);  //for 40181
+	gpio_enable_level_int(gpio_to_idx(GPIO_WIFI_HOSTWAKE), 1, 4);  //for 40181
 #endif
 #if defined(CONFIG_BCM40183_WIFI)
 	gpio_enable_edge_int(gpio_to_idx(GPIO_WIFI_HOSTWAKE), 0, 5);     //for 40183
@@ -551,6 +772,15 @@ void sdio_extern_init(void)
 }
 #endif
 
+static void inand_extern_init(void)
+{
+	printk("inand_extern_init !\n");
+   CLEAR_CBUS_REG_MASK(PAD_PULL_UP_REG3, (0xf<<0));//data pull up
+   CLEAR_CBUS_REG_MASK(PAD_PULL_UP_REG3, (0x3<<10)); //clk cmd pull
+   CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_2, (0x1f<<22)); //clr nand ce&data
+   SET_CBUS_REG_MASK(PERIPHS_PIN_MUX_6, (0x1f<<25)); //set sdio c cmd&data
+   SET_CBUS_REG_MASK(PERIPHS_PIN_MUX_6, (0x1<<24)); //set sdio c clk
+}		
 static struct aml_card_info  amlogic_card_info[] = {
     [0] = {
         .name = "sd_card",
@@ -571,8 +801,31 @@ static struct aml_card_info  amlogic_card_info[] = {
         .card_wp_input_mask = PREG_IO_30_MASK,
         .card_extern_init = 0,
     },
+#if defined(CONFIG_INAND)
+[1] = {
+   .name = "inand_card",
+   .work_mode = CARD_HW_MODE,
+   .io_pad_type = SDHC_BOOT_0_11,
+   .card_ins_en_reg = 0,
+   .card_ins_en_mask = 0,
+   .card_ins_input_reg = 0,
+   .card_ins_input_mask = 0,
+   .card_power_en_reg = 0,
+   .card_power_en_mask = 0,
+   .card_power_output_reg = 0,
+   .card_power_output_mask = 0,
+   .card_power_en_lev = 0,
+   .card_wp_en_reg = 0,
+   .card_wp_en_mask = 0,
+   .card_wp_input_reg = 0,
+   .card_wp_input_mask = 0,
+   .card_extern_init = inand_extern_init,
+   .partitions = multi_partition_info_512M,
+   .nr_partitions = ARRAY_SIZE(multi_partition_info_512M),
+     },
+#endif
 #if defined(CONFIG_SDIO_DHD_CDC_WIFI_40181_MODULE_MODULE)
-    [1] = {
+    [2] = {
         .name = "sdio_card",
         .work_mode = CARD_HW_MODE,
         .io_pad_type = SDIO_A_GPIOX_0_3,
@@ -1302,184 +1555,6 @@ static struct platform_device aml_efuse_device = {
 };
 #endif
 
-#ifdef CONFIG_AM_NAND
-static struct mtd_partition multi_partition_info_512M[] = 
-{
-    {
-	.name = "aml_logo",
-	.offset = 8*1024*1024,
-	.size=8*1024*1024,
-    },
-    {
-        .name = "recovery",
-        .offset = 16*1024*1024,
-        .size = 16*1024*1024,
-    },
-    {
-        .name = "boot",
-        .offset = 32*1024*1024,
-        .size = 16*1024*1024,
-    },
-    {
-        .name = "system",
-        .offset = 48*1024*1024,
-        .size = 256*1024*1024,
-    },
-    {
-        .name = "cache",
-        .offset = 304*1024*1024,
-        .size = 128*1024*1024,
-    },
-#ifdef CONFIG_AML_NFTL
-   {
-        .name = "userdata",
-        .offset=432*1024*1024,
-        .size=512*1024*1024,
-    },
-    {
-	.name = "NFTL_Part",
-	.offset = MTDPART_OFS_APPEND,
-	.size = MTDPART_SIZ_FULL,
-    },
-#else
-    {
-        .name = "userdata",
-        .offset=MTDPART_OFS_APPEND,
-        .size=MTDPART_SIZ_FULL,
-    },
-#endif
-};
-
-static struct mtd_partition multi_partition_info_1G_or_More[] = 
-{
-#ifdef CONFIG_AML_NAND_ENV
-    {
-	.name = "ubootenv",
-	.offset = 8*1024*1024,
-	.size = 4*1024*1024,
-    },
-#endif
-    {
-	.name = "aml_logo",
-	.offset = 12*1024*1024,
-	.size = 16*1024*1024,
-    },
-    {
-        .name = "recovery",
-        .offset = 28*1024*1024,
-        .size = 16*1024*1024,
-    },
-    {
-        .name = "boot",
-        .offset = 44*1024*1024,
-        .size = 20*1024*1024,
-    },
-	{
-        .name = "system",
-        .offset = 64*1024*1024,
-        .size = 512*1024*1024,
-    },
-    {
-        .name = "cache",
-        .offset = 576*1024*1024,
-        .size = 192*1024*1024,
-    },
-#ifdef CONFIG_AML_NFTL
-   {
-        .name = "userdata",
-        .offset = 768*1024*1024,
-        .size = 512*1024*1024,
-    },
-    {
-	.name = "NFTL_Part",
-	.offset = MTDPART_OFS_APPEND,
-	.size = MTDPART_SIZ_FULL,
-    },
-#else
-    {
-        .name = "userdata",
-        .offset = MTDPART_OFS_APPEND,
-        .size = MTDPART_SIZ_FULL,
-    },
-#endif
-};
-
-static void nand_set_parts(uint64_t size, struct platform_nand_chip *chip)
-{
-    printk("set nand parts for chip %lldMB\n", (size/(1024*1024)));
-
-    if (size/(1024*1024) == 512) {
-        chip->partitions = multi_partition_info_512M;
-        chip->nr_partitions = ARRAY_SIZE(multi_partition_info_512M);
-        }
-    else if (size/(1024*1024) >= 1024) {
-        chip->partitions = multi_partition_info_1G_or_More;
-        chip->nr_partitions = ARRAY_SIZE(multi_partition_info_1G_or_More);
-        }
-    else {
-        chip->partitions = multi_partition_info_512M;
-        chip->nr_partitions = ARRAY_SIZE(multi_partition_info_512M);
-        }
-    return;
-}
-
-static struct aml_nand_platform aml_nand_mid_platform[] = {
-#ifdef CONFIG_AML_NAND_ENV
-{
-		.name = NAND_BOOT_NAME,
-		.chip_enable_pad = AML_NAND_CE0,
-		.ready_busy_pad = AML_NAND_CE0,
-		.platform_nand_data = {
-			.chip =  {
-				.nr_chips = 1,
-				.options = (NAND_TIMING_MODE5 | NAND_ECC_BCH60_1K_MODE),
-			},
-    	},
-			.T_REA = 20,
-			.T_RHOH = 15,
-	},
-#endif
-{
-		.name = NAND_MULTI_NAME,
-		.chip_enable_pad = (AML_NAND_CE0 | (AML_NAND_CE1 << 4) | (AML_NAND_CE2 << 8) | (AML_NAND_CE3 << 12)),
-		.ready_busy_pad = (AML_NAND_CE0 | (AML_NAND_CE0 << 4) | (AML_NAND_CE1 << 8) | (AML_NAND_CE1 << 12)),
-		.platform_nand_data = {
-			.chip =  {
-				.nr_chips = 4,
-				.nr_partitions = ARRAY_SIZE(multi_partition_info_512M),
-				.partitions = multi_partition_info_512M,
-				.set_parts = nand_set_parts,
-				.options = (NAND_TIMING_MODE5 | NAND_ECC_BCH60_1K_MODE | NAND_TWO_PLANE_MODE),
-			},
-    	},
-			.T_REA = 20,
-			.T_RHOH = 15,
-	}
-};
-
-struct aml_nand_device aml_nand_mid_device = {
-	.aml_nand_platform = aml_nand_mid_platform,
-	.dev_num = ARRAY_SIZE(aml_nand_mid_platform),
-};
-
-static struct resource aml_nand_resources[] = {
-    {
-        .start = 0xc1108600,
-        .end = 0xc1108624,
-        .flags = IORESOURCE_MEM,
-    },
-};
-
-static struct platform_device aml_nand_device = {
-    .name = "aml_m3_nand",
-    .id = 0,
-    .num_resources = ARRAY_SIZE(aml_nand_resources),
-    .resource = aml_nand_resources,
-    .dev = {
-		.platform_data = &aml_nand_mid_device,
-    },
-};
-#endif
 
 #if  defined(CONFIG_AM_TV_OUTPUT)||defined(CONFIG_AM_TCON_OUTPUT)
 static struct resource vout_device_resources[] = {
@@ -1616,20 +1691,86 @@ static struct platform_device bt_device = {
 
 static void bt_device_init(void)
 {
+#ifdef CONFIG_BCM40183_WIFI
+        printk("-----------%s-----------\n", __FUNCTION__);
+        /* BT_RST_N GPIOD_3*/
+        CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_0, 1<<23);
+        CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_1, 1<<18);
+        set_gpio_val(GPIOD_bank_bit0_9(3), GPIOD_bit_bit0_9(3), 0); 
+        set_gpio_mode(GPIOD_bank_bit0_9(3), GPIOD_bit_bit0_9(3), GPIO_OUTPUT_MODE);
+
+        /* BT_REG_EN GPIOD_2*/
+        CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_0, 1<<22);
+        CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_1, 1<<19);
+        set_gpio_val(GPIOD_bank_bit0_9(2), GPIOD_bit_bit0_9(2), 0); 
+        set_gpio_mode(GPIOD_bank_bit0_9(2), GPIOD_bit_bit0_9(2), GPIO_OUTPUT_MODE);
+
+        /* BT_WAKE GPIOX_10*/
+        set_gpio_val(GPIOX_bank_bit0_31(10), GPIOX_bit_bit0_31(10), 0);
+        set_gpio_mode(GPIOD_bank_bit0_9(2), GPIOD_bit_bit0_9(2), GPIO_OUTPUT_MODE);
+
+        /*UART_A GPIOX_13~16*/
+        SET_CBUS_REG_MASK(PERIPHS_PIN_MUX_4, 0xf<<10);
+
+        /*PCM GPIOX_17~20*/
+        CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_8, 0xff<<24);
+        CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_4, 0xf<<6);
+        CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_4, 0xf<<18);
+        SET_CBUS_REG_MASK(PERIPHS_PIN_MUX_4, 0xf<<22);
+#endif /*CONFIG_BCM40183_WIFI*/
 }
 
 static void bt_device_on(void)
 {
+#ifdef CONFIG_BCM40183_WIFI
+        printk("-----------%s-----------\n", __FUNCTION__);
+        /* BT_REG_EN set to high */
+        set_gpio_val(GPIOD_bank_bit0_9(2), GPIOD_bit_bit0_9(2), 1);
+        msleep(50);
+        /* BT_RST_EN set to high */
+        set_gpio_val(GPIOD_bank_bit0_9(3), GPIOD_bit_bit0_9(3), 1);
+        /* BT_WAKE set to high */
+        set_gpio_val(GPIOX_bank_bit0_31(10), GPIOX_bit_bit0_31(10), 1);
+#endif /*CONFIG_BCM40183_WIFI*/
 }
 
 static void bt_device_off(void)
 {
+#ifdef CONFIG_BCM40183_WIFI
+        printk("-----------%s-----------\n", __FUNCTION__);
+        /* BT_REG_EN set to low */
+        set_gpio_val(GPIOD_bank_bit0_9(2), GPIOD_bit_bit0_9(2), 0);
+        /* BT_RST_EN set to low */
+        set_gpio_val(GPIOD_bank_bit0_9(3), GPIOD_bit_bit0_9(3), 0);
+        /* BT_WAKE set to low */
+        set_gpio_val(GPIOX_bank_bit0_31(10), GPIOX_bit_bit0_31(10), 0);
+#endif /*CONFIG_BCM40183_WIFI*/
+}
+
+static void bt_device_suspend(void)
+{
+#if defined(CONFIG_BCM40183_WIFI) & defined(BCM40181_POWER_ALWAYS_ON)
+        printk("-----------%s-----------\n", __FUNCTION__);
+        /* BT_WAKE set to low */
+        set_gpio_val(GPIOX_bank_bit0_31(10), GPIOX_bit_bit0_31(10), 0);
+#endif /*CONFIG_BCM40183_WIFI*/
+}
+
+static void bt_device_resume(void)
+{
+#if defined(CONFIG_BCM40183_WIFI) & defined(BCM40181_POWER_ALWAYS_ON)
+        printk("-----------%s-----------\n", __FUNCTION__);
+        /* BT_WAKE set to high */
+        set_gpio_val(GPIOX_bank_bit0_31(10), GPIOX_bit_bit0_31(10), 1);
+#endif /*CONFIG_BCM40183_WIFI*/
 }
 
 struct bt_dev_data bt_dev = {
     .bt_dev_init    = bt_device_init,
     .bt_dev_on      = bt_device_on,
     .bt_dev_off     = bt_device_off,
+    .bt_dev_suspend = bt_device_suspend,
+    .bt_dev_resume  = bt_device_resume,
 };
 #endif
 
@@ -1768,6 +1909,12 @@ static struct resource avl6211_resource[]  = {
 	.flags = IORESOURCE_MEM,
 	.name  = "frontend0_POWERON/OFF"
 	},	
+	[7] = {
+	.start = (GPIOB_bank_bit0_23(20)<<16)|GPIOB_bit_bit0_23(20),
+	.end   = (GPIOB_bank_bit0_23(20)<<16)|GPIOB_bit_bit0_23(20),
+	.flags = IORESOURCE_MEM,
+	.name  = "frontend0_ANTOVERLOAD"
+	},		
 };
 
 static  struct platform_device avl6211_device = {
@@ -1841,11 +1988,23 @@ static struct resource ite9173_resource[]  = {
 		.name  = "frontend0_demod_addr"
 	},
 	[4] = {
-		.start = (GPIOB_bank_bit0_23(23)<<16)|GPIOB_bit_bit0_23(23),  //// ANT_PWR_CTRL pin
+		.start = (GPIOB_bank_bit0_23(21)<<16)|GPIOB_bit_bit0_23(21),  // TUNER_POWERC pin
+		.end   = (GPIOB_bank_bit0_23(21)<<16)|GPIOB_bit_bit0_23(21),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_TUNER_POWER"
+	},
+	[5] = {
+		.start = (GPIOB_bank_bit0_23(20)<<16)|GPIOB_bit_bit0_23(20),  // ANT_OVERLOAD pin
+		.end   = (GPIOB_bank_bit0_23(20)<<16)|GPIOB_bit_bit0_23(20),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_ANT_OVERLOAD"
+	},
+	[6] = {
+		.start = (GPIOB_bank_bit0_23(23)<<16)|GPIOB_bit_bit0_23(23),  //ANT_POWER pin
 		.end   = (GPIOB_bank_bit0_23(23)<<16)|GPIOB_bit_bit0_23(23),
 		.flags = IORESOURCE_MEM,
-		.name  = "frontend0_power"
-	},
+		.name  = "frontend0_ANT_POWER"
+	},	
 };
 
 static  struct platform_device ite9173_device = {
@@ -1854,6 +2013,102 @@ static  struct platform_device ite9173_device = {
 	.num_resources    = ARRAY_SIZE(ite9173_resource),
 	.resource         = ite9173_resource,
 };
+
+static struct resource ite9133_resource[]  = {
+	[0] = {
+		.start = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8), //reset pin
+		.end   = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_reset"
+	},
+	[1] = {
+		.start = 0,                                    //frontend 0 i2c adapter id
+		.end   = 0,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_i2c"
+	},
+	[2] = {
+		.start = 0x98,                                 //frontend 0 tuner address
+		.end   = 0x98,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_tuner_addr"
+	},
+	[3] = {
+		.start =  0x38,                                 //frontend 0 demod address
+		.end   =  0x38,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_demod_addr"
+	},
+	[4] = {
+		.start = (GPIOC_bank_bit0_15(3)<<16)|GPIOC_bank_bit0_15(3),  //// tuner_enable
+		.end   = (GPIOC_bank_bit0_15(3)<<16)|GPIOC_bank_bit0_15(3),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_power"
+	},
+};
+
+static  struct platform_device ite9133_device = {
+	.name             = "ite9133",
+	.id               = -1,
+	.num_resources    = ARRAY_SIZE(ite9133_resource),
+	.resource         = ite9133_resource,
+};
+
+
+
+static struct resource dib7090p_resource[]  = {
+	[0] = {
+		.start = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8), //reset pin
+		.end   = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_reset_pin"
+	},
+	[1] = {
+		.start = 0,                                    //frontend 0 i2c adapter id
+		.end   = 0,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_i2c"
+	},
+	[2] = {
+		.start = 0x98,                                 //frontend 0 tuner address
+		.end   = 0x98,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_tuner_addr"
+	},
+	[3] = {
+		.start =  0x10,                                 //frontend 0 demod address
+		.end   =  0x10,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_demod_addr"
+	},
+	[4] = {
+		.start = (GPIOAO_bank_bit0_11(6)<<16)|GPIOAO_bank_bit0_11(6), //(GPIOC_bank_bit0_15(3)<<16)|GPIOC_bank_bit0_15(3),  //// tuner_enable
+		.end   = (GPIOAO_bank_bit0_11(6)<<16)|GPIOAO_bank_bit0_11(6), //(GPIOC_bank_bit0_15(3)<<16)|GPIOC_bank_bit0_15(3),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_power_pin"
+	},
+	[5] = {
+		.start = 0x1,                                 
+		.end   = 0x1,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_reset_value_enable"
+	},
+	[6] = {
+		.start =  0x0,                                 
+		.end   =  0x0,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_power_value_enable"
+	},
+};
+
+static  struct platform_device dib7090p_device = {
+	.name             = "DiB7090P",
+	.id               = -1,
+	.num_resources    = ARRAY_SIZE(dib7090p_resource),
+	.resource         = dib7090p_resource,
+};
+
+
 #endif
 #if defined(CONFIG_AML_WATCHDOG)
 static struct platform_device aml_wdt_device = {
@@ -1863,8 +2118,61 @@ static struct platform_device aml_wdt_device = {
 };
 #endif
 
+#if defined(CONFIG_AML_HDMI_TX)
+static struct hdmi_phy_set_data brd_phy_data[] = {
+//    {27, 0xf7, 0x0},    // an example: set Reg0xf7 to 0 in 27MHz
+    {-1,   -1},         //end of phy setting
+};
+static struct hdmi_config_platform_data aml_hdmi_pdata ={
+    .hdmi_5v_ctrl = NULL,
+    .hdmi_3v3_ctrl = NULL,
+    .hdmi_pll_vdd_ctrl = NULL,
+    .hdmi_sspll_ctrl = NULL,
+    .phy_data = brd_phy_data,
+};
 
+static struct platform_device aml_hdmi_device = {
+    .name = "amhdmitx",
+    .id   = -1,
+    .dev  = {
+        .platform_data = &aml_hdmi_pdata,
+    }
+};
+#endif
+#define ETH_PM_DEV
+#if defined(ETH_PM_DEV)
+#define ETH_MODE_RMII_EXTERNAL
+static void meson_eth_clock_enable(int flag)
+{
+}
+
+static void meson_eth_reset(void)
+{
+    set_gpio_mode(GPIOD_bank_bit0_9(7), GPIOD_bit_bit0_9(7), GPIO_OUTPUT_MODE);
+    set_gpio_val(GPIOD_bank_bit0_9(7), GPIOD_bit_bit0_9(7), 0);
+    mdelay(100);
+    set_gpio_val(GPIOD_bank_bit0_9(7), GPIOD_bit_bit0_9(7), 1);
+}
+static struct aml_eth_platform_data  aml_pm_eth_platform_data ={
+    .clock_enable = meson_eth_clock_enable,
+    .reset = meson_eth_reset,
+};
+
+struct platform_device meson_device_eth = {
+	.name   = "ethernet_pm_driver",
+	.id     = -1,
+	.dev    = {
+		.platform_data = &aml_pm_eth_platform_data,
+	}
+};
+#endif
 static struct platform_device __initdata *platform_devs[] = {
+#if defined(ETH_PM_DEV)
+    &meson_device_eth,
+#endif
+#if defined(CONFIG_AML_HDMI_TX)
+    &aml_hdmi_device,
+#endif
 #if defined(CONFIG_JPEGLOGO)
     &jpeglogo_device,
 #endif
@@ -1973,6 +2281,8 @@ static struct platform_device __initdata *platform_devs[] = {
 	&gx1001_device,
 	&avl6211_device,
 	&ite9173_device,
+	&ite9133_device,
+	& dib7090p_device,
 #endif
  #if defined(CONFIG_AML_WATCHDOG)
         &aml_wdt_device,
@@ -2101,6 +2411,32 @@ static void __init device_pinmux_init(void )
 //	clear_mio_mux(0, 1<<4);
 	clear_mio_mux(0, 0x7);
 #endif
+
+#ifdef CONFIG_AM_ITE9133
+
+//for ite9133
+	printk("CONFIG_AM_ITE9133 set pinmux\n");
+	set_mio_mux(3, 0xFFF<<6);
+//	clear_mio_mux(0, 1<<4);
+	clear_mio_mux(0, 0x3F);
+
+
+#endif
+#ifdef CONFIG_AM_DIB7090P
+	printk("CONFIG_AM_DIB7090P set pinmux\n");
+	set_mio_mux(3, 0x3F<<6);
+	clear_mio_mux(0, 0xF);
+	clear_mio_mux(5, 0x1<<23);
+
+/*	clear_mio_mux(0, 1<<6);
+	//pwr pin;
+	clear_mio_mux(0, 1<<13);
+	clear_mio_mux(1, 1<<8);
+	//rst pin;
+	clear_mio_mux(0, 1<<28);
+	clear_mio_mux(1, 1<<20);*/
+#endif
+
 
 
 #if defined(CONFIG_SDIO_DHD_CDC_WIFI_40181_MODULE_MODULE)
@@ -2252,6 +2588,16 @@ static __initdata struct map_desc meson_video_mem_desc[] = {
         .type       = MT_MEMORY,
     },
 #endif
+// #ifdef CONFIG_AML_SECURE_DRIVER
+#ifdef CONFIG_AM_IPTV_SECURITY
+    {
+        .virtual    = PAGE_ALIGN(0xdfe00000),
+        .pfn        = __phys_to_pfn(0x9fe00000),
+        .length     = SZ_1M,
+        .type       = MT_MEMORY,
+    },
+#endif
+
 };
 
 static __init void m1_map_io(void)
@@ -2268,19 +2614,28 @@ static __init void m1_irq_init(void)
 static __init void m1_fixup(struct machine_desc *mach, struct tag *tag, char **cmdline, struct meminfo *m)
 {
     struct membank *pbank;
+    unsigned size;
+    
     m->nr_banks = 0;
     pbank=&m->bank[m->nr_banks];
     pbank->start = PAGE_ALIGN(PHYS_MEM_START);
     pbank->size  = SZ_64M & PAGE_MASK;
     pbank->node  = PHYS_TO_NID(PHYS_MEM_START);
-    m->nr_banks++;
+    m->nr_banks++;    
     pbank=&m->bank[m->nr_banks];
     pbank->start = PAGE_ALIGN(RESERVED_MEM_END+1);
+   size = PHYS_MEM_END-RESERVED_MEM_END;
 #ifdef CONFIG_AML_SUSPEND
     pbank->size  = (PHYS_MEM_END-RESERVED_MEM_END-SZ_1M) & PAGE_MASK;
 #else
     pbank->size  = (PHYS_MEM_END-RESERVED_MEM_END) & PAGE_MASK;
 #endif
+// #ifdef CONFIG_ENCRYPT
+#ifdef CONFIG_AM_IPTV_SECURITY
+	size -= SZ_1M;
+#endif
+    pbank->size  = size & PAGE_MASK;
+
     pbank->node  = PHYS_TO_NID(RESERVED_MEM_END+1);
     m->nr_banks++;
 }

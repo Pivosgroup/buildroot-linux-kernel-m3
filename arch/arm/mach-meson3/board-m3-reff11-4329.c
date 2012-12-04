@@ -79,6 +79,10 @@
 extern void axp_power_off(void);
 #endif
 
+#ifdef CONFIG_AML_HDMI_TX
+#include <linux/hdmi/hdmi_config.h>
+#endif
+
 #ifdef CONFIG_AW_AXP20
 
 int pmu_used;
@@ -382,6 +386,29 @@ static struct axp_platform_data axp_pdata = {
     .gpio_base = 0,
 };
 
+#endif
+
+#if defined(CONFIG_AML_HDMI_TX)
+static struct hdmi_phy_set_data brd_phy_data[] = {
+//    {27, 0xf7, 0x0},    // an example: set Reg0xf7 to 0 in 27MHz
+    {-1,   -1},         //end of phy setting
+};
+
+static struct hdmi_config_platform_data aml_hdmi_pdata ={
+    .hdmi_5v_ctrl = NULL,
+    .hdmi_3v3_ctrl = NULL,
+    .hdmi_pll_vdd_ctrl = NULL,
+    .hdmi_sspll_ctrl = NULL,
+    .phy_data = brd_phy_data,
+};
+
+static struct platform_device aml_hdmi_device = {
+    .name = "amhdmitx",
+    .id   = -1,
+    .dev  = {
+        .platform_data = &aml_hdmi_pdata,
+    }
+};
 #endif
 
 #if defined(CONFIG_KEYPADS_AM)||defined(CONFIG_KEYPADS_AM_MODULE)
@@ -717,23 +744,34 @@ static int WIFI_ON;
 static int BT_ON;
 /* WL_BT_REG_ON control function */
 static void reg_on_control(int is_on)
+
 {
+
     CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_3,(1<<5));
     CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_6,(1<<19));
     CLEAR_CBUS_REG_MASK(PERIPHS_PIN_MUX_0,(1<<6));
     CLEAR_CBUS_REG_MASK(PREG_PAD_GPIO0_EN_N, (1<<7));
     if(is_on){
+
         SET_CBUS_REG_MASK(PREG_PAD_GPIO0_O, (1<<7));
+
     }
 
+
+
     else{
+
     /* only pull donw reg_on pin when wifi and bt off */
+
         if((!WIFI_ON) && (!BT_ON)){
+
             CLEAR_CBUS_REG_MASK(PREG_PAD_GPIO0_O, (1<<7));
             printk("WIFI BT Power down\n");
         }
     }
+
 }
+
 
 void extern_wifi_power(int is_power)
 {
@@ -1869,6 +1907,9 @@ struct bt_dev_data bt_dev = {
 #endif
 
 static struct platform_device __initdata *platform_devs[] = {
+#if defined(CONFIG_AML_HDMI_TX)
+    &aml_hdmi_device,
+#endif
 #if defined(CONFIG_FB_AM)
     &fb_device,
 #endif

@@ -375,8 +375,10 @@ void GT2005_set_param_wb(enum  camera_wb_flip_e para)//°×Æ½ºâ
 			gt2005_write_byte(0x0444 , 0x4B);
 			break;
 
-		case CAM_WB_MANUAL:
+	case CAM_WB_MANUAL:
 		    	// TODO
+			break;
+	default:
 			break;
 	}
 	

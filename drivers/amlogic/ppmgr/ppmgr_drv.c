@@ -303,7 +303,7 @@ static ssize_t disp_write(struct class *cla,
 					const char *buf, size_t count)
 {
     set_disp_para(buf);
-    return 0;
+    return count;
 }
 
 #ifdef CONFIG_POST_PROCESS_MANAGER_PPSCALER
@@ -362,7 +362,7 @@ static ssize_t ppscaler_rect_write(struct class *cla,
 					const char *buf, size_t count)
 {
     set_ppscaler_para(buf);
-    return 0;
+    return count;
 }
 #endif
 

@@ -455,6 +455,20 @@ static int __init early_mem(char *p)
 			arm_add_memory(bankstart, vstart - bankstart);
 			bankstart = PAGE_ALIGN(vend);
 		}
+// #ifdef CONFIG_AML_SECURE_DRIVER
+#ifdef CONFIG_AM_IPTV_SECURITY
+	if (bankstart < start + size) {
+			unsigned long securestart, securesize, secureend;
+			securestart = 0x9FE00000; //PHYS_OFFSET + CONFIG_AML_SUSPEND_FIRMWARE_BASE;
+			securesize = SZ_1M;
+			secureend = securestart + securesize;
+			/* 170M-511M */
+			printk("bankstart=0x%x, size=0x%x\n", bankstart,  securestart - bankstart);
+			arm_add_memory(bankstart, securestart - bankstart);
+			bankstart = PAGE_ALIGN(secureend);
+	}
+#endif
+		
 #ifdef CONFIG_AML_SUSPEND
 		if (bankstart < start + size) {
 			/* 511M-512M is reserved for suspend firmware. */
@@ -463,11 +477,14 @@ static int __init early_mem(char *p)
 			firmwaresize = SZ_1M;
 			firmwareend = firmwarestart + firmwaresize;
 			/* 170M-511M */
-			arm_add_memory(bankstart, firmwarestart - bankstart);
+			printk("bankstart=0x%x, size=0x%x\n", bankstart,  firmwarestart - bankstart);
+			if(firmwarestart - bankstart > 0)
+				arm_add_memory(bankstart, firmwarestart - bankstart);
 			bankstart = PAGE_ALIGN(firmwareend);
 		}
 #endif
 		/* 170-end or 512-end (ifdef CONFIG_AML_SUSPEND) */
+		printk("bankstart=0x%x, size=0x%x\n", bankstart,  start + size - bankstart);
 		if (bankstart < start + size)
 			arm_add_memory(bankstart, start + size - bankstart);
 	}

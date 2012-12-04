@@ -1205,7 +1205,7 @@ u8 rtw_free_drv_sw(_adapter *padapter)
 	
 }
 
-int netdev_open(struct net_device *pnetdev)
+int _netdev_open(struct net_device *pnetdev)
 {
 	uint status;	
 	_adapter *padapter = (_adapter *)rtw_netdev_priv(pnetdev);
@@ -1356,7 +1356,18 @@ netdev_open_error:
 	
 }
 
-
+int netdev_open(struct net_device *pnetdev)
+{
+	int ret;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(pnetdev);
+	struct pwrctrl_priv *pwrctrlpriv = &padapter->pwrctrlpriv;
+	
+	_enter_pwrlock(&pwrctrlpriv->lock);
+	ret = _netdev_open(pnetdev);
+	_exit_pwrlock(&pwrctrlpriv->lock);
+	
+	return ret;
+}
 
 #ifdef CONFIG_IPS
 int  ips_netdrv_open(_adapter *padapter)
@@ -1451,7 +1462,7 @@ int pm_netdev_open(struct net_device *pnetdev,u8 bnormal)
 {
 	int status;
 	if(bnormal)
-		status = netdev_open(pnetdev);
+		status = _netdev_open(pnetdev);
 #ifdef CONFIG_IPS
 	else
 		status =  (_SUCCESS == ips_netdrv_open((_adapter *)rtw_netdev_priv(pnetdev)))?(0):(-1);

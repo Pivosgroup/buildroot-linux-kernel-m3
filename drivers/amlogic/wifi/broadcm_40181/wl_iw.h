@@ -103,8 +103,6 @@ struct cntry_locales_custom {
 
 #define			G_SCAN_RESULTS 8*1024
 #define 		WE_ADD_EVENT_FIX	0x80
-#define          G_WLAN_SET_ON	0
-#define          G_WLAN_SET_OFF	1
 
 #define CHECK_EXTRA_FOR_NULL(extra) \
 if (!extra) { \

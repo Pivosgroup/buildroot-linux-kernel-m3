@@ -5250,7 +5250,7 @@ wl_notify_scan_status(struct wl_priv *wl, struct net_device *ndev,
 
 	WL_DBG(("Enter \n"));
 	if (!wl_get_drv_status(wl, SCANNING, ndev)) {
-		WL_ERR(("scan is not ready \n"));
+		//WL_ERR(("scan is not ready \n"));
 		return err;
 	}
 	if (wl->iscan_on && wl->iscan_kickstart)

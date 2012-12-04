@@ -99,10 +99,11 @@ int c_dbg_lvl = 0;
 #define RTC_REGMEM_ADDR_2           6
 #define RTC_REGMEM_ADDR_3           7
 
+static DEFINE_SPINLOCK(com_lock);
+
 struct aml_rtc_priv{
 	struct rtc_device *rtc;
-       unsigned long base_addr;
-	spinlock_t lock;
+	unsigned long base_addr;
 	struct timer_list timer;
 	struct work_struct work;
 	struct workqueue_struct *rtc_work_queue;
@@ -285,18 +286,22 @@ static unsigned int ser_access_read(unsigned long addr)
 {
 	unsigned val = 0;
 	int s_nrdy_cnt = 0;
+	unsigned long flags;
 
 	RTC_DBG(RTC_DBG_VAL, "aml_rtc --ser_access_read_1\n");
-	/*if(check_osc_clk() < 0){
+	if(check_osc_clk() < 0){
 		RTC_DBG(RTC_DBG_VAL, "aml_rtc -- the osc clk does not work\n");
 		return val;
-	}*/
+	}
 
 	RTC_DBG(RTC_DBG_VAL, "aml_rtc -- ser_access_read_2\n");
+	spin_lock_irqsave(&com_lock, flags);
 	while(rtc_comm_init()<0){
 		RTC_DBG(RTC_DBG_VAL, "aml_rtc -- rtc_common_init fail\n");
-		if(s_nrdy_cnt>RESET_RETRY_TIMES)
+		if(s_nrdy_cnt>RESET_RETRY_TIMES) {
+			spin_unlock_irqrestore(&com_lock, flags);
 			return val;
+		}
 		rtc_reset_s_ready( );
 		s_nrdy_cnt++;
 	}
@@ -305,6 +310,7 @@ static unsigned int ser_access_read(unsigned long addr)
 	rtc_send_addr_data(1,addr);
 	rtc_set_mode(0); //Read
 	rtc_get_data(&val);
+	spin_unlock_irqrestore(&com_lock, flags);
 
 	return val;
 }
@@ -312,11 +318,14 @@ static unsigned int ser_access_read(unsigned long addr)
 static int ser_access_write(unsigned long addr, unsigned long data)
 {
 	int s_nrdy_cnt = 0;
+	unsigned long flags;
 	
+	spin_lock_irqsave(&com_lock, flags);
 	while(rtc_comm_init()<0){
 		
 		if(s_nrdy_cnt>RESET_RETRY_TIMES) {
 			aml_rtc_reset();
+			spin_unlock_irqrestore(&com_lock, flags);
 			printk("error: rtc serial communication abnormal!\n");
 			return -1;
 		}
@@ -326,7 +335,7 @@ static int ser_access_write(unsigned long addr, unsigned long data)
 	rtc_send_addr_data(0,data);
 	rtc_send_addr_data(1,addr);
 	rtc_set_mode(1); //Write
-
+	spin_unlock_irqrestore(&com_lock, flags);
 	rtc_wait_s_ready();
 
 	return 0;
@@ -336,20 +345,15 @@ static int ser_access_write(unsigned long addr, unsigned long data)
 int rtc_reset_gpo(struct device *dev, unsigned level)
 {
 	unsigned data = 0;
-	struct aml_rtc_priv *priv;
-	unsigned long flags;
-	priv = dev_get_drvdata(dev);
 	data |= 1<<20;
 	//reset mode
 	if(!level){
 		data |= 1<<22;         //gpo pin level high
 	}
-	
-	spin_lock_irqsave(&priv->lock, flags);
+
 	ser_access_write(RTC_GPO_COUNTER_ADDR, data);
 	rtc_wait_s_ready();
-	spin_unlock_irqrestore(&priv->lock, flags);
-	
+
 	return 0;
 }
 
@@ -363,7 +367,7 @@ typedef struct alarm_data_s{
  */
 int aml_rtc_alarm_status(void)
 {
-    	unsigned long flags;
+	unsigned long flags;
     u32 data32 = ser_access_read(RTC_GPO_COUNTER_ADDR);
     RTC_DBG(RTC_DBG_VAL, "%s() RTC_GPO_COUNTER=%x\n", __func__, data32);
     return (data32 & (1 << 24));
@@ -374,10 +378,7 @@ int aml_rtc_alarm_status(void)
 int rtc_set_alarm_aml(struct device *dev, alarm_data_t *alarm_data) {
 	unsigned data = 0;
 	//reset the gpo level
-	struct aml_rtc_priv *priv;
-	unsigned long flags;
-	priv = dev_get_drvdata(dev);
-	
+
 	rtc_reset_gpo(dev, !(alarm_data->level));
 
 	data |= 2 << 20;    //output defined level after time
@@ -390,11 +391,9 @@ int rtc_set_alarm_aml(struct device *dev, alarm_data_t *alarm_data) {
 
 	data |= alarm_data->alarm_sec - 1;
 	
-	spin_lock_irqsave(&priv->lock, flags);
 	ser_access_write(RTC_GPO_COUNTER_ADDR, data);
 	rtc_wait_s_ready();
 	rtc_comm_delay();
-	spin_unlock_irqrestore(&priv->lock, flags);
 
 	return 0;
 }
@@ -466,14 +465,9 @@ static void static_register_write(unsigned data)
 static int aml_rtc_read_time(struct device *dev, struct rtc_time *tm)
 {
     unsigned int time_t;
-    struct aml_rtc_priv *priv;
-    unsigned long flags;
 
-    priv = dev_get_drvdata(dev);
     RTC_DBG(RTC_DBG_VAL, "aml_rtc: read rtc time\n");
-    spin_lock_irqsave(&priv->lock, flags);
     time_t = ser_access_read(RTC_COUNTER_ADDR);
-    spin_unlock_irqrestore(&priv->lock, flags);
     RTC_DBG(RTC_DBG_VAL, "aml_rtc: have read the rtc time, time is %d\n", time_t);
     if ((int)time_t < 0) {
         RTC_DBG(RTC_DBG_VAL, "aml_rtc: time(%d) < 0, reset to 0", time_t);
@@ -487,18 +481,12 @@ static int aml_rtc_read_time(struct device *dev, struct rtc_time *tm)
 static int aml_rtc_write_time(struct device *dev, struct rtc_time *tm)
 {
       unsigned long time_t;
-      struct aml_rtc_priv *priv;
-      unsigned long flags;
-
-      priv = dev_get_drvdata(dev);
 
       rtc_tm_to_time(tm, &time_t);
      
-      spin_lock_irqsave(&priv->lock, flags);
       RTC_DBG(RTC_DBG_VAL, "aml_rtc : write the rtc time, time is %ld\n", time_t);
       ser_access_write(RTC_COUNTER_ADDR, time_t);
       RTC_DBG(RTC_DBG_VAL, "aml_rtc : the time has been written\n");
-      spin_unlock_irqrestore(&priv->lock, flags);
 
       return 0;
 }
@@ -509,9 +497,7 @@ static int aml_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alarm)
 	unsigned long alarm_secs, cur_secs;
 	struct rtc_time cur_time;
 	int ret;
-	struct aml_rtc_priv *priv;
 
-	priv = dev_get_drvdata(dev);
 	//rtc_tm_to_time(&alarm->time, &secs);
 	
 	alarm_data.level = 0;
@@ -527,6 +513,18 @@ static int aml_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alarm)
 
 	rtc_set_alarm_aml(dev, &alarm_data);
 
+	return 0;
+}
+
+#define AUTO_RESUME_INTERVAL 8
+static int aml_rtc_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	alarm_data_t alarm_data;
+	static int suspend_time = 0;
+	alarm_data.alarm_sec = AUTO_RESUME_INTERVAL;
+        alarm_data.level = 0;
+	rtc_set_alarm_aml(&pdev->dev, &alarm_data);
+	printk("suspend %d times, system will up %ds later!\n", ++suspend_time, alarm_data.alarm_sec);
 	return 0;
 }
 
@@ -602,14 +600,11 @@ static int aml_rtc_probe(struct platform_device *pdev)
 		goto out;
 	}
 
-	spin_lock_init(&priv->lock);
 
 	//ser_access_write(RTC_GPO_COUNTER_ADDR,0x100000);
 	//static_register_write(0x0004);
-	spin_lock_irqsave(&priv->lock, flags);
 	ser_access_write(RTC_GPO_COUNTER_ADDR,0x100000);
 	rtc_wait_s_ready();
-	spin_unlock_irqrestore(&priv->lock, flags);
 
 	//check_osc_clk();
 	//ser_access_write(RTC_COUNTER_ADDR, 0);
@@ -627,16 +622,13 @@ out:
 	return ret;
 }
 
-static int get_gpo_flag(struct aml_rtc_priv *priv)
+static int get_gpo_flag(void)
 {
 	u32 data32 = 0;
 	int ret = 0;
-	unsigned long flags;
 
-	spin_lock_irqsave(&priv->lock, flags);
 	data32 = ser_access_read(RTC_GPO_COUNTER_ADDR);
-	spin_unlock_irqrestore(&priv->lock, flags);
-	
+
 	RTC_DBG(RTC_DBG_VAL, "%s() RTC_GPO_COUNTER=%x\n", __func__, data32);
 	ret = !!(data32 & (1 << 24));
 	
@@ -645,23 +637,19 @@ static int get_gpo_flag(struct aml_rtc_priv *priv)
 
 static void reset_gpo_work(struct work_struct *work)
 {
-	struct aml_rtc_priv *priv = container_of(work, struct aml_rtc_priv, work);
 	int count = 5;
-	unsigned long flags;
-	
-	while(get_gpo_flag(priv)) {
-		spin_lock_irqsave(&priv->lock, flags);
-		ser_access_write(RTC_GPO_COUNTER_ADDR,0x100000);
-		spin_unlock_irqrestore(&priv->lock, flags);				
+
+	while(get_gpo_flag()) {
+		ser_access_write(RTC_GPO_COUNTER_ADDR,0x100000);			
 		count--;
 		if(count <= 0) {
-			printk("error: can not reset gpo !!!!!!!!!!!!!!!!!!!!\n");
+			printk("error: can not reset gpo !\n");
 			count = 5;
 			//panic("gpo can not be reset");
 		}
 	}
 	
-	printk("reset gpo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+	printk("reset gpo\n");
 
 }
 
@@ -676,13 +664,9 @@ static int power_down_gpo(unsigned long data)
 static int aml_rtc_resume(struct platform_device *pdev)
 {
 	struct aml_rtc_priv *priv;
-	unsigned long flags;
 	priv = platform_get_drvdata(pdev);
-
-	spin_lock_irqsave(&priv->lock, flags);
-    ser_access_write(RTC_GPO_COUNTER_ADDR,0x100000);
-	spin_unlock_irqrestore(&priv->lock, flags);
 	
+    ser_access_write(RTC_GPO_COUNTER_ADDR,0x100000);
 	queue_work(priv->rtc_work_queue, &priv->work);
 	//setup_timer(&priv->timer, power_down_gpo, priv) ;
     	//mod_timer(&priv->timer, jiffies + msecs_to_jiffies(10000));
@@ -692,19 +676,13 @@ static int aml_rtc_resume(struct platform_device *pdev)
 
 static int aml_rtc_shutdown(struct platform_device *pdev)
 {
-	struct aml_rtc_priv *priv;
-	unsigned long flags;
-	priv = platform_get_drvdata(pdev);
-	
-	spin_lock_irqsave(&priv->lock, flags);
     ser_access_write(RTC_GPO_COUNTER_ADDR,0x100000);
-	spin_unlock_irqrestore(&priv->lock, flags);
     return 0;
 }
 
 static int aml_rtc_remove(struct platform_device *dev)
 {
-       struct aml_rtc_priv *priv = platform_get_drvdata(dev);
+	struct aml_rtc_priv *priv = platform_get_drvdata(dev);
 	rtc_device_unregister(priv->rtc);
 	if (priv->rtc_work_queue)
 		destroy_workqueue(priv->rtc_work_queue);
@@ -723,6 +701,7 @@ struct platform_driver aml_rtc_driver = {
 	 .probe = aml_rtc_probe,
 	 .remove = __devexit_p(aml_rtc_remove),
 	.resume = aml_rtc_resume,
+        //.suspend = aml_rtc_suspend,
 	.shutdown = aml_rtc_shutdown,
 };
 

@@ -126,7 +126,8 @@ static ssize_t _esparser_write(const char __user *buf, size_t count, u32 type)
                             parser_type | PARSER_WRITE | PARSER_AUTOSEARCH,
                             ES_CTRL_BIT, ES_CTRL_WID);
 
-        WRITE_MPEG_REG(PARSER_FETCH_ADDR, fetchbuf);
+        WRITE_MPEG_REG(PARSER_FETCH_ADDR, virt_to_phys((u8 *)fetchbuf));
+        
         WRITE_MPEG_REG(PARSER_FETCH_CMD,
                        (7 << FETCH_ENDIAN) | len);
 

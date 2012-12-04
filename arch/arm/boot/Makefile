@@ -74,7 +74,7 @@ quiet_cmd_uImage = UIMAGE  $@
 
 quiet_cmd_uzImage = UZIMAGE  $@
       cmd_uzImage = $(MKIMAGE) -A arm -O linux -T kernel \
-		   -C none -a 0x84000000 -e 0x84000000 \
+		   -C none -a $(LOADADDR) -e $(STARTADDR) \
 		   -n 'Linux-$(KERNELRELEASE)' -d $< $@
 
 
@@ -86,18 +86,22 @@ quiet_cmd_ugImage = ugIMAGE  $@
 
 ifeq ($(CONFIG_ZBOOT_ROM),y)
 $(obj)/uImage: LOADADDR=$(CONFIG_ZBOOT_ROM_TEXT)
+$(obj)/uzImage: LOADADDR=$(CONFIG_ZBOOT_ROM_TEXT)
 $(obj)/ugImage: LOADADDR=$(CONFIG_ZBOOT_ROM_TEXT)
 else
 $(obj)/uImage: LOADADDR=$(ZRELADDR)
+$(obj)/uzImage: LOADADDR=$(ZRELADDR)
 $(obj)/ugImage: LOADADDR=$(ZRELADDR)
 endif
 
 ifeq ($(CONFIG_THUMB2_KERNEL),y)
 # Set bit 0 to 1 so that "mov pc, rx" switches to Thumb-2 mode
 $(obj)/uImage: STARTADDR=$(shell echo $(LOADADDR) | sed -e "s/.$$/1/")
+$(obj)/uzImage: STARTADDR=$(shell echo $(LOADADDR) | sed -e "s/.$$/1/")
 $(obj)/ugImage: STARTADDR=$(shell echo $(LOADADDR) | sed -e "s/.$$/1/")
 else
 $(obj)/uImage: STARTADDR=$(LOADADDR)
+$(obj)/uzImage: STARTADDR=$(LOADADDR)
 $(obj)/ugImage: STARTADDR=$(LOADADDR)
 endif
 

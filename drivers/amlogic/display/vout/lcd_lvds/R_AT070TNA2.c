@@ -306,10 +306,17 @@ static void t13_power_off(void)
 	power_off_lcd();
 }
 
+void shut_down_lcd(void)
+{
+	printk("shut down lcd...\n");
+	power_off_backlight();
+    power_off_lcd();
+}
+
 static void t13_io_init(void)
 {
     //printk("\n\nT13 LCD Init.\n\n");    
-    power_on_lcd();	
+    power_off_lcd();	
 	//power_on_backlight();	//disable when required power sequence.
 }
 

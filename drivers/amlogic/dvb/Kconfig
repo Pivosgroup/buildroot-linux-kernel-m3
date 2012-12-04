@@ -60,5 +60,14 @@ config AM_ITE9173
 	help
 		Select to enable ITE9173 demod driver.	
 
+config AM_ITE9133
+	tristate "ITE9133 demod driver"
+	default n
+	depends on AM_DVB
+	help
+		Select to enable ITE9133 demod driver.	
+
+source "drivers/amlogic/dvb/dib7090/Kconfig" 
+
 endmenu
 

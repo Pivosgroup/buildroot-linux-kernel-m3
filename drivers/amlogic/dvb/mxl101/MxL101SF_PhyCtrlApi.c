@@ -398,25 +398,45 @@ printdebug("mxl_mode is %d,\n",mxl_mode);
       agcLockStatus = (regData & V6_AGC_LOCK_MASK) >> 5;
 
       if (agcLockStatus)
-        TimeOut = 2048;
-
-      while ((cellIdEndTime - cellIdStartTime) < 350)  
+        TimeOut = 1*1024;//2048;
+#if 0	 
+    /*  while ((cellIdEndTime - cellIdStartTime) < 700)  //350
       {
+      	if(dvb_set_frontend){
+			printk("[RSJ]dvb_set_frontend break,dvb_set_frontend is %d\n",dvb_set_frontend);
+			dvb_set_frontend=0;
+			break;
+		}
         // Check for CP Lock
         status |= MxLWare_API_GetDemodStatus(MXL_DEMOD_CP_LOCK_REQ, &cpLock);
-        
+        printk("cpLock.Status is %d",cpLock.Status);
         if (cpLock.Status == MXL_UNLOCKED) 
         {
           if ((cellIdEndTime - StartTime) < TimeOut)
             Ctrl_GetTime(&cellIdStartTime);
-          else
+          else{
+		  	printf("__tune4,break,TimeOut is %d\n",TimeOut);
             break;
+          	}
         }
         Ctrl_GetTime(&cellIdEndTime);
-      }
-
+      }*/
+#endif		
       status |= Ctrl_ProgramRegisters(MxL_DisableCellId); 
-	  
+	   int count;
+	  MXL_DEMOD_LOCK_STATUS_T rsLockStatus;
+	  for(count=0;count<10;count++){
+	  	MxLWare_API_GetDemodStatus(MXL_DEMOD_RS_LOCK_REQ, &rsLockStatus);
+		if(rsLockStatus.Status == 1){
+			printf("__tune4,lock success\n");
+			msleep(200);
+			break;
+		}
+
+		msleep(50);
+			
+	  }
+//	  printf("__tune5\n");
     }
   }
 printdebug("MxL101SF_API_TuneRF] out\n");

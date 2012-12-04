@@ -23,9 +23,26 @@
 #define CEC0_LOG_ADDR 4 // MBX logical address
 #define TV_CEC_INTERVAL     (HZ*3)
 
-#define CEC_VERSION     "v1.0"
+#define CEC_VERSION     "v1.3"
+#define _RX_DATA_BUF_SIZE_ 6
 
 //#define _SUPPORT_CEC_TV_MASTER_
+
+//#define _RX_CEC_DBG_ON_
+//#define _TX_CEC_DBG_ON_
+
+#ifdef _RX_CEC_DBG_ON_
+#define hdmirx_cec_dbg_print(fmt, args...) printk(KERN_WARNING fmt, ## args)//hdmi_print
+#else
+#define hdmirx_cec_dbg_print(fmt, args...)
+#endif
+
+#ifdef _TX_CEC_DBG_ON_
+#define hdmitx_cec_dbg_print(fmt, args...) printk(KERN_WARNING fmt, ## args)//hdmi_print
+#else
+#define hdmitx_cec_dbg_print(fmt, args...)
+#endif
+
 
 #define MSG_P0( init, follow, opcode )	{				\
 	gbl_msg[0] = (init)<<4 | (follow);					\
@@ -203,6 +220,8 @@ typedef struct {
             unsigned char header;          // 4bit Initiator logical address + 4bit Destination logical address
             unsigned char opcode;          // message opcode
             unsigned char operands[14];    // the maximun operand is 14
+            //unsigned int  flag;            // flag = 1 ,cec key pressed;flag = 0, cec key released
+            //struct input_dev *remote_cec_dev; //cec input device
         }msg;                              // message struct
     }content;                              // message content
     unsigned char operand_num;             // number of operand
@@ -320,6 +339,11 @@ typedef enum {
     CEC_MENU_LANG_GER,
 } cec_menu_lang_e;
 
+typedef enum {
+    OFF = 0,
+    ON,
+} system_audio_status_e;
+
 typedef unsigned long cec_info_mask;
 
 #define INFO_MASK_CEC_VERSION                (1<<0)
@@ -371,6 +395,7 @@ typedef struct {
     unsigned char osd_name_def[16];
     menu_state_e menu_state;
     cec_menu_lang_e menu_lang;
+
     union {
         struct {
         } display;
@@ -384,6 +409,11 @@ typedef struct {
         struct {
         } tuner;
         struct {
+            system_audio_status_e sys_audio_mode;
+            struct {
+                unsigned char audio_mute_status : 1;
+                unsigned char audio_volume_status : 7;
+            } audio_status;      	
         } audio;
     }specific_info;
 } cec_node_info_t;
@@ -430,6 +460,7 @@ typedef enum {
     //SET_STREAM_PATH,
     REPORT_PHYSICAL_ADDRESS,    //0x17
     SET_TEXT_VIEW_ON,
+    POLLING_ONLINE_DEV, //0x19
     USR_CMD_MAX,
 } usr_cmd_type_e;
 
@@ -442,6 +473,18 @@ typedef enum {
     TV_CEC_POLLING_OFF = 0,
     TV_CEC_POLLING_ON,
 } tv_cec_polling_state_e;
+
+
+typedef struct {
+    cec_rx_message_t cec_rx_message[_RX_DATA_BUF_SIZE_];
+    unsigned char rx_write_pos;
+    unsigned char rx_read_pos;
+    unsigned char rx_buf_size;
+} cec_rx_msg_buf_t;
+
+extern cec_rx_msg_buf_t cec_rx_msg_buf;
+
+
 
 int cec_ll_tx(unsigned char *msg, unsigned char len, unsigned char *stat_header);
 
@@ -460,7 +503,12 @@ void register_cec_tx_msg(unsigned char *msg, unsigned char len);
 void cec_usr_cmd_post_process(void);
 void cec_set_pending(tv_cec_pending_e on_off);
 void cec_polling_online_dev(int log_addr, int *bool);
+unsigned short cec_log_addr_to_dev_type(unsigned char log_addr);
 
+void cec_usrcmd_routing_information(cec_rx_message_t* pcec_message);
+void cec_usrcmd_routing_change(cec_rx_message_t* pcec_message);
+void cec_usrcmd_set_osd_name(cec_rx_message_t* pcec_message);
+void cec_usrcmd_set_device_vendor_id(void);
 void cec_usrcmd_get_cec_version(unsigned char log_addr);
 void cec_usrcmd_get_audio_status(unsigned char log_addr);
 void cec_usrcmd_get_deck_status(unsigned char log_addr);
@@ -486,9 +534,34 @@ void cec_usrcmd_clear_node_dev_real_info_mask(unsigned char log_addr, cec_info_m
 void cec_usrcmd_set_report_physical_address(void);
 void cec_usrcmd_text_view_on(unsigned char log_addr);
 void cec_polling_online_dev(int log_addr, int *bool);
+void cec_device_vendor_id(cec_rx_message_t* pcec_message);
+void cec_report_power_status(cec_rx_message_t* pcec_message);
+void cec_active_source(cec_rx_message_t* pcec_message);
+void cec_set_stream_path(cec_rx_message_t* pcec_message);
+void cec_set_osd_name(cec_rx_message_t* pcec_message);
+void cec_deactive_source(cec_rx_message_t* pcec_message);
+void cec_set_system_audio_mode(void);
+void cec_system_audio_mode_request(void);
+void cec_report_audio_status(void);
+
 
 size_t cec_usrcmd_get_global_info(char * buf);
 void cec_usrcmd_set_dispatch(const char * buf, size_t count);
+void cec_input_handle_message(void);
+void cec_send_event_irq(void);
+void cec_standby_irq(void);
+void cec_user_control_released_irq(void);
+void cec_user_control_pressed_irq(void);
+
+extern struct input_dev *remote_cec_dev;
+extern __u16 cec_key_map[];
+extern unsigned int cec_key_flag;
+
+extern unsigned char check_cec_msg_valid(const cec_rx_message_t* pcec_message);
+extern void cec_send_event(cec_rx_message_t* pcec_message);
+extern void cec_user_control_pressed(cec_rx_message_t* pcec_message);
+extern void cec_user_control_released(cec_rx_message_t* pcec_message);  
+extern void cec_standby(cec_rx_message_t* pcec_message);
 
 
 #endif

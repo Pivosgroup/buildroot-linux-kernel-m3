@@ -1912,6 +1912,7 @@ bcm_format_ssid(char* buf, const uchar ssid[], uint ssid_len)
 
 #endif /* BCMDRIVER */
 
+extern int new_nvram;
 /*
  * ProcessVars:Takes a buffer of "<var>=<value>\n" lines read from a file and ending in a NUL.
  * also accepts nvram files which are already in the format of <var1>=<value>\0\<var2>=<value2>\0
@@ -1927,6 +1928,7 @@ process_nvram_vars(char *varbuf, unsigned int len)
 	int column;
 	unsigned int buf_len, n;
 	unsigned int pad = 0;
+	char cck2gpo_new[32]="cck2gpo=0x5555", ofdm2gpo_new[32]="ofdm2gpo=0x99999999";
 
 	dp = varbuf;
 
@@ -1950,9 +1952,27 @@ process_nvram_vars(char *varbuf, unsigned int len)
 			column = 0;
 			continue;
 		}
+		if (new_nvram == 1) {
+			if (!memcmp(&varbuf[n], "cck2gpo", strlen("cck2gpo"))) {
+				findNewline = TRUE;
+				continue;
+			}
+			if (!memcmp(&varbuf[n], "ofdm2gpo", strlen("ofdm2gpo"))) {
+				findNewline = TRUE;
+				continue;
+			}
+		}
 		*dp++ = varbuf[n];
 		column++;
 	}
+
+	if (new_nvram == 1) {
+		strcpy(dp++, cck2gpo_new);
+		dp += strlen(cck2gpo_new);
+		strcpy(dp++, ofdm2gpo_new);
+		dp += strlen(ofdm2gpo_new);
+	}
+
 	buf_len = (unsigned int)(dp - varbuf);
 	if (buf_len % 4) {
 		pad = 4 - buf_len % 4;

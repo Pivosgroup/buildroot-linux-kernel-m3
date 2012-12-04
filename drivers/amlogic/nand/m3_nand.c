@@ -19,6 +19,8 @@
 
 #include <mach/nand.h>
 
+extern int nand_get_device(struct nand_chip *chip, struct mtd_info *mtd,  int new_state);
+extern void nand_release_device(struct mtd_info *mtd);
 static char *aml_nand_plane_string[]={
 	"NAND_SINGLE_PLANE_MODE",
 	"NAND_TWO_PLANE_MODE",
@@ -73,7 +75,7 @@ static void m3_nand_select_chip(struct aml_nand_chip *aml_chip, int chipnr)
 					if (!((aml_chip->chip_enable[i] >> 10) & 8))
 						SET_CBUS_REG_MASK(PERIPHS_PIN_MUX_2, (1 << 22));
 
-					if ((aml_chip->ops_mode & AML_CHIP_NONE_RB) == 0){ 
+					if (((aml_chip->ops_mode & AML_CHIP_NONE_RB) == 0) && (aml_chip->rb_enable[i])){ 
     					if (!((aml_chip->rb_enable[i] >> 10) & 1))
     						SET_CBUS_REG_MASK(PERIPHS_PIN_MUX_2, (1 << 17));
     					if (!((aml_chip->rb_enable[i] >> 10) & 2))
@@ -239,7 +241,7 @@ static int m3_nand_options_confirm(struct aml_nand_chip *aml_chip)
 	struct aml_nand_platform *plat = aml_chip->platform;
 	struct aml_nand_bch_desc *ecc_supports = aml_chip->bch_desc;
 	unsigned max_bch_mode = aml_chip->max_bch_mode;
-	unsigned options_selected = 0, options_support = 0, ecc_bytes, options_define;
+	unsigned options_selected = 0, options_support = 0, ecc_bytes, options_define, valid_chip_num = 0;
 	int error = 0, i, j;
 
 	options_selected = (plat->platform_nand_data.chip.options & NAND_ECC_OPTIONS_MASK);
@@ -339,27 +341,6 @@ static int m3_nand_options_confirm(struct aml_nand_chip *aml_chip)
 			break;
 	}
 
-	options_selected = (plat->platform_nand_data.chip.options & NAND_PLANE_OPTIONS_MASK);
-	options_define = (aml_chip->options & NAND_PLANE_OPTIONS_MASK);
-	if (options_selected > options_define) {
-		printk("multi plane error for selected plane mode: %s force plane to : %s\n", aml_nand_plane_string[options_selected >> 4], aml_nand_plane_string[options_define >> 4]);
-		options_selected = options_define;
-	}
-
-	switch (options_selected) {
-
-		case NAND_TWO_PLANE_MODE:
-			aml_chip->plane_num = 2;
-			mtd->erasesize *= 2;
-			mtd->writesize *= 2;
-			mtd->oobsize *= 2;
-			break;
-
-		default:
-			aml_chip->plane_num = 1;
-			break;
-	}
-
 	options_selected = (plat->platform_nand_data.chip.options & NAND_INTERLEAVING_OPTIONS_MASK);
 	options_define = (aml_chip->options & NAND_INTERLEAVING_OPTIONS_MASK);
 	if (options_selected > options_define) {
@@ -378,6 +359,42 @@ static int m3_nand_options_confirm(struct aml_nand_chip *aml_chip)
 
 		default:		
 			break;
+	}
+
+	options_selected = (plat->platform_nand_data.chip.options & NAND_PLANE_OPTIONS_MASK);
+	options_define = (aml_chip->options & NAND_PLANE_OPTIONS_MASK);
+	if (options_selected > options_define) {
+		printk("multi plane error for selected plane mode: %s force plane to : %s\n", aml_nand_plane_string[options_selected >> 4], aml_nand_plane_string[options_define >> 4]);
+		options_selected = options_define;
+	}
+	
+	for (i=0; i<aml_chip->chip_num; i++) {
+		if (aml_chip->valid_chip[i]) {
+		    valid_chip_num++;
+		}
+    	}
+    
+	if (aml_chip->ops_mode & AML_INTERLEAVING_MODE)
+		valid_chip_num *= aml_chip->internal_chipnr;	
+	
+	if(valid_chip_num > 2){
+		aml_chip->plane_num = 1;
+	    printk("detect valid_chip_num:%d over 2, and aml_chip->internal_chipnr:%d, disable NAND_TWO_PLANE_MODE here\n", valid_chip_num, aml_chip->internal_chipnr);
+	}
+	else{
+		switch (options_selected) {
+
+			case NAND_TWO_PLANE_MODE:
+				aml_chip->plane_num = 2;
+				mtd->erasesize *= 2;
+				mtd->writesize *= 2;
+				mtd->oobsize *= 2;
+				break;
+
+			default:
+				aml_chip->plane_num = 1;
+				break;
+		}
 	}
 
 	return error;
@@ -406,6 +423,7 @@ static int m3_nand_dma_write(struct aml_nand_chip *aml_chip, unsigned char *buf,
 	int ret = 0;
 	unsigned dma_unit_size = 0, count = 0;
 	struct nand_chip *chip = &aml_chip->chip;
+    struct mtd_info *mtd = &aml_chip->mtd;  
 
 	memcpy(aml_chip->aml_nand_data_buf, buf, len);
 	wmb();
@@ -425,7 +443,7 @@ static int m3_nand_dma_write(struct aml_nand_chip *aml_chip, unsigned char *buf,
 	NFC_SEND_CMD_AIH((aml_chip->nand_info_dma_addr));
 	
 	if(aml_chip->ran_mode){
-		NFC_SEND_CMD_SEED(aml_chip->page_addr);
+	        NFC_SEND_CMD_SEED((aml_chip->page_addr/(mtd->writesize >> chip->page_shift)) * (mtd->writesize >> chip->page_shift));
 	}
 	if(!bch_mode)
 		NFC_SEND_CMD_M2N_RAW(aml_chip->ran_mode, len);
@@ -445,6 +463,7 @@ static int m3_nand_dma_read(struct aml_nand_chip *aml_chip, unsigned char *buf, 
 	struct nand_chip *chip = &aml_chip->chip;
 	unsigned dma_unit_size = 0, count = 0, info_times_int_len;
 	int ret = 0;
+    struct mtd_info *mtd = &aml_chip->mtd;  
 
 	info_times_int_len = PER_INFO_BYTE/sizeof(unsigned int);
 	if (bch_mode == NAND_ECC_NONE)
@@ -465,7 +484,7 @@ static int m3_nand_dma_read(struct aml_nand_chip *aml_chip, unsigned char *buf, 
 	NFC_SEND_CMD_AIL(aml_chip->nand_info_dma_addr);
 	NFC_SEND_CMD_AIH((aml_chip->nand_info_dma_addr));
 	if(aml_chip->ran_mode){
-		NFC_SEND_CMD_SEED(aml_chip->page_addr);
+	        NFC_SEND_CMD_SEED((aml_chip->page_addr/(mtd->writesize >> chip->page_shift)) * (mtd->writesize >> chip->page_shift));
 	}
 
 	if(bch_mode == NAND_ECC_NONE)
@@ -806,6 +825,7 @@ static int aml_nand_probe(struct aml_nand_platform *plat, struct device *dev)
 	chip = &aml_chip->chip;
 	chip->priv = &aml_chip->mtd;
 	aml_chip->ran_mode = plat->ran_mode; 	
+	aml_chip->rbpin_detect = plat->rbpin_detect;	
 	mtd = &aml_chip->mtd;
 	mtd->priv = chip;
 	mtd->owner = THIS_MODULE;
@@ -817,10 +837,8 @@ static int aml_nand_probe(struct aml_nand_platform *plat, struct device *dev)
 	aml_chip->aml_nand_dma_read = m3_nand_dma_read;
 	aml_chip->aml_nand_dma_write = m3_nand_dma_write;
 	aml_chip->aml_nand_hwecc_correct = m3_nand_hwecc_correct;
-#ifdef CONFIG_HAS_EARLYSUSPEND
     aml_chip->nand_early_suspend.suspend = m3_nand_early_suspend;
     aml_chip->nand_early_suspend.resume = m3_nand_late_resume;
-#endif
 
 	err = aml_nand_init(aml_chip);
 	if (err)
@@ -860,7 +878,7 @@ static int m3_nand_reboot_notifier(struct notifier_block *nb, unsigned long prio
 	struct aml_nand_chip *aml_chip = NULL;
 	struct mtd_info *mtd = NULL;
 	int i;
-
+	printk("%s %d \n", __func__, __LINE__);
 	for (i=1; i<aml_nand_dev->dev_num; i++) {
 		plat = &aml_nand_dev->aml_nand_platform[i];
 		aml_chip = plat->aml_chip;
@@ -952,6 +970,7 @@ static void m3_nand_shutdown(struct platform_device *pdev)
 	struct aml_nand_platform *plat = NULL;
 	struct aml_nand_chip *aml_chip = NULL;
 	struct mtd_info *mtd = NULL;
+	struct nand_chip *chip = NULL;
 	int i;
 
 	for (i=1; i<aml_nand_dev->dev_num; i++) {
@@ -967,6 +986,15 @@ static void m3_nand_shutdown(struct platform_device *pdev)
 				}  
 			}
 #endif
+			if(mtd){
+				chip = mtd->priv;
+				if(chip){				
+					nand_get_device(chip, mtd, FL_SHUTDOWN);
+					chip->options |= NAND_ROM;					
+					printk("%s %d chip->options:%x\n", __func__, __LINE__, chip->options);
+					nand_release_device(mtd);
+				}
+			}
 		}
 	}
 

@@ -66,7 +66,7 @@ static unsigned int DOWN_KEY_SCANCODE = 0;
 static unsigned int OK_KEY_SCANCODE = 0;
 static unsigned int PAGEUP_KEY_SCANCODE = 0;
 static unsigned int PAGEDOWN_KEY_SCANCODE = 0;
-
+static unsigned int MOUSE_LEFT = 0;
 type_printk input_dbg;
 
 static DEFINE_MUTEX(kp_enable_mutex);
@@ -78,6 +78,7 @@ static int NEC_REMOTE_IRQ_NO=INT_REMOTE;
 DECLARE_TASKLET_DISABLED(tasklet, kp_tasklet, 0);
 
 static struct kp   *gp_kp=NULL;
+static int repeat_flag,mouse_lefft_flag;
 char *remote_log_buf;
 typedef  struct {
 	char		     *platform_name;
@@ -227,11 +228,22 @@ void kp_send_key(struct input_dev *dev, unsigned int scancode, unsigned int type
 	if(scancode == OK_KEY_SCANCODE && key_pointer_switch == false)
 	{
 		input_event(dev, EV_KEY, BTN_MOUSE, type);
-		input_sync(dev);
-
+		input_sync(dev);	
+		mouse_lefft_flag = 0;
 		return;
 	}
-
+	if(scancode == MOUSE_LEFT && mouse_lefft_flag == 0)
+	{
+		input_event(dev, EV_KEY, BTN_LEFT, 0);
+		input_sync(dev);
+		return;
+	}
+	if(scancode == MOUSE_LEFT && mouse_lefft_flag == 1)
+	{
+		input_event(dev, EV_KEY, BTN_LEFT, 1);
+		input_sync(dev);
+		return;
+	}
 	if(kp_mouse_event(dev, scancode, type)){
 		if(scancode > ARRAY_SIZE(key_map[fcode])){
 			input_dbg("scancode is 0x%04x, out of key mapping.\n", scancode);
@@ -282,7 +294,8 @@ static void kp_repeat_sr(unsigned long data)
 	switch(status&REMOTE_HW_DECODER_STATUS_MASK) 
 	{
 		case REMOTE_HW_DECODER_STATUS_OK:
-			kp_send_key(kp_data->input, (kp_data->cur_keycode>>16)&0xff, 0);	
+			kp_send_key(kp_data->input, (kp_data->cur_keycode>>16)&0xff, 0);
+			repeat_flag = 0;
 			break ;
 		default:
 			SET_AOBUS_REG_MASK(AO_IR_DEC_REG1,1);//reset ir deocoder
@@ -308,7 +321,28 @@ static void kp_repeat_sr(unsigned long data)
 static void kp_timer_sr(unsigned long data)
 {
 	struct kp *kp_data=(struct kp *)data;
-	kp_send_key(kp_data->input, (kp_data->cur_keycode>>16)&0xff ,0);
+	if(kp_data->work_mode == REMOTE_WORK_MODE_FIQ_RCMM )
+	{
+		if(kp_data->bit_count == 12)
+		kp_send_key(kp_data->input, kp_data->cur_keycode&0xff ,0);
+		else
+		{
+			switch(kp_data->function_flag&0x1f){
+					case 0x1 :
+						input_report_key(kp_data->input, BTN_RIGHT, 0);
+						input_sync(kp_data->input);
+					break;
+					case 0x4 :
+						input_report_key(kp_data->input, BTN_LEFT, 0);
+						input_sync(kp_data->input);
+					break;
+				}
+		}
+	}
+	else{
+		kp_send_key(kp_data->input, (kp_data->cur_keycode>>16)&0xff ,0);
+		repeat_flag = 0;
+	}
 	if(!(kp_data->work_mode&REMOTE_WORK_MODE_HW))
 		kp_data->step   = REMOTE_STATUS_WAIT ;
 }
@@ -349,6 +383,10 @@ static inline int kp_hw_reprot_key(struct kp *kp_data )
 	status=READ_AOBUS_REG(AO_IR_DEC_STATUS);
 	key_index=0 ;
 	key_hold=-1 ;
+	if(((scan_code>>16)&0xff) == (MOUSE_LEFT&0xff))
+	{
+		mouse_lefft_flag =!mouse_lefft_flag;
+	}
 	if(scan_code)  //key first press
 	{
 		last_custom_code=scan_code&0xffff;
@@ -367,8 +405,10 @@ static inline int kp_hw_reprot_key(struct kp *kp_data )
 			{
 				if(kp_data->repeat_timer.expires > jiffies){//release last key.
 					kp_send_key(kp_data->input, (kp_data->cur_keycode>>16)&0xff, 0);
+					repeat_flag = 0;
 				}
 				kp_send_key(kp_data->input, (scan_code>>16)&0xff, 1);
+				repeat_flag = 1;
 				last_scan_code=scan_code;
 				kp_data->cur_keycode=last_scan_code;
 				kp_data->repeat_timer.data=(unsigned long)kp_data;
@@ -379,9 +419,12 @@ static inline int kp_hw_reprot_key(struct kp *kp_data )
 			}
 			else
 			{
-				if(kp_data->timer.expires > jiffies)
+				if(kp_data->timer.expires > jiffies){
 					kp_send_key(kp_data->input, (kp_data->cur_keycode>>16)&0xff, 0);
+					repeat_flag = 0;
+				}
 				kp_send_key(kp_data->input, (scan_code>>16)&0xff, 1);
+				repeat_flag = 1;
 				if(kp_data->repeat_enable)
 					kp_data->repeat_tick = jiffies + msecs_to_jiffies(kp_data->input->rep[REP_DELAY]);
 			}
@@ -398,7 +441,7 @@ static inline int kp_hw_reprot_key(struct kp *kp_data )
 		if((kp_data->custom_code[0] == last_custom_code )||(kp_data->custom_code[1] == last_custom_code) )
 		{
 			if(kp_data->repeat_enable){
-				if(kp_data->repeat_tick < jiffies){
+				if((kp_data->repeat_tick < jiffies)&&(repeat_flag == 1)){
 					kp_send_key(kp_data->input, (scan_code>>16)&0xff, 2);
 					kp_data->repeat_tick += msecs_to_jiffies(kp_data->input->rep[REP_PERIOD]);
 				}
@@ -627,6 +670,9 @@ remote_config_ioctl(struct inode *inode, struct file *filp,
 		case REMOTE_IOC_UNFCODE_CONFIG:
 			fcode = 0;
 			break;
+		case REMOTE_IOC_SET_MOUSEDRAW:
+			MOUSE_LEFT  = val&0xffff;
+			break;
 		case REMOTE_IOC_RESET_KEY_MAPPING:
 			for(i = 0; i < ARRAY_SIZE(key_map[fcode]); i++)
 				key_map[fcode][i] = KEY_RESERVED;
@@ -664,8 +710,8 @@ remote_config_ioctl(struct inode *inode, struct file *filp,
 			break;
 		case  REMOTE_IOC_SET_BIT_COUNT:
 			copy_from_user(&kp->bit_count,argp,sizeof(long));
-			if(kp->bit_count > 32)
-				kp->bit_count = 32;
+			//if(kp->bit_count > 32)
+			//	kp->bit_count = 32;
 			break;
 		case  REMOTE_IOC_SET_CUSTOMCODE:
 			kp->custom_code[fcode]=val&0xffff;
@@ -690,6 +736,7 @@ remote_config_ioctl(struct inode *inode, struct file *filp,
 			break;
 		case REMOTE_IOC_SET_RELEASE_DELAY:
 			copy_from_user(&kp->release_delay,argp,sizeof(long));
+			kp->tmp_release_delay =kp->release_delay;
 			break;
 			//SW
 		case REMOTE_IOC_SET_TW_LEADER_ACT:
@@ -919,7 +966,8 @@ static int __init kp_probe(struct platform_device *pdev)
 	}
 
 	input_dbg("device_create_file completed \r\n");
-	input_dev->evbit[0] = BIT_MASK(EV_KEY)  | BIT_MASK(EV_REL);
+	input_dev->evbit[0] = BIT_MASK(EV_KEY)  | BIT_MASK(EV_REL)| BIT_MASK(EV_ABS);
+	input_dev->absbit[0] =  BIT_MASK(ABS_X) | BIT_MASK(ABS_Y);
 	input_dev->keybit[BIT_WORD(BTN_MOUSE)] = BIT_MASK(BTN_LEFT) |BIT_MASK(BTN_RIGHT)|BIT_MASK(BTN_MIDDLE);
 	input_dev->relbit[0] = BIT_MASK(REL_X) | BIT_MASK(REL_Y)| BIT_MASK(REL_WHEEL);
 	input_dev->keybit[BIT_WORD(BTN_MOUSE)] |=BIT_MASK(BTN_SIDE)|BIT_MASK(BTN_EXTRA);	

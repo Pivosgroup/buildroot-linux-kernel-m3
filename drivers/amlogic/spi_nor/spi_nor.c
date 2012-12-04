@@ -468,6 +468,9 @@ static struct flash_info spi_nor_data [] = {
 	{ "mx25l3205d", 0xC22016, 64 * 1024, 64, BLOCK_64K, },
 	{ "mx25l6445e", 0xC22017, 64 * 1024, 128, SECT_4K, },
 	{ "mx25l2805d", 0xC22018, 64 * 1024, 256, SECT_4K, },
+
+        /*GigaByte----*/
+        { "GD25Q40", 0xC84013, 64 * 1024, 8, SECT_4K, },
 };
 
 static struct flash_info * jedec_probe(struct spi_device *spi)

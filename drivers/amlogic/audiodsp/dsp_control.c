@@ -26,6 +26,7 @@
 #define MAX_CACHE_ALIGN(x)	((x+0x1f)&(~0x1f))
 
 extern unsigned IEC958_mode_raw;
+extern unsigned IEC958_mode_codec;
 
 int decopt = 0x0000ffff;
 
@@ -112,11 +113,11 @@ void reset_dsp( struct audiodsp_priv *priv)
  //   SET_MPEG_REG_MASK(SDRAM_CTL0,1);//arc mapping to ddr memory
     SET_MPEG_REG_MASK(MEDIA_CPU_CTL, ((AUDIO_DSP_START_PHY_ADDR)>> 20) << 4);
 // decode option    
-    if(IEC958_mode_raw){
-      if(IEC958_mode_raw > 1){
-	DSP_WD(DSP_DECODE_OPTION, decopt|(3<<30));
+    if(IEC958_mode_codec){
+      if(IEC958_mode_codec == 4){//dd+
+		DSP_WD(DSP_DECODE_OPTION, decopt|(3<<30));
       }else{
-	DSP_WD(DSP_DECODE_OPTION, decopt|(1<<31));
+		DSP_WD(DSP_DECODE_OPTION, decopt|(1<<31));//dd,dts
       }
     }
 	else{
@@ -321,6 +322,14 @@ exit:
 /**
  *	bit31 - digital raw output
  *	bit30 - IEC61937 pass over HDMI
+ *    bit 5 - DTS passthrough working mode
+ 		     00:  AIU 958 hw search raw mode 
+ 		     01:  PCM_RAW mode,the same as AC3/AC3+
+ *    bit 3:4 - used for the communication of dsp and player tansfer decoding infomation:
+ *                00: used for libplayer_end to tell dsp_end that the file end has been notreached;
+ *                01: used for libplayer_end to tell dsp_end that the file end has been reached;
+ *                10: used for dsp_end to tell libplayer_end that all the data in the dsp_end_buf has been decoded completely;
+ *                11: reserved;
  *	bit 2 - ARC DSP print flag
  *	bit 1  - dts decoder policy select: 0:mute 1:noise
  *	bit 0  - dd/dd+ 	decoder policy select  0:mute 1:noise

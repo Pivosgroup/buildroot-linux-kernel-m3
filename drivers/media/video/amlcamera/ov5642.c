@@ -42,6 +42,7 @@
 #include <mach/pinmux.h>
 #include <linux/tvin/tvin.h>
 #include "common/plat_ctrl.h"
+#include "common/vmapi.h"
 
 #define OV5642_CAMERA_MODULE_NAME "ov5642"
 
@@ -108,7 +109,7 @@ static struct v4l2_queryctrl ov5642_qctrl[] = {
 		.maximum       = 1,
 		.step          = 0x1,
 		.default_value = 0,
-		.flags         = V4L2_CTRL_FLAG_SLIDER,
+		.flags         = V4L2_CTRL_FLAG_DISABLED,
 	} ,{
 		.id            = V4L2_CID_VFLIP,
 		.type          = V4L2_CTRL_TYPE_INTEGER,
@@ -117,7 +118,7 @@ static struct v4l2_queryctrl ov5642_qctrl[] = {
 		.maximum       = 1,
 		.step          = 0x1,
 		.default_value = 0,
-		.flags         = V4L2_CTRL_FLAG_SLIDER,
+		.flags         = V4L2_CTRL_FLAG_DISABLED,
 	},{
 		.id            = V4L2_CID_DO_WHITE_BALANCE,
 		.type          = V4L2_CTRL_TYPE_INTEGER,
@@ -1209,7 +1210,6 @@ static int ov5642_setting(struct ov5642_device *dev,int PROP_ID,int value )
 	case V4L2_CID_EXPOSURE:
 		ret=i2c_put_byte(client,0x0201, value);
 		break;	
-#endif
 	case V4L2_CID_HFLIP:    /* set flip on H. */
 		ret=i2c_get_byte(client,0x0101);
 		if(ret>0) {
@@ -1237,6 +1237,7 @@ static int ov5642_setting(struct ov5642_device *dev,int PROP_ID,int value )
 			dprintk(dev, 1, "vertical read error\n");
 		}
 		break;	
+#endif
 	case V4L2_CID_DO_WHITE_BALANCE:
         if(ov5642_qctrl[4].default_value!=value){
 			ov5642_qctrl[4].default_value=value;
@@ -1277,7 +1278,6 @@ static void power_down_ov5642(struct ov5642_device *dev)
 	DMA and thread functions
    ------------------------------------------------------------------*/
 
-extern   int vm_fill_buffer(struct videobuf_buffer* vb , int v4l2_format , int magic,void* vaddr);
 #define TSTAMP_MIN_Y	24
 #define TSTAMP_MAX_Y	(TSTAMP_MIN_Y + 15)
 #define TSTAMP_INPUT_X	10
@@ -1286,17 +1286,19 @@ extern   int vm_fill_buffer(struct videobuf_buffer* vb , int v4l2_format , int m
 static void ov5642_fillbuff(struct ov5642_fh *fh, struct ov5642_buffer *buf)
 {
 	struct ov5642_device *dev = fh->dev;
-	int h , pos = 0;
-	int hmax  = buf->vb.height;
-	int wmax  = buf->vb.width;
-	struct timeval ts;
-	char *tmpbuf;
 	void *vbuf = videobuf_to_vmalloc(&buf->vb);
+	vm_output_para_t para = {0};
 	dprintk(dev,1,"%s\n", __func__);	
 	if (!vbuf)
 		return;
  /*  0x18221223 indicate the memory type is MAGIC_VMAL_MEM*/
-    vm_fill_buffer(&buf->vb,fh->fmt->fourcc ,0x18221223,vbuf);
+	para.mirror = -1;// not set
+	para.v4l2_format = fh->fmt->fourcc;
+	para.v4l2_memory = 0x18221223;
+	para.zoom = -1;
+	para.angle = 0;
+	para.vaddr = (unsigned)vbuf;
+	vm_fill_buffer(&buf->vb,&para);
 	buf->vb.state = VIDEOBUF_DONE;
 }
 

@@ -323,7 +323,8 @@ static void vmpeg4_isr(void)
 
         if ((I_PICTURE == picture_type) || (P_PICTURE == picture_type)) {
             offset = READ_MPEG_REG(MP4_OFFSET_REG);
-            if (pts_lookup_offset(PTS_TYPE_VIDEO, offset, &pts, 0) == 0) {
+//for video pts lookup faild
+            if (pts_lookup_offset(PTS_TYPE_VIDEO, offset, &pts, 3000) == 0) {
                 pts_valid = 1;
                 last_anch_pts = pts;
 #ifdef CONFIG_AM_VDEC_MPEG4_LOG

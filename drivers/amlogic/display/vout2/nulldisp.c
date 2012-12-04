@@ -116,7 +116,8 @@ static void __exit nulldisp_exit(void)
     vout_unregister_server(&nulldisp_vout_server);
 }
 
-module_init(nulldisp_init);
+//module_init(nulldisp_init);
+subsys_initcall(nulldisp_init);
 module_exit(nulldisp_exit);
 
 MODULE_DESCRIPTION("AMLOGIC NullDisp ");

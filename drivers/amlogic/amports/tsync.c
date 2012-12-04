@@ -32,7 +32,7 @@ MODULE_AMLOG(AMLOG_DEFAULT_LEVEL, 0, LOG_DEFAULT_LEVEL_DESC, LOG_DEFAULT_MASK_DE
 //#define DEBUG
 #define AVEVENT_FLAG_PARAM  0x01
 
-//#define TSYNC_SLOW_SYNC
+#define TSYNC_SLOW_SYNC
 
 #define PCR_CHECK_INTERVAL  (HZ * 5)
 #define PCR_DETECT_MARGIN_SHIFT_AUDIO_HI     7
@@ -82,6 +82,7 @@ const static struct {
     {"AUDIO_STOP",  10, AUDIO_STOP,  0},
     {"AUDIO_PAUSE", 11, AUDIO_PAUSE, 0},
     {"AUDIO_TSTAMP_DISCONTINUITY", 26, AUDIO_TSTAMP_DISCONTINUITY, AVEVENT_FLAG_PARAM},
+    {"AUDIO_PRE_START",15, AUDIO_PRE_START, 0 },
 };
 
 const static char *tsync_mode_str[] = {
@@ -108,6 +109,7 @@ static unsigned int tsync_syncthresh = 1;
 static int tsync_dec_reset_flag = 0;
 static int tsync_dec_reset_video_start = 0;
 static int tsync_automute_on = 0;
+static int tsync_video_started = 0;
 
 #define M_HIGH_DIFF    2
 #define M_LOW_DIFF     2
@@ -320,6 +322,7 @@ void tsync_avevent_locked(avevent_t event, u32 param)
 
     switch (event) {
     case VIDEO_START:
+        tsync_video_started = 1;
         if (tsync_enable) {
             tsync_mode = TSYNC_MODE_AMASTER;
         } else {
@@ -367,6 +370,7 @@ void tsync_avevent_locked(avevent_t event, u32 param)
         tsync_stat = TSYNC_STAT_PCRSCR_SETUP_NONE;
         timestamp_vpts_set(0);
         timestamp_pcrscr_enable(0);
+        tsync_video_started = 0;
         break;
 
         /* Note:
@@ -412,6 +416,10 @@ void tsync_avevent_locked(avevent_t event, u32 param)
 
     case AUDIO_TSTAMP_DISCONTINUITY:
 		timestamp_apts_set(param);
+        if (!tsync_video_started) {
+            timestamp_pcrscr_set(param);
+        }
+        
         amlog_level(LOG_LEVEL_ATTENTION, "audio discontinue, reset apts, 0x%x\n", param);	
 		 
         if (!tsync_enable) {
@@ -438,13 +446,19 @@ void tsync_avevent_locked(avevent_t event, u32 param)
         }
         break;
 
+    case AUDIO_PRE_START:
+        timestamp_apts_start(0);
+        break;
+
     case AUDIO_START:		
 		timestamp_apts_set(param);
 
 		amlog_level(LOG_LEVEL_INFO, "audio start, reset apts = 0x%x\n", param);
 
         timestamp_apts_enable(1);
-		 
+		
+        timestamp_apts_start(1);
+
         if (!tsync_enable) {
             break;
         }
@@ -482,12 +496,12 @@ void tsync_avevent_locked(avevent_t event, u32 param)
 
     case AUDIO_RESUME:
 		timestamp_apts_enable(1);
+		apause_flag = 0;
 		
         if (!tsync_enable) {
             break;
         }
-        timestamp_pcrscr_enable(1);
-        apause_flag = 0;
+        timestamp_pcrscr_enable(1);        
         break;
 
     case AUDIO_STOP:
@@ -500,6 +514,7 @@ void tsync_avevent_locked(avevent_t event, u32 param)
             tsync_stat = TSYNC_STAT_PCRSCR_SETUP_NONE;
         }
         apause_flag = 0;
+        timestamp_apts_start(0);
         break;
 
     case AUDIO_PAUSE:

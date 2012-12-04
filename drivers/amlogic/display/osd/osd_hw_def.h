@@ -169,7 +169,7 @@ static  void  osd1_update_canvas_conf(void);
 **************************************************************************/
 LIST_HEAD(update_list);
 static spinlock_t osd_lock = SPIN_LOCK_UNLOCKED;
-static hw_para_t  osd_hw;
+hw_para_t  osd_hw;
 static unsigned long 	lock_flags;
 #ifdef FIQ_VSYNC
 static unsigned long	fiq_flag;

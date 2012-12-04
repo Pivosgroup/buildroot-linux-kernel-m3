@@ -44,6 +44,7 @@ char *data;
 #define AUDIODSP_SYNC_GET_PCRSCR					_IOR('r',8,unsigned long)
 #define AUDIODSP_AUTOMUTE_ON					_IOW('r',9,unsigned long)
 #define AUDIODSP_AUTOMUTE_OFF					_IOW('r',10,unsigned long)
+#define AUDIODSP_LOOKUP_APTS                                   _IOR('r',11,unsigned long)
 
 #define MCODEC_FMT_MPEG123 (1<<0)
 #define MCODEC_FMT_AAC 	  (1<<1)
@@ -60,5 +61,9 @@ char *data;
 #define MCODEC_FMT_ALAC     (1<<12)
 #define MCODEC_FMT_AAC_LATM     (1<<14)
 #define MCODEC_FMT_APE     (1<<15)
+#define MCODEC_FMT_EAC3     (1<<16)
+
+#define AUDIOINFO_FROM_AUDIODSP(format)  ((format == MCODEC_FMT_AAC) || \
+										  (format ==MCODEC_FMT_AAC_LATM))
 #endif
 

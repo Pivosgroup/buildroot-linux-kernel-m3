@@ -11,7 +11,7 @@
  */
 #include <linux/module.h>
 #include <linux/vout/vout_notify.h>
-
+#include <linux/delay.h>
 
 static BLOCKING_NOTIFIER_HEAD(vout_notifier_list);
 static  DEFINE_MUTEX(vout_mutex)  ;
@@ -89,10 +89,30 @@ vmode_t get_current_vmode(void)
 	return mode;
 }
 EXPORT_SYMBOL(get_current_vmode);
+#ifdef CONFIG_SCREEN_ON_EARLY
+static int wake_up_flag;
+void wakeup_early_suspend_proc(void)
+{
+	wake_up_flag = 1;
+}
+#endif
 int vout_suspend(void)
 {
 	int ret=0 ;
 	vout_server_t  *p_server = vout_module.curr_vout_server;
+
+#ifdef CONFIG_SCREEN_ON_EARLY
+extern void power_off_backlight(void);
+	power_off_backlight();
+	int i = 0;
+	wake_up_flag = 0;
+	for(; i < 10; i++)
+		if (wake_up_flag) {
+			break;
+		} else
+			msleep(100);
+	wake_up_flag = 0;
+#endif
 
 	mutex_lock(&vout_mutex);
 	if (p_server)

@@ -407,6 +407,8 @@ extern void * dhd_os_open_image(char * filename);
 extern int dhd_os_get_image_block(char * buf, int len, void * image);
 extern void dhd_os_close_image(void * image);
 extern void dhd_os_wd_timer(void *bus, uint wdtick);
+extern void dhd_init_lock_local(dhd_pub_t * pub); // terence 20120530: fix for preinit function missed called after resume
+extern void dhd_init_unlock_local(dhd_pub_t * pub);
 extern void dhd_os_sdlock(dhd_pub_t * pub);
 extern void dhd_os_sdunlock(dhd_pub_t * pub);
 extern void dhd_os_sdlock_txq(dhd_pub_t * pub);
@@ -533,8 +535,8 @@ extern uint dhd_watchdog_ms;
 #if defined(DHD_DEBUG)
 /* Console output poll interval */
 extern uint dhd_console_ms;
-extern uint wl_msg_level;
 #endif /* defined(DHD_DEBUG) */
+extern uint wl_msg_level;
 
 /* Use interrupts */
 extern uint dhd_intr;

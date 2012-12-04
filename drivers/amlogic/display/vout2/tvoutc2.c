@@ -255,6 +255,8 @@ int tvoutc_setmode2(tvmode_t mode)
         WRITE_MPEG_REG(HHI_VIID_CLK_CNTL, 0xc001f); //reg 0x104b, select vid_pll2_clk for vi2_clk_div?
         WRITE_CBUS_REG_BITS(HHI_VID_CLK_DIV, 0x9, 28, 4); //reg 0x1059, select v2_clk_div2 for cts_enci_clk , 27MHz
         WRITE_CBUS_REG_BITS(HHI_VIID_CLK_DIV, 0x9, 24, 4); //0x104a, select v2_clk_div2 for cts_vdac_clk[1] (DAC3)
+        WRITE_MPEG_REG(HHI_VIID_PLL_CNTL2, 0x065e31ff);
+        WRITE_MPEG_REG(HHI_VIID_PLL_CNTL3, 0x1649a941);
         break;
 		case TVMODE_480P:
 		case TVMODE_576P:

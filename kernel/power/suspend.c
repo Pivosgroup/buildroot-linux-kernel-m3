@@ -122,6 +122,14 @@ void __attribute__ ((weak)) arch_suspend_enable_irqs(void)
 	local_irq_enable();
 }
 
+#ifdef CONFIG_SCREEN_ON_EARLY
+extern void osd_resume_early(void);
+extern void vout_pll_resume_early(void);
+extern void resume_vout_early(void);
+extern void amvideo_class_resume_early(void);
+extern int check_power_key_pressing(void);
+#endif
+
 /**
  *	suspend_enter - enter the desired system sleep state.
  *	@state:		state to enter
@@ -166,6 +174,15 @@ static int suspend_enter(suspend_state_t state)
 			error = suspend_ops->enter(state);
 		sysdev_resume();
 	}
+
+#ifdef CONFIG_SCREEN_ON_EARLY
+	if(check_power_key_pressing()){
+		amvideo_class_resume_early();
+		vout_pll_resume_early();
+		osd_resume_early();
+		resume_vout_early();
+	}
+#endif		
 
 	arch_suspend_enable_irqs();
 	BUG_ON(irqs_disabled());

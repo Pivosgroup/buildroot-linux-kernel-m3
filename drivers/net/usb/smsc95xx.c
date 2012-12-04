@@ -1180,7 +1180,8 @@ static struct sk_buff *smsc95xx_tx_fixup(struct usbnet *dev,
 	/* We do not advertise SG, so skbs should be already linearized */
 	BUG_ON(skb_shinfo(skb)->nr_frags);
 
-	if (skb_headroom(skb) < overhead) {
+	//if (skb_headroom(skb) < overhead) 
+	{
 		struct sk_buff *skb2 = skb_copy_expand(skb,
 			overhead, 0, flags);
 		dev_kfree_skb_any(skb);
@@ -1232,7 +1233,7 @@ static const struct driver_info smsc95xx_info = {
 	.rx_fixup	= smsc95xx_rx_fixup,
 	.tx_fixup	= smsc95xx_tx_fixup,
 	.status		= smsc95xx_status,
-	.flags		= FLAG_ETHER | FLAG_SEND_ZLP,
+	.flags		= FLAG_ETHER | FLAG_SEND_ZLP | FLAG_SMSC_MAC,
 };
 
 static const struct usb_device_id products[] = {

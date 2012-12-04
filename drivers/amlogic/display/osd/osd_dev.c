@@ -203,6 +203,11 @@ void osddev_set_2x_scale(u32 index,u16 h_scale_enable,u16 v_scale_enable)
 	osd_set_2x_scale_hw(index,h_scale_enable,v_scale_enable);
 }
 
+void osddev_get_flush_rate(u32 *flush_rate)
+{
+	osd_get_flush_rate(flush_rate);
+}
+
 void osddev_set_block_windows(u32 index, u32 *block_windows)
 {
 	osd_set_block_windows_hw(index, block_windows);

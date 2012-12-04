@@ -44,6 +44,7 @@
 #include <linux/gpio.h>
 #include <linux/spinlock.h>
 #include <linux/amdsc.h>
+#include <linux/string.h>
 #include "aml_dvb.h"
 
 #if 1
@@ -348,6 +349,7 @@ static int aml_dvb_asyncfifo_init(struct aml_dvb *advb, struct aml_asyncfifo *as
 	asyncfifo->dvb = advb;
 	asyncfifo->id = id;
 	asyncfifo->init = 0;
+	asyncfifo->flush_size = 256*1024;
 	
 	return aml_asyncfifo_hw_init(asyncfifo);
 }
@@ -585,6 +587,35 @@ static ssize_t asyncfifo##i##_store_source(struct class *class,  struct class_at
 	ASYNCFIFO_SOURCE_FUNC_DECL(1)
 #endif
 
+/*Show the async fifo flush size*/
+#define ASYNCFIFO_FLUSHSIZE_FUNC_DECL(i)  \
+static ssize_t asyncfifo##i##_show_flush_size(struct class *class,  struct class_attribute *attr,char *buf)\
+{\
+	struct aml_dvb *dvb = &aml_dvb_device;\
+	struct aml_asyncfifo *afifo = &dvb->asyncfifo[i];\
+	ssize_t ret = 0;\
+	ret = sprintf(buf, "%d\n", afifo->flush_size);\
+	return ret;\
+}\
+static ssize_t asyncfifo##i##_store_flush_size(struct class *class,  struct class_attribute *attr,const char *buf, size_t size)\
+{\
+    struct aml_dvb *dvb = &aml_dvb_device;\
+	struct aml_asyncfifo *afifo = &dvb->asyncfifo[i];\
+	int fsize = (int)simple_strtol(buf, NULL, 10);\
+	if (fsize != afifo->flush_size) {\
+		afifo->flush_size = fsize;\
+    	aml_asyncfifo_hw_reset(&aml_dvb_device.asyncfifo[i]);\
+    }\
+    return size;\
+}
+
+#if ASYNCFIFO_COUNT>0
+	ASYNCFIFO_FLUSHSIZE_FUNC_DECL(0)
+#endif
+#if ASYNCFIFO_COUNT>1
+	ASYNCFIFO_FLUSHSIZE_FUNC_DECL(1)
+#endif
+
 
 extern int dmx_reset_hw(struct aml_dvb *dvb);
 
@@ -661,11 +692,15 @@ static struct class_attribute aml_stb_class_attrs[] = {
 #endif
 #define ASYNCFIFO_SOURCE_ATTR_DECL(i)\
 		__ATTR(asyncfifo##i##_source,  S_IRUGO | S_IWUSR, asyncfifo##i##_show_source, asyncfifo##i##_store_source)
+#define ASYNCFIFO_FLUSHSIZE_ATTR_DECL(i)\
+		__ATTR(asyncfifo##i##_flush_size,  S_IRUGO | S_IWUSR, asyncfifo##i##_show_flush_size, asyncfifo##i##_store_flush_size)
 #if ASYNCFIFO_COUNT>0
 	ASYNCFIFO_SOURCE_ATTR_DECL(0),
+	ASYNCFIFO_FLUSHSIZE_ATTR_DECL(0),
 #endif
 #if ASYNCFIFO_COUNT>1
 	ASYNCFIFO_SOURCE_ATTR_DECL(1),
+	ASYNCFIFO_FLUSHSIZE_ATTR_DECL(1),
 #endif
 	__ATTR(demux_reset,  S_IRUGO | S_IWUSR, NULL, demux_do_reset),
 	__ATTR(video_pts,  S_IRUGO | S_IWUSR, demux_show_video_pts, NULL),

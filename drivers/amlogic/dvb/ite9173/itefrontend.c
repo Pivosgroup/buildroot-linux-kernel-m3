@@ -78,9 +78,17 @@ MODULE_PARM_DESC(frontend_demod_addr, "\n\t\t Demod IIC address of frontend");
 static int frontend_demod_addr = -1;
 module_param(frontend_demod_addr, int, S_IRUGO);
 
-MODULE_PARM_DESC(frontend_power, "\n\t\t ANT_PWR_CTRL of frontend");
+MODULE_PARM_DESC(frontend_power, "\n\t\t TUNER_POWER of frontend");
 static int frontend_power = -1;
 module_param(frontend_power, int, S_IRUGO);
+
+MODULE_PARM_DESC(frontend_antoverload, "\n\t\t ANT_ANTOVERLOAD of frontend");
+static int frontend_antoverload = -1;
+module_param(frontend_antoverload, int, S_IRUGO);
+
+MODULE_PARM_DESC(frontend_antpower, "\n\t\t ANT_POWER of frontend");
+static int frontend_antpower = -1;
+module_param(frontend_antpower, int, S_IRUGO);
 
 static struct mutex ite_lock;
 static struct aml_fe ite9173_fe[FE_DEV_COUNT];
@@ -122,6 +130,13 @@ static int ite9173_sleep(struct dvb_frontend *fe)
 	return 0;
 }
 
+static int ite9173_Ant_Power(int ant)
+{
+	if(1==ant)	gpio_direction_output(frontend_antpower, 1);
+	else	gpio_direction_output(frontend_antpower, 0);
+	return 0;
+}
+
 static int ite9173_read_status(struct dvb_frontend *fe, fe_status_t * status)
 {
 	Bool locked = 0;
@@ -151,7 +166,26 @@ static int ite9173_read_status(struct dvb_frontend *fe, fe_status_t * status)
 
 static int ite9173_read_ber(struct dvb_frontend *fe, u32 * ber)
 {
+	Dword ret = 0;
+	OUT Dword postErrorCount = 0;  /** 24 bits */
+	OUT Dword postBitCount = 0;    /** 16 bits */
+	OUT Word abortCount = 0;
+
 	struct ite9173_state *state = fe->demodulator_priv;
+
+	pr_dbg("ite9173_read_ber\n");
+
+	mutex_lock(&ite_lock);
+	ret = Demodulator_getPostVitBer(pdemod,&postErrorCount,&postBitCount,&abortCount);
+	mutex_unlock(&ite_lock);
+
+	*ber = (postErrorCount /postBitCount );
+
+	if(Error_NO_ERROR != ret)
+		return -1;
+
+	pr_dbg("ite9173_read_ber--\n");
+
 
 	return 0;
 }
@@ -163,8 +197,9 @@ static int ite9173_read_signal_strength(struct dvb_frontend *fe, u16 *strength)
 
 	pr_dbg("ite9173_read_signal_strength\n");
 
+	*strength = 0;
 	mutex_lock(&ite_lock);
-	ret = Demodulator_getSignalStrength(pdemod,(Byte*)strength);
+	ret = Demodulator_getSignalStrengthDbm(pdemod,(Long*)strength);	
 	mutex_unlock(&ite_lock);
 
 	if(Error_NO_ERROR != ret)
@@ -182,6 +217,7 @@ static int ite9173_read_snr(struct dvb_frontend *fe, u16 *snr)
 
 	pr_dbg("ite9173_read_snr\n");
 
+	*snr = 0;
 	mutex_lock(&ite_lock);
 	ret = Demodulator_getSNR(pdemod,(Byte*)snr);
 	mutex_unlock(&ite_lock);
@@ -209,7 +245,6 @@ static int ite9173_set_frontend(struct dvb_frontend *fe, struct dvb_frontend_par
 	Bool locked = 0;
 	Word bandwidth=8;
 	Dword ret = 0;
-	int times=40;
 	struct ite9173_state *state = fe->demodulator_priv;
 
 	pr_dbg("ite9173_set_frontend\n");
@@ -226,6 +261,8 @@ static int ite9173_set_frontend(struct dvb_frontend *fe, struct dvb_frontend_par
 
 	state->freq=(p->frequency/1000);
 
+	pr_dbg("state->freq ==== %d \n", state->freq);
+
 	if(state->freq>0&&state->freq!=-1) {
 		mutex_lock(&ite_lock);
 		ret = Demodulator_acquireChannel(pdemod, bandwidth*1000,state->freq);
@@ -235,20 +272,7 @@ static int ite9173_set_frontend(struct dvb_frontend *fe, struct dvb_frontend_par
 	} else {
 		printk("\n--Invalidate Fre!!!!!!!!!!!!!--\n");
 	}
-//	printk("now1 the jiffies is %x\n",jiffies);
-	while(times) {
-		mutex_lock(&ite_lock);
-		ret = Demodulator_isLocked(pdemod,&locked);
-		printk("DVB----lock status is %d\n",locked);
-		mutex_unlock(&ite_lock);
-		if(Error_NO_ERROR != ret)
-			return -1;
-		if(1==locked)
-			break;
-//		msleep(10);
-		times--;
-	}	
-//	printk("now2 the jiffies is %x\n",jiffies);
+
 	pr_dbg("ite9173_set_frontend--\n");
 
 	return  0;
@@ -418,7 +442,7 @@ static int ite9173_fe_init(struct aml_dvb *advb, struct platform_device *pdev, s
 	}
 
 	if(frontend_power==-1) {
-		snprintf(buf, sizeof(buf), "frontend%d_power", id);
+		snprintf(buf, sizeof(buf), "frontend%d_TUNER_POWER", id);
 		res = platform_get_resource_byname(pdev, IORESOURCE_MEM, buf);
 		if (!res) {
 			pr_error("cannot get resource \"%s\"\n", buf);
@@ -426,6 +450,28 @@ static int ite9173_fe_init(struct aml_dvb *advb, struct platform_device *pdev, s
 			goto err_resource;
 		}
 		frontend_power = res->start;
+	}
+
+	if(frontend_antoverload==-1) {
+		snprintf(buf, sizeof(buf), "frontend%d_ANT_OVERLOAD", id);
+		res = platform_get_resource_byname(pdev, IORESOURCE_MEM, buf);
+		if (!res) {
+			pr_error("cannot get resource \"%s\"\n", buf);
+			ret = -EINVAL;
+			goto err_resource;
+		}
+		frontend_antoverload = res->start;
+	}
+
+	if(frontend_antpower==-1) {
+		snprintf(buf, sizeof(buf), "frontend%d_ANT_POWER", id);
+		res = platform_get_resource_byname(pdev, IORESOURCE_MEM, buf);
+		if (!res) {
+			pr_error("cannot get resource \"%s\"\n", buf);
+			ret = -EINVAL;
+			goto err_resource;
+		}
+		frontend_antpower = res->start;
 	}
 
 	frontend_reset = cfg->reset_pin;
@@ -501,9 +547,40 @@ static int ite9173_fe_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static int ite9173_fe_resume(struct platform_device *pdev)
+{
+	gpio_direction_output(frontend_reset, 0);
+	msleep(300);
+	gpio_direction_output(frontend_reset, 1); //enable tuner power
+	msleep(500);
+
+	gpio_direction_output(frontend_power, 1);
+
+	if(Error_NO_ERROR != Demodulator_initialize (pdemod, streamType))
+		return -1;
+
+	printk("ite9173_fe_resume \r\n");
+
+	return 0;
+
+	return 0;
+
+
+}
+
+static int ite9173_fe_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	return 0;
+}
+
+
+
+
 static struct platform_driver aml_fe_driver = {
 	.probe		= ite9173_fe_probe,
 	.remove		= ite9173_fe_remove,	
+	.resume		= ite9173_fe_resume,
+	.suspend	= ite9173_fe_suspend,
 	.driver		= {
 		.name	= "ite9173",
 		.owner	= THIS_MODULE,

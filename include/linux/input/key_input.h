@@ -16,7 +16,7 @@ struct key_input_platform_data{
     int fuzz_time;
     int *key_code_list;
     int key_num;
-    int (*scan_func)(void *data);
+    int (*scan_func)(int *data);
     int (*init_func)(void);
     int config;
 };

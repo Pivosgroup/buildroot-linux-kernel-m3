@@ -317,6 +317,9 @@ enum {
 	
 	/* OV5640,   */
 	V4L2_IDENT_OV5640 =  26, 
+	
+	/* GC0329,   */
+	V4L2_IDENT_GC0329 =  27,
 };
 
 #endif

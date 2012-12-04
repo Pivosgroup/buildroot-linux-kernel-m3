@@ -333,6 +333,11 @@ static inline void vdin_set_top(unsigned int offset, enum tvin_port_e port, unsi
             break;
         case 0x02: // 656
             vdin_mux = VDIN_MUX_656;
+            if(port == TVIN_PORT_CAMERA_YUYV){
+                vdin_data_bus_0 = VDIN_MAP_Y_G;
+                vdin_data_bus_1 = VDIN_MAP_RCR;
+                vdin_data_bus_2 = VDIN_MAP_BPB;
+            }
             break;
         case 0x04: // VGA
             vdin_mux = VDIN_MUX_TVFE;

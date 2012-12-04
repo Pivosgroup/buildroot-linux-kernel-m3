@@ -65,6 +65,14 @@ if AM_VDEC_H264
           The maximum supported reference frame number is limited by the memory size defined here.
 endif #AM_VDEC_H264
 
+config AM_VDEC_AVS
+       tristate "AMLOGIC AVS Video Decoder"
+       default y
+       select AM_VIDEO	
+       select AM_PTSSERVER
+       help
+         Driver for avs video decoder.
+
 config AM_VDEC_H264MVC
 	tristate "AMLOGIC H264MVC Video Decoder"
 	default y

@@ -835,7 +835,7 @@ static int dvb_frontend_check_parameters(struct dvb_frontend *fe,
 	    (freq_max && parms->frequency > freq_max)) {
 		printk(KERN_WARNING "DVB: adapter %i frontend %i frequency %u out of range (%u..%u)\n",
 		       fe->dvb->num, fe->id, parms->frequency, freq_min, freq_max);
-		return -EINVAL;
+	//	return -EINVAL;   //modify by rsj 20121018 for s2
 	}
 
 	/* range check: symbol rate */
@@ -847,7 +847,7 @@ static int dvb_frontend_check_parameters(struct dvb_frontend *fe,
 			printk(KERN_WARNING "DVB: adapter %i frontend %i symbol rate %u out of range (%u..%u)\n",
 			       fe->dvb->num, fe->id, parms->u.qpsk.symbol_rate,
 			       fe->ops.info.symbol_rate_min, fe->ops.info.symbol_rate_max);
-			return -EINVAL;
+	//		return -EINVAL;  //modify by rsj 20121018 for s2
 		}
 
 	} else if (fe->ops.info.type == FE_QAM) {
@@ -1937,7 +1937,7 @@ static int dvb_frontend_ioctl_legacy(struct inode *inode, struct file *file,
 	case FE_READ_BLINDSCANCHANNELINFO:
 		printk("FE_READ_BLINDSCANCHANNELINFO\n");
 		if (fe->ops.blindscan_readchannelinfo)
-			err = fe->ops.blindscan_readchannelinfo(fe, (struct dvb_frontend_parameters*) parg);
+			err = fe->ops.blindscan_readchannelinfo(fe, (struct dvbsx_frontend_parameters*) parg);
 
 		break;
 

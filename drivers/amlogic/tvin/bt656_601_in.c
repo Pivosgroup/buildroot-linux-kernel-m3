@@ -666,14 +666,14 @@ static void start_amvdec_656_601_camera_in(unsigned int mem_start, unsigned int 
         am656in_dec_info.dec_status = 1;
 
     }
-    else if(port == TVIN_PORT_CAMERA)
+    else if((port == TVIN_PORT_CAMERA)||(port == TVIN_PORT_CAMERA_YUYV))
     {
         pr_dbg("camera in decode. \n");
         bt656_camera_in_canvas_init(mem_start, mem_size);
 //        init_656in_dec_parameter(TVIN_SIG_FMT_CAMERA_1920X1080P_30Hz);
         init_656in_dec_parameter(fmt_info);
         reset_656in_dec_parameter();
-        am656in_dec_info.para.port = TVIN_PORT_CAMERA;
+        am656in_dec_info.para.port = port;
 		am656in_dec_info.wr_canvas_index = 0xff;
         reinit_camera_dec();
         am656in_dec_info.dec_status = 1;
@@ -731,7 +731,7 @@ static void check_amvdec_656_601_camera_fromat( void )
             {
                 reinit_bt601in_dec();
             }
-            else //if(am656in_dec_info.para.port == TVIN_PORT_CAMERA)
+            else //if((am656in_dec_info.para.port == TVIN_PORT_CAMERA)||(am656in_dec_info.para.port == TVIN_PORT_CAMERA_YUYV))
             {
                 reinit_camera_dec();
             }
@@ -765,6 +765,7 @@ static void check_amvdec_656_601_camera_fromat( void )
         switch(am656in_dec_info.para.port)
         {
             case TVIN_PORT_CAMERA:
+            case TVIN_PORT_CAMERA_YUYV:
                 for(format = (TVIN_SIG_FMT_BT601IN_480I + 1); format < TVIN_SIG_FMT_MAX; format++)
                 {
                     if((active_line_1 >= (tvin_fmt_tbl[format].v_active- tvin_fmt_tbl[format].v_cnt_offset)) &&
@@ -850,6 +851,7 @@ static void check_amvdec_656_601_camera_fromat( void )
                 switch(am656in_dec_info.para.port)
                 {
                     case TVIN_PORT_CAMERA:
+                    case TVIN_PORT_CAMERA_YUYV:
                         if(format ==  TVIN_SIG_FMT_NULL)
                         {
                             if(active_line_1 == 0)
@@ -1292,7 +1294,7 @@ int amvdec_656_601_camera_in_run(vframe_t *info)
         {
             reinit_bt601in_dec();
         }
-        else //if(am656in_dec_info.para.port == TVIN_PORT_CAMERA)
+        else //if((am656in_dec_info.para.port == TVIN_PORT_CAMERA)||(am656in_dec_info.para.port == TVIN_PORT_CAMERA_YUYV))
         {
             reinit_camera_dec();
         }
@@ -1336,7 +1338,7 @@ int amvdec_656_601_camera_in_run(vframe_t *info)
     {
         bt601_in_dec_run(info);
     }
-    else //if(am656in_dec_info.para.port == TVIN_PORT_CAMERA)
+    else //if((am656in_dec_info.para.port == TVIN_PORT_CAMERA)||(am656in_dec_info.para.port == TVIN_PORT_CAMERA_YUYV))
     {
         camera_in_dec_run(info);
     }
@@ -1394,7 +1396,8 @@ static int bt656in_notifier_callback(struct notifier_block *block, unsigned long
                 p = (vdin_dev_t*)para;
                 if ((p->para.port != TVIN_PORT_BT656) &&
                     (p->para.port != TVIN_PORT_BT601) &&
-                    (p->para.port != TVIN_PORT_CAMERA))
+                    (p->para.port != TVIN_PORT_CAMERA)&&
+                    (p->para.port != TVIN_PORT_CAMERA_YUYV))
                 {
                     pr_info("bt656: ignore TVIN_EVENT_DEC_START (port=%d)\n", p->para.port);
                     return ret;
@@ -1417,7 +1420,8 @@ static int bt656in_notifier_callback(struct notifier_block *block, unsigned long
                 p = (vdin_dev_t*)para;
                 if((p->para.port != TVIN_PORT_BT656) &&
                     (p->para.port != TVIN_PORT_BT601) &&
-                    (p->para.port != TVIN_PORT_CAMERA))
+                    (p->para.port != TVIN_PORT_CAMERA)&&
+                    (p->para.port != TVIN_PORT_CAMERA_YUYV))
                 {
                     pr_info("bt656: ignore TVIN_EVENT_DEC_STOP, port=%d \n", p->para.port);
                     return ret;

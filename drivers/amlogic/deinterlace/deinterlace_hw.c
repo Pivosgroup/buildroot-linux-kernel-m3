@@ -272,6 +272,10 @@ static void set_di_if0_mif ( DI_MIF_t *mif, int urgent, int hold_line );
 
 void di_hw_init(void)
 {
+    WRITE_MPEG_REG(DI_PRE_HOLD, (1 << 31) | (31 << 16) | 31);
+#if defined(CONFIG_ARCH_MESON)
+    WRITE_MPEG_REG(DI_NRMTN_CTRL0, 0xb00a0603);
+#endif
 }
 
 void di_hw_uninit(void)

@@ -167,7 +167,9 @@ void card_remove_card(struct memory_card *card)
 	if (card->state & CARD_STATE_PRESENT){
 		init_completion(&card_devdel_comp);
 		device_del(&card->dev);
+	          put_device(&card->dev);
 		wait_for_completion(&card_devdel_comp);
+                   return;
 	}
 
 	put_device(&card->dev);

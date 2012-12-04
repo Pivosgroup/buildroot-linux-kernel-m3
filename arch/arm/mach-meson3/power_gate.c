@@ -16,7 +16,12 @@ EXPORT_SYMBOL(video_dac_enable);
 
 int  video_dac_disable()
 {
+#ifdef CONFIG_MACH_MESON3_REFF16_DONGLE
+	/*disable  YUV*/
+	WRITE_MPEG_REG(VENC_VDAC_SETTING, 0x07);
+#else
     SET_CBUS_REG_MASK(VENC_VDAC_SETTING, 0x1f);
+#endif
     return 0;
 }
 EXPORT_SYMBOL(video_dac_disable);

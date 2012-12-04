@@ -90,4 +90,4 @@ obj-y += vfm/
 # watchdog timer
 obj-y += watchdog/
 
-
+obj-$(CONFIG_AM_IPTV_SECURITY) += security/

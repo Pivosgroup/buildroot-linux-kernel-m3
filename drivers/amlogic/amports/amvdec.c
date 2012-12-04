@@ -119,12 +119,6 @@ static void amvdec_pg_enable(bool enable)
             }
         }
 
-        WRITE_MPEG_REG(RESET0_REGISTER, 4);
-        READ_MPEG_REG(RESET0_REGISTER);
-        READ_MPEG_REG(RESET0_REGISTER);
-        READ_MPEG_REG(RESET0_REGISTER);
-        CLK_GATE_OFF(IQIDCT_CLK);
-
         //CLK_GATE_OFF(VLD_CLK);
     }
 }

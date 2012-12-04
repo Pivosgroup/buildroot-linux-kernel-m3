@@ -629,6 +629,14 @@ config USB_SERIAL_VIVOPAY_SERIAL
           To compile this driver as a module, choose M here: the
           module will be called vivopay-serial.
 
+config USB_SERIAL_USI
+        tristate "USB USI Serial driver"
+        help
+          Say Y here if you have a USI WCDMA modem that's connected to USB.
+
+          To compile this driver as a module, choose M here: the
+          module will be called option.
+
 config USB_SERIAL_DEBUG
 	tristate "USB Debugging Device"
 	help

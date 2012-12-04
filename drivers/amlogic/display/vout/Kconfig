@@ -61,6 +61,12 @@ config AML_TCON_S7
 	help  
 		S7 LCD panel module			
 
+config AML_TCON_TM070
+        tristate "TM070 panel driver"
+        depends on  AM_LCD_TTL_OUTPUT
+        help
+                TM070 LCD panel module
+
 config AML_LVDS_R_AT070TNA2
 	tristate "R_AT070TNA2"
 	depends on AM_LCD_LVDS_OUTPUT

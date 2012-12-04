@@ -49,7 +49,7 @@ typedef struct{
 vfm_map_t* vfm_map[VFM_MAP_COUNT];
 static int vfm_map_num = 0;
 
-int vfm_debug_flag = 0;
+int vfm_debug_flag = 1;
 
 void vf_update_active_map(void)
 {
@@ -260,16 +260,21 @@ static void vfm_init(void)
     char def_id[] = "default";
     char def_name_chain[] = "decoder amvideo";
 #endif    
-#ifdef CONFIG_AM_VIDEO2
+#ifdef CONFIG_TVIN_VIUIN
     char def_ext_id[] = "default_ext";
     char def_ext_name_chain[] = "vdin amvideo2";
 #else
 #ifdef CONFIG_AMLOGIC_VIDEOIN_MANAGER
     char def_ext_id[] = "default_ext";
+#ifdef CONFIG_AMLOGIC_VM_DISABLE_VIDEOLAYER
+    char def_ext_name_chain[] = "vdin vm";
+#else
     char def_ext_name_chain[] = "vdin vm amvideo";
+#endif
 #endif    
 #endif
     char def_osd_id[] = "default_osd";
+    //char def_osd_name_chain[] = "osd amvideo4osd";
     char def_osd_name_chain[] = "osd amvideo";
     
     int i;

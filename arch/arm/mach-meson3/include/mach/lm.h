@@ -41,6 +41,9 @@ struct lm_device {
     unsigned int        port_config;
     unsigned int        dma_config;
     void (* set_vbus_power)(char is_power_on);
+#ifdef CONFIG_USB_DPLINE_PULLUP_DISABLE	
+	void (* set_vbus_valid_ext)(unsigned int id,char val);
+#endif	
     void * pdata;
 };
 

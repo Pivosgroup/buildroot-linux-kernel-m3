@@ -20,6 +20,10 @@ obj-$(CONFIG_AM_VDEC_VC1) += amvdec_vc1.o
 amvdec_vc1-objs := vvc1.o
 amvdec_vc1-y    := vvc1.o
 
+obj-$(CONFIG_AM_VDEC_AVS) += amvdec_avs.o
+amvdec_avs-objs := vavs.o
+amvdec_avs-y    := vavs.o
+
 obj-$(CONFIG_AM_VDEC_H264) += amvdec_h264.o
 amvdec_h264-objs := vh264.o
 amvdec_h264-y    := vh264.o

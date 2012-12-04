@@ -43,8 +43,6 @@ extern  void sdio_reinit(void);
 //extern  void extern_wifi_reset(int is_on);
 //extern void extern_wifi_power(int is_on);
 extern void extern_wifi_set_enable(int is_on);
-
-
 #endif /* CUSTOMER_HW_AMLOGIC */
 
 
@@ -79,7 +77,7 @@ extern int sdioh_mmc_irq(int irq);
 /* Customer specific Host GPIO defintion  */
 static int dhd_oob_gpio_num = -1;
 
-#ifdef HARD_KERNEL_OOB
+#ifdef HARDKERNEL_OOB
 #include <linux/gpio.h>
 #include <mach/gpio.h>
 #include <mach/regs-gpio.h>
@@ -107,8 +105,8 @@ int dhd_customer_oob_irq_map(unsigned long *irq_flags_ptr)
 #ifdef CUSTOMER_HW2
 	host_oob_irq = wifi_get_irq_number(irq_flags_ptr);
 
-#elif defined(HARD_KERNEL_OOB)
-	printk("GPIO(WL_HOST_WAKE_UP) = EXYNOS4_GPX0(7) = %d\n", EXYNOS4_GPX0(7));
+#elif defined(HARDKERNEL_OOB)
+	printk("GPIO(WL_HOST_WAKE) = EXYNOS4_GPX0(7) = %d\n", EXYNOS4_GPX0(7));
 	host_oob_irq = gpio_to_irq(EXYNOS4_GPX0(7));
 	gpio_direction_input(EXYNOS4_GPX0(7));
 	printk("host_oob_irq: %d \r\n", host_oob_irq);
@@ -157,7 +155,6 @@ dhd_customer_gpio_wlan_ctrl(int onoff)
 			wifi_set_power(0, 0);
 #endif
 #ifdef CUSTOMER_HW_AMLOGIC
-
 			//extern_wifi_enable(0);
 #endif /* CUSTOMER_HW_AMLOGIC */
 
@@ -174,12 +171,11 @@ dhd_customer_gpio_wlan_ctrl(int onoff)
 			wifi_set_power(1, 0);
 #endif
 #ifdef CUSTOMER_HW_AMLOGIC
-
-		   extern_wifi_set_enable(0);
-                    mdelay(200);
-                    extern_wifi_set_enable(1);
-                   mdelay(200);
-                    sdio_reinit();
+//			extern_wifi_set_enable(0);
+//			mdelay(200);
+//			extern_wifi_set_enable(1);
+//			mdelay(200);
+//			sdio_reinit();
 #endif /* CUSTOMER_HW_AMLOGIC */
 			WL_ERROR(("=========== WLAN going back to live  ========\n"));
 		break;
@@ -192,12 +188,10 @@ dhd_customer_gpio_wlan_ctrl(int onoff)
 #endif /* CUSTOMER_HW */
 
 #ifdef CUSTOMER_HW_AMLOGIC
-		
-
-		extern_wifi_set_enable(0);
-		//extern_wifi_power(0);
+			extern_wifi_set_enable(0);
+			//extern_wifi_power(0);
 #endif /* CUSTOMER_HW_AMLOGIC */
-
+			WL_ERROR(("=========== WLAN placed in POWER OFF ========\n"));
 		break;
 
 		case WLAN_POWER_ON:
@@ -211,11 +205,12 @@ dhd_customer_gpio_wlan_ctrl(int onoff)
 
 #ifdef CUSTOMER_HW_AMLOGIC
 			extern_wifi_set_enable(0);
-                  	mdelay(200);
-                    	extern_wifi_set_enable(1);
 			mdelay(200);
-                   	 sdio_reinit();
+			extern_wifi_set_enable(1);
+			mdelay(200);
+			sdio_reinit();
 #endif /* CUSTOMER_HW_AMLOGIC */
+			WL_ERROR(("=========== WLAN placed in POWER ON ========\n"));
 		break;
 	}
 }

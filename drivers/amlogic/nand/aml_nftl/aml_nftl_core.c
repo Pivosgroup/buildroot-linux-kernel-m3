@@ -108,13 +108,28 @@ int aml_nftl_check_node(struct aml_nftl_info_t *aml_nftl_info, addr_blk_t blk_ad
 
 	node_len_actual = aml_nftl_get_node_length(aml_nftl_info, vt_blk_node);
 	node_len_actual = (node_len_actual > (aml_nftl_info->accessibleblocks-1)) ? (aml_nftl_info->accessibleblocks-1) : node_len_actual;
-	
-	valid_page = aml_nftl_malloc(sizeof(int16_t) * (node_len_actual + 2));
-	if(valid_page == NULL){
-		aml_nftl_dbg("%s, have no mem for valid_page, at blk_addr:%d,  node_len_actual:%d!!!!\n", blk_addr, node_len_actual);
-		return -ENOMEM;
+
+	if(node_len_actual >node_len_max) {	
+		valid_page = aml_nftl_malloc(sizeof(int16_t) * (node_len_actual + 2));
+
+		if(valid_page == NULL){
+			aml_nftl_dbg("have no mem for valid_page, at blk_addr:%d,  node_len_actual:%d!!!!\n", blk_addr, node_len_actual);
+			return -ENOMEM;
+		}	
+		memset((unsigned char *)valid_page, 0x0, sizeof(int16_t)*(node_len_actual+2));
+	}
+	else {
+		valid_page = aml_nftl_malloc(sizeof(int16_t) * (node_len_max + 2));
+
+		if(valid_page == NULL){
+			aml_nftl_dbg("have no mem for valid_page, at blk_addr:%d,  node_len_actual:%d!!!!\n", blk_addr, node_len_max);
+			return -ENOMEM;
+		}	
+		memset((unsigned char *)valid_page, 0x0, sizeof(int16_t)*(node_len_max+2));
 	}
 
+	
+#if 0  //removed unused printk	
 	if (node_len_actual > node_len_max) {
 		aml_nftl_dbg("%s Line:%d blk_addr:%d  have node length over MAX, and node_len_actual:%d\n", __func__, __LINE__, blk_addr, node_len_actual);
 #if 0		
@@ -134,8 +149,9 @@ int aml_nftl_check_node(struct aml_nftl_info_t *aml_nftl_info, addr_blk_t blk_ad
 		}
 #endif		
 	}
+#endif
 
-	memset((unsigned char *)valid_page, 0x0, sizeof(int16_t)*(node_len_actual+2));
+	
 	for (k=0; k<aml_nftl_info->pages_per_blk; k++) {
 
 		node_length = 0;
@@ -286,6 +302,7 @@ static int aml_nftl_blk_mark_bad(struct aml_nftl_info_t *aml_nftl_info, addr_blk
 			if ((vt_blk_node != NULL) && (vt_blk_node->phy_blk_addr == blk_addr)) {
 				vt_blk_node_prev->next = vt_blk_node->next;
 				aml_nftl_free(vt_blk_node);
+				vt_blk_node = NULL; //NULL for free				
 			}
 			else if ((vt_blk_node_prev != NULL) && (vt_blk_node_prev->phy_blk_addr == blk_addr)) {
 				if (*(aml_nftl_info->vtpmt + phy_blk_node->vtblk) == vt_blk_node_prev)
@@ -308,8 +325,15 @@ static int aml_nftl_creat_sectmap(struct aml_nftl_info_t *aml_nftl_info, addr_bl
 	uint32_t page_per_blk;
 	int16_t valid_sects = 0;
 	struct phyblk_node_t *phy_blk_node;
-	unsigned char nftl_oob_buf[sizeof(struct nftl_oobinfo_t)];
 	struct nftl_oobinfo_t *nftl_oob_info;
+	//unsigned char nftl_oob_buf[sizeof(struct nftl_oobinfo_t)];
+	unsigned char *nftl_oob_buf;
+	nftl_oob_buf = aml_nftl_malloc(sizeof(struct nftl_oobinfo_t));
+	
+	if(nftl_oob_buf== NULL){
+		printk("%s,%d malloc failed\n",__func__,__LINE__);
+		return -ENOMEM;;
+	}
 	phy_blk_node = &aml_nftl_info->phypmt[phy_blk_addr];
 	nftl_oob_info = (struct nftl_oobinfo_t *)nftl_oob_buf;
 
@@ -320,6 +344,7 @@ static int aml_nftl_creat_sectmap(struct aml_nftl_info_t *aml_nftl_info, addr_bl
     		status = aml_nftl_info->get_page_info(aml_nftl_info, phy_blk_addr, i, nftl_oob_buf, sizeof(struct nftl_oobinfo_t));
     		if (status) {
     			aml_nftl_dbg("nftl creat sect map faile at: %d\n", phy_blk_addr);
+				aml_nftl_free(nftl_oob_buf);
     			return AML_NFTL_FAILURE;
     		}		    
 			phy_blk_node->ec = nftl_oob_info->ec;
@@ -330,6 +355,7 @@ static int aml_nftl_creat_sectmap(struct aml_nftl_info_t *aml_nftl_info, addr_bl
             status = aml_nftl_info->get_page_info(aml_nftl_info, phy_blk_addr, i, nftl_oob_buf, sizeof(addr_sect_t));
     		if (status) {
     			aml_nftl_dbg("nftl creat sect map faile at: %d\n", phy_blk_addr);
+				aml_nftl_free(nftl_oob_buf);
     			return AML_NFTL_FAILURE;
     		}		    
 		}
@@ -343,7 +369,7 @@ static int aml_nftl_creat_sectmap(struct aml_nftl_info_t *aml_nftl_info, addr_bl
 			break;
 	}
 	phy_blk_node->valid_sects = valid_sects;
-
+	aml_nftl_free(nftl_oob_buf);
 	return 0;
 }
 
@@ -378,6 +404,7 @@ static void aml_nftl_erase_sect_map(struct aml_nftl_info_t * aml_nftl_info, addr
 				aml_nftl_dbg("free blk had mapped vt blk: %d phy blk: %d\n", phy_blk_node->vtblk, blk_addr);
 				vt_blk_node_prev->next = vt_blk_node->next;
 				aml_nftl_free(vt_blk_node);
+				vt_blk_node = NULL; //NULL for free
 			}
 			else if ((vt_blk_node_prev != NULL) && (vt_blk_node_prev->phy_blk_addr == blk_addr)) {
 				aml_nftl_dbg("free blk had mapped vt blk: %d phy blk: %d\n", phy_blk_node->vtblk, blk_addr);

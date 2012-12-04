@@ -1,8 +1,8 @@
 /*
  *      uvc_status.c  --  USB Video Class driver - Status endpoint
  *
- *      Copyright (C) 2007-2009
- *          Laurent Pinchart (laurent.pinchart@skynet.be)
+ *      Copyright (C) 2005-2009
+ *          Laurent Pinchart (laurent.pinchart@ideasonboard.com)
  *
  *      This program is free software; you can redistribute it and/or modify
  *      it under the terms of the GNU General Public License as published by
@@ -16,8 +16,7 @@
 #include <linux/slab.h>
 #include <linux/usb.h>
 #include <linux/usb/input.h>
-
-#include "uvcvideo.h"
+#include <linux/uvcvideo.h>
 
 /* --------------------------------------------------------------------------
  * Input device
@@ -112,7 +111,11 @@ static void uvc_event_control(struct uvc_device *dev, __u8 *data, int len)
 		data[1], data[3], attrs[data[4]], len);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+static void uvc_status_complete(struct urb *urb, struct pt_regs *regs)
+#else
 static void uvc_status_complete(struct urb *urb)
+#endif
 {
 	struct uvc_device *dev = urb->context;
 	int len, ret;

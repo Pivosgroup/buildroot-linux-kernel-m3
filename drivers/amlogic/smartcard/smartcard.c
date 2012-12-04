@@ -119,7 +119,7 @@ static struct class smc_class = {
 extern unsigned long get_mpeg_clk(void);
 #else
 #include "linux/clk.h"
-unsigned long get_mpeg_clk(void)
+static unsigned long get_mpeg_clk(void)
 {
 	struct clk *clk;
 	clk = clk_get_sys("clk81", NULL);

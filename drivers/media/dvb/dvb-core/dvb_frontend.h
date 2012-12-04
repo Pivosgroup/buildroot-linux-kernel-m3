@@ -249,28 +249,6 @@ struct analog_demod_ops {
 	/** This is to allow setting tuner-specific configuration */
 	int (*set_config)(struct dvb_frontend *fe, void *priv_cfg);
 };
-//for dvbs2  
-/*Stores the blind scan parameters which are passed to the FE_SET_BLINDSCAN ioctl.*/
-struct dvbsx_blindscanpara
-{
-	__u16 m_uifrequency_100khz;
-	__u16 m_uitunerlpf_100khz;
-	__u16 m_uistartfreq_100khz;		/*The start scan frequency in units of 100kHz. The minimum value depends on the tuner specification.*/ 
-	__u16 m_uistopfreq_100khz;		/*The stop scan frequency in units of 100kHz. The maximum value depends on the tuner specification.*/
-	__u16 m_uiminsymrate_khz;		/*The minimum symbol rate to be scanned in units of kHz. The minimum value is 1000 kHz.*/
-	__u16 m_uimaxsymrate_khz;		/*The maximum symbol rate to be scanned in units of kHz. The maximum value is 45000 kHz.*/
-};
-
-/*Stores the blind scan status information.*/
-struct dvbsx_blindscaninfo
-{
-	__u16 m_uiProgress;					/*The percentage completion of the blind scan procedure. A value of 100 indicates that the blind scan is finished.*/ 
-	__u16 m_uiChannelCount;				/*The number of channels detected thus far by the blind scan operation.  The Availink device can store up to 120 detected channels.*/ 
-	__u16 m_uiNextStartFreq_100kHz;	/*The start frequency of the next scan in units of 100kHz.*/ 
-	__u16 m_uiResultCode;				/*The result of the blind scan operation.  Possible values are:  0 - blind scan operation normal; 1 -- more than 120 channels have been detected.*/ 
-};
-
-//
 
 struct dvb_frontend_ops {
 
@@ -332,7 +310,7 @@ struct dvb_frontend_ops {
 	int (*blindscan_scan)(struct dvb_frontend* fe, struct dvbsx_blindscanpara *pbspara);
 	int (*blindscan_getscanstatus)(struct dvb_frontend* fe, struct dvbsx_blindscaninfo *pbsinfo);
 	int (*blindscan_cancel)(struct dvb_frontend* fe);
-	int (*blindscan_readchannelinfo)(struct dvb_frontend* fe, struct dvb_frontend_parameters *pchannel);
+	int (*blindscan_readchannelinfo)(struct dvb_frontend* fe, struct dvbsx_frontend_parameters *pchannel);
 	int (*blindscan_reset)(struct dvb_frontend* fe);
 
 //end

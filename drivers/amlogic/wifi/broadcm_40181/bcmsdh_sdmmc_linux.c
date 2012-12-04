@@ -29,6 +29,9 @@
 #include <sdio.h>	/* SDIO Device and Protocol Specs */
 #include <bcmsdbus.h>	/* bcmsdh to/from specific controller APIs */
 #include <sdiovar.h>	/* to get msglevel bit values */
+#include <proto/ethernet.h>
+#include <dngl_stats.h>
+#include <dhd.h>
 
 #include <linux/sched.h>	/* request_irq() */
 
@@ -107,6 +110,49 @@ extern int bcmsdh_probe(struct device *dev);
 extern int bcmsdh_remove(struct device *dev);
 extern volatile bool dhd_mmc_suspend;
 
+#ifndef CONFIG_BCM40181_POWER_ALWAYS_ON
+#include <linux/earlysuspend.h>
+struct sdio_early_suspend_info {
+    struct sdio_func *func;
+    struct early_suspend sdio_early_suspend;
+    struct work_struct	tqueue;
+    int do_late_resume;
+};
+static struct sdio_early_suspend_info sdioinfo[4];
+#if defined(CONFIG_HAS_EARLYSUSPEND)
+
+static void bcmsdh_probe_workqueue(struct work_struct *work)
+{
+    struct sdio_early_suspend_info *sdioinfo =container_of(work, struct sdio_early_suspend_info, tqueue);
+    printk("call bcmsdh_probe\n");
+    /* Call customer gpio to turn on power with WL_REG_ON signal */
+    dhd_customer_gpio_wlan_ctrl(WLAN_POWER_ON);
+    bcmsdh_probe(&sdioinfo->func->dev);
+}
+
+static void bcmsdh_sdmmc_early_suspend(struct early_suspend *h)
+{
+	struct sdio_early_suspend_info *sdioinfo = container_of(h, struct sdio_early_suspend_info, sdio_early_suspend);
+
+	printk("%s: enter\n", __FUNCTION__);
+    if(sdioinfo->func->num == 2)
+        sdioinfo->do_late_resume = 0;
+}
+
+static void bcmsdh_sdmmc_late_resume(struct early_suspend *h)
+{
+	struct sdio_early_suspend_info *sdioinfo = container_of(h, struct sdio_early_suspend_info, sdio_early_suspend);
+
+	printk("%s: enter\n", __FUNCTION__);
+    if(sdioinfo->func->num == 2 && sdioinfo->do_late_resume ){
+        printk("schedule sdioinfo->tqueue\n");
+        sdioinfo->do_late_resume = 0;
+        schedule_work(&sdioinfo->tqueue);
+    }
+}
+#endif /* defined(CONFIG_HAS_EARLYSUSPEND) */
+#endif
+
 static int bcmsdh_sdmmc_probe(struct sdio_func *func,
                               const struct sdio_device_id *id)
 {
@@ -139,6 +185,18 @@ static int bcmsdh_sdmmc_probe(struct sdio_func *func,
 		ret = bcmsdh_probe(&func->dev);
 	}
 
+#ifndef CONFIG_BCM40181_POWER_ALWAYS_ON
+#ifdef CONFIG_HAS_EARLYSUSPEND
+    sdioinfo[func->num].func = func;
+    sdioinfo[func->num].do_late_resume = 0;
+    sdioinfo[func->num].sdio_early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 30;
+	sdioinfo[func->num].sdio_early_suspend.suspend = bcmsdh_sdmmc_early_suspend;
+	sdioinfo[func->num].sdio_early_suspend.resume = bcmsdh_sdmmc_late_resume;
+	register_early_suspend(&sdioinfo[func->num].sdio_early_suspend);
+    INIT_WORK(&sdioinfo[func->num].tqueue, bcmsdh_probe_workqueue);
+#endif
+#endif
+
 	return ret;
 }
 
@@ -150,6 +208,9 @@ static void bcmsdh_sdmmc_remove(struct sdio_func *func)
 	sd_info(("sdio_device: 0x%04x\n", func->device));
 	sd_info(("Function#: 0x%04x\n", func->num));
 
+#ifndef CONFIG_BCM40181_POWER_ALWAYS_ON
+    unregister_early_suspend(&sdioinfo[func->num].sdio_early_suspend);
+#endif
 	if (func->num == 2) {
 		sd_trace(("F2 found, calling bcmsdh_remove...\n"));
 		bcmsdh_remove(&func->dev);
@@ -179,7 +240,13 @@ static const struct sdio_device_id bcmsdh_sdmmc_ids[] = {
 
 MODULE_DEVICE_TABLE(sdio, bcmsdh_sdmmc_ids);
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 39)) && defined(CONFIG_PM)
+#ifndef CONFIG_BCM40181_POWER_ALWAYS_ON
+/* i don't know why sdio can't not use when in suspend,
+ * so set this "on_suspend" flage indicat dhd is suspending,
+ * and do not operate sdio bus */
+volatile int on_suspend = 0;
+#endif
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 33)) && defined(CONFIG_PM)
 static int bcmsdh_sdmmc_suspend(struct device *pdev)
 {
 	struct sdio_func *func = dev_to_sdio_func(pdev);
@@ -191,9 +258,21 @@ static int bcmsdh_sdmmc_suspend(struct device *pdev)
 
 	if (dhd_os_check_wakelock(bcmsdh_get_drvdata()))
 		return -EBUSY;
+#ifdef CONFIG_BCM40181_POWER_ALWAYS_ON
 #if defined(OOB_INTR_ONLY)
 	bcmsdh_oob_intr_set(0);
 #endif	/* defined(OOB_INTR_ONLY) */
+#else
+    /* add by jiamin */
+    if (func->num == 2 && !sdioinfo[func->num].do_late_resume) {
+        printk("dhd suspend, remove bcmsdh\n");
+        on_suspend = 1;
+        bcmsdh_remove(&func->dev);
+        dhd_customer_gpio_wlan_ctrl(WLAN_POWER_OFF);
+        on_suspend = 0;
+        sdioinfo[func->num].do_late_resume = 1;
+    }
+#endif
 	dhd_mmc_suspend = TRUE;
 	smp_mb();
 
@@ -206,10 +285,17 @@ static int bcmsdh_sdmmc_resume(struct device *pdev)
 
 	sd_trace(("%s Enter\n", __FUNCTION__));
 	dhd_mmc_suspend = FALSE;
+#ifdef CONFIG_BCM40181_POWER_ALWAYS_ON
 #if defined(OOB_INTR_ONLY)
 	if ((func->num == 2) && dhd_os_check_if_up(bcmsdh_get_drvdata()))
 		bcmsdh_oob_intr_set(1);
 #endif /* (OOB_INTR_ONLY) */
+#else
+    gInstance->func[func->num] = func;
+    if (func->num == 2) {
+        printk("dhd resume, late probe bcmsdh\n");
+    }
+#endif
 
 	smp_mb();
 	return 0;
@@ -261,7 +347,7 @@ static struct sdio_driver bcmsdh_sdmmc_driver = {
 	.remove		= bcmsdh_sdmmc_remove,
 	.name		= "bcmsdh_sdmmc",
 	.id_table	= bcmsdh_sdmmc_ids,
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 39)) && defined(CONFIG_PM)
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 33)) && defined(CONFIG_PM)
 	.drv = {
 	.pm	= &bcmsdh_sdmmc_pm_ops,
 	},

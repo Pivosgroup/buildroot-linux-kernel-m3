@@ -20,6 +20,7 @@
 #include <linux/mtd/nand.h>
 #include <linux/mtd/nand_ecc.h>
 #include <linux/mtd/partitions.h>
+#include <linux/aml_eth.h>
 #include <linux/device.h>
 #include <linux/spi/flash.h>
 #include <mach/hardware.h>
@@ -78,6 +79,10 @@
 
 #ifdef CONFIG_EFUSE
 #include <linux/efuse.h>
+#endif
+
+#ifdef CONFIG_AML_HDMI_TX
+#include <linux/hdmi/hdmi_config.h>
 #endif
 
 #ifdef CONFIG_SUSPEND
@@ -291,25 +296,16 @@ static struct platform_device fb_device = {
 
 #if defined(CONFIG_AMLOGIC_SPI_NOR)
 static struct mtd_partition spi_partition_info[] = {
-    /* Hide uboot partition
-            {
-                    .name = "uboot",
-                    .offset = 0,
-                    .size = 0x3e000,
-            },
-    //*/
+    {
+        .name = "ubootwhole",
+        .offset = 0,
+        .size = 0x60000,
+    },
     {
         .name = "ubootenv",
         .offset = 0x7e000,
         .size = 0x2000,
-},
-    /* Hide recovery partition
-            {
-                    .name = "recovery",
-                    .offset = 0x40000,
-                    .size = 0x1c0000,
-            },
-    //*/
+    },
 };
 
 static struct flash_platform_data amlogic_spi_platform = {
@@ -337,6 +333,20 @@ static struct platform_device amlogic_spi_nor_device = {
 #endif
 
 #ifdef CONFIG_USB_DWC_OTG_HCD
+#ifdef CONFIG_USB_DPLINE_PULLUP_DISABLE
+static set_vbus_valid_ext_fun(unsigned int id,char val)
+{
+	unsigned int  reg = (PREI_USB_PHY_A_REG1 + id);
+	if(val == 1)
+	{
+		SET_CBUS_REG_MASK(reg,1<<0);
+	}
+	else
+	{
+		CLEAR_CBUS_REG_MASK(reg,1<<0);
+	}
+}
+#endif
 static void set_usb_a_vbus_power(char is_power_on)
 {
     if(is_power_on) {
@@ -382,6 +392,9 @@ static struct lm_device usb_ld_a = {
     .port_speed = USB_PORT_SPEED_DEFAULT,
     .dma_config = USB_DMA_BURST_SINGLE,
     .set_vbus_power = set_usb_a_vbus_power,
+#ifdef CONFIG_USB_DPLINE_PULLUP_DISABLE	
+	.set_vbus_valid_ext = set_vbus_valid_ext_fun,
+#endif
 };
 static struct lm_device usb_ld_b = {
     .type = LM_DEVICE_TYPE_USB,
@@ -394,6 +407,9 @@ static struct lm_device usb_ld_b = {
     .port_speed = USB_PORT_SPEED_DEFAULT,
     .dma_config = USB_DMA_BURST_SINGLE , //   USB_DMA_DISABLE,
     .set_vbus_power = set_usb_b_vbus_power,
+#ifdef CONFIG_USB_DPLINE_PULLUP_DISABLE	
+	.set_vbus_valid_ext = set_vbus_valid_ext_fun,
+#endif	
 };
 
 #endif
@@ -815,7 +831,26 @@ static struct platform_device aml_pm_device = {
 #endif
 
 #if defined(CONFIG_I2C_SW_AML)
+#define MESON3_I2C_PREG_GPIOX_OE		CBUS_REG_ADDR(PREG_PAD_GPIO4_EN_N)
+#define MESON3_I2C_PREG_GPIOX_OUTLVL	CBUS_REG_ADDR(PREG_PAD_GPIO4_O)
+#define MESON3_I2C_PREG_GPIOX_INLVL	CBUS_REG_ADDR(PREG_PAD_GPIO4_I)
 
+static struct aml_sw_i2c_platform aml_sw_i2c_plat = {
+    .sw_pins = {
+        .scl_reg_out        = MESON3_I2C_PREG_GPIOX_OUTLVL,
+        .scl_reg_in     = MESON3_I2C_PREG_GPIOX_INLVL,
+        .scl_bit            = 26, 
+        .scl_oe         = MESON3_I2C_PREG_GPIOX_OE,
+        .sda_reg_out        = MESON3_I2C_PREG_GPIOX_OUTLVL,
+        .sda_reg_in     = MESON3_I2C_PREG_GPIOX_INLVL,
+        .sda_bit            = 25,
+        .sda_oe         = MESON3_I2C_PREG_GPIOX_OE,
+    },  
+    .udelay         = 2,
+    .timeout            = 100,
+};
+
+#if 0
 static struct aml_sw_i2c_platform aml_sw_i2c_plat = {
     .sw_pins = {
         .scl_reg_out        = MESON_I2C_PREG_GPIOB_OUTLVL,
@@ -830,7 +865,7 @@ static struct aml_sw_i2c_platform aml_sw_i2c_plat = {
     .udelay         = 2,
     .timeout            = 100,
 };
-
+#endif
 static struct platform_device aml_sw_i2c_device = {
     .name         = "aml-sw-i2c",
     .id       = -1,
@@ -1335,11 +1370,12 @@ static struct aml_nand_platform aml_nand_mid_platform[] = {
 				.nr_partitions = ARRAY_SIZE(multi_partition_info_512M),
 				.partitions = multi_partition_info_512M,
 				.set_parts = nand_set_parts,
-				.options = (NAND_TIMING_MODE5 | NAND_ECC_BCH60_1K_MODE | NAND_TWO_PLANE_MODE),
+				.options = (NAND_TIMING_MODE5 | NAND_ECC_BCH60_1K_MODE),
 			},
     	},
 			.T_REA = 20,
 			.T_RHOH = 15,
+			.ran_mode = 1,
 	}
 };
 
@@ -1527,7 +1563,61 @@ static struct platform_device aml_wdt_device = {
 };
 #endif
 
+#if defined(CONFIG_AML_HDMI_TX)
+static struct hdmi_phy_set_data brd_phy_data[] = {
+//    {27, 0xf7, 0x0},    // an example: set Reg0xf7 to 0 in 27MHz
+    {-1,   -1},         //end of phy setting
+};
+static struct hdmi_config_platform_data aml_hdmi_pdata ={
+    .hdmi_5v_ctrl = NULL,
+    .hdmi_3v3_ctrl = NULL,
+    .hdmi_pll_vdd_ctrl = NULL,
+    .hdmi_sspll_ctrl = NULL,
+    .phy_data = brd_phy_data,
+};
+
+static struct platform_device aml_hdmi_device = {
+    .name = "amhdmitx",
+    .id   = -1,
+    .dev  = {
+        .platform_data = &aml_hdmi_pdata,
+    }
+};
+#endif
+#define ETH_PM_DEV
+#if defined(ETH_PM_DEV)
+#define ETH_MODE_RMII_EXTERNAL
+static void meson_eth_clock_enable(int flag)
+{
+}
+
+static void meson_eth_reset(void)
+{
+    set_gpio_mode(GPIOD_bank_bit0_9(7), GPIOD_bit_bit0_9(7), GPIO_OUTPUT_MODE);
+    set_gpio_val(GPIOD_bank_bit0_9(7), GPIOD_bit_bit0_9(7), 0);
+    mdelay(100);
+    set_gpio_val(GPIOD_bank_bit0_9(7), GPIOD_bit_bit0_9(7), 1);
+}
+static struct aml_eth_platform_data  aml_pm_eth_platform_data ={
+    .clock_enable = meson_eth_clock_enable,
+    .reset = meson_eth_reset,
+};
+
+struct platform_device meson_device_eth = {
+	.name   = "ethernet_pm_driver",
+	.id     = -1,
+	.dev    = {
+		.platform_data = &aml_pm_eth_platform_data,
+	}
+};
+#endif
 static struct platform_device __initdata *platform_devs[] = {
+#if defined(ETH_PM_DEV)
+    &meson_device_eth,
+#endif
+#if defined(CONFIG_AML_HDMI_TX)
+    &aml_hdmi_device,
+#endif
 #if defined(CONFIG_JPEGLOGO)
     &jpeglogo_device,
 #endif
@@ -1582,6 +1672,9 @@ static struct platform_device __initdata *platform_devs[] = {
 #endif
 #if defined(CONFIG_NAND_FLASH_DRIVER_MULTIPLANE_CE)
     &aml_nand_device,
+#endif
+#ifdef CONFIG_BT_DEVICE
+ 	&bt_device,
 #endif
 #if defined(CONFIG_AML_RTC)
     &aml_rtc_device,
@@ -1828,6 +1921,16 @@ static __initdata struct map_desc meson_video_mem_desc[] = {
         .type       = MT_MEMORY,
     },
 #endif
+// #ifdef CONFIG_AML_SECURE_DRIVER
+#ifdef CONFIG_AM_IPTV_SECURITY
+    {
+        .virtual    = PAGE_ALIGN(0xdfe00000),
+        .pfn        = __phys_to_pfn(0x9fe00000),
+        .length     = SZ_1M,
+        .type       = MT_MEMORY,
+    },
+#endif
+
 };
 
 static __init void m1_map_io(void)
@@ -1844,6 +1947,8 @@ static __init void m1_irq_init(void)
 static __init void m1_fixup(struct machine_desc *mach, struct tag *tag, char **cmdline, struct meminfo *m)
 {
     struct membank *pbank;
+    unsigned size;
+    
     m->nr_banks = 0;
     pbank=&m->bank[m->nr_banks];
     pbank->start = PAGE_ALIGN(PHYS_MEM_START);
@@ -1852,11 +1957,18 @@ static __init void m1_fixup(struct machine_desc *mach, struct tag *tag, char **c
     m->nr_banks++;
     pbank=&m->bank[m->nr_banks];
     pbank->start = PAGE_ALIGN(RESERVED_MEM_END+1);
+   size = PHYS_MEM_END-RESERVED_MEM_END;
 #ifdef CONFIG_AML_SUSPEND
     pbank->size  = (PHYS_MEM_END-RESERVED_MEM_END-SZ_1M) & PAGE_MASK;
 #else
     pbank->size  = (PHYS_MEM_END-RESERVED_MEM_END) & PAGE_MASK;
 #endif
+// #ifdef CONFIG_ENCRYPT
+#ifdef CONFIG_AM_IPTV_SECURITY
+	size -= SZ_1M;
+#endif
+    pbank->size  = size & PAGE_MASK;
+
     pbank->node  = PHYS_TO_NID(RESERVED_MEM_END+1);
     m->nr_banks++;
 }

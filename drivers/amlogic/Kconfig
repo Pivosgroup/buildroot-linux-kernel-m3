@@ -21,6 +21,7 @@ source "drivers/amlogic/smartcard/Kconfig"
 source "drivers/amlogic/gps/Kconfig"
 source "drivers/amlogic/watchdog/Kconfig"
 source "drivers/amlogic/boot_monitor/Kconfig"
+source "drivers/amlogic/security/Kconfig"
 
 #	Block devices
 #

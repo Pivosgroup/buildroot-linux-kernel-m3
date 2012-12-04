@@ -36,6 +36,8 @@ typedef struct {
 
 #define OSD1_CANVAS_INDEX 0x40
 #define OSD2_CANVAS_INDEX 0x43
+#define OSD3_CANVAS_INDEX 0x41
+#define OSD4_CANVAS_INDEX 0x42
 #define ALLOC_CANVAS_INDEX  0x46
 
 #define GE2D_MAX_CANVAS_INDEX   0x5f
@@ -47,8 +49,21 @@ typedef struct {
 #define DISPLAY2_CANVAS_MAX_INDEX    0x6b 
 
     /* DEINTERLACE_CANVAS_MAX_INDEX is 0x77 because the canvas start from 0x78 are used by h264 */
+#define DI_USE_FIXED_CANVAS_IDX
+#ifdef DI_USE_FIXED_CANVAS_IDX
+#define DI_PRE_MEM_NR_CANVAS_IDX        0x70
+#define DI_PRE_CHAN2_NR_CANVAS_IDX      0x71
+#define DI_PRE_WR_NR_CANVAS_IDX         0x72
+#define DI_PRE_WR_MTN_CANVAS_IDX        0x73
+#define DI_POST_BUF0_CANVAS_IDX         0x74
+#define DI_POST_BUF1_CANVAS_IDX         0x75
+#define DI_POST_MTNCRD_CANVAS_IDX       0x76
+#define DI_POST_MTNPRD_CANVAS_IDX       0x77
+#else
 #define DEINTERLACE_CANVAS_BASE_INDEX	0x70
-#define DEINTERLACE_CANVAS_MAX_INDEX	0x77
+#define DEINTERLACE_CANVAS_MAX_INDEX	0x7f
+#endif
+
 
 #define FREESCALE_CANVAS_INDEX 0x50   //for osd&video scale use
 #define MAX_FREESCALE_CANVAS_INDEX 0x5f

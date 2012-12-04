@@ -4,7 +4,7 @@
  *	Copyright (C) 2006-2007
  *		Ivan N. Zlatev <contact@i-nz.net>
  *	Copyright (C) 2008-2009
- *		Laurent Pinchart <laurent.pinchart@skynet.be>
+ *		Laurent Pinchart <laurent.pinchart@ideasonboard.com>
  *
  *      This program is free software; you can redistribute it and/or modify
  *      it under the terms of the GNU General Public License as published by
@@ -16,8 +16,7 @@
 #include <linux/usb.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
-
-#include "uvcvideo.h"
+#include <linux/uvcvideo.h>
 
 /* Built-in iSight webcams implements most of UVC 1.0 except a
  * different packet format. Instead of sending a header at the

@@ -56,3 +56,10 @@ config BCM40181_OOB_INTR_ONLY
         default n
         ---help---
            Use out of band interrupt for all interrupts(including SDIO interrupts).
+
+config BCM40181_POWER_ALWAYS_ON
+        bool "wifi power always on"
+        depends on SDIO_DHD_CDC_WIFI_40181_MODULE
+        default n
+        ---help---
+           keep wifi power on when system suspend.

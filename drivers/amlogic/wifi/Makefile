@@ -1,6 +1,6 @@
 obj-$(CONFIG_RTL8XXX_CU_USB_WIFI) += rtl8xxx_CU/
 obj-$(CONFIG_RTL8XXX_SU_USB_WIFI) += rtl8xxx_SU/
-obj-$(CONFIG_RALINK_3070_USB_WIFI) += ralink3070/
+obj-$(CONFIG_RTXX7X_USB_WIFI) += rtxx7x/
 obj-$(CONFIG_SAMSUNG_WIFI_4329) += bcm4329/
 obj-$(CONFIG_SDIO_DHD_CDC_WIFI_4329) += broadcm_4329/
 obj-$(CONFIG_SDIO_DHD_CDC_WIFI_4319) += broadcm_4329/

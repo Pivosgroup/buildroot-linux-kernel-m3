@@ -404,7 +404,7 @@ struct snd_pcm_status {
 #ifdef CONFIG_ANDROID
 	snd_pcm_uframes_t ex_size;   /* extra size kept not be put into HW buf */
 #endif
-	unsigned char reserved[60];	/* must be filled with zero */
+    unsigned char reserved[60];	/* must be filled with zero */
 };
 
 struct snd_pcm_mmap_status {

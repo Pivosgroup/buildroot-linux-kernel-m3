@@ -255,7 +255,7 @@ AVL_DVBSx_ErrorCode Tuner_control(AVL_uint32 channel_freq, AVL_uint32 bb_sym, st
 	AVL_DVBSx_ErrorCode r;
 	//AVL_uchar auto_scan = 0;// Add flag for "’ßÌ¨"
 	// Register initial flag;
-
+	auto_scan = 0;
 	//when sym is 0 or 45000, means auto-scan channel.
 	if (bb_sym == 0 || bb_sym == 45000) //auto-scan mode
 	{

@@ -91,6 +91,33 @@
 #endif
 
 
+#ifdef CONFIG_AML_HDMI_TX
+#include <linux/hdmi/hdmi_config.h>
+#endif
+
+#if defined(CONFIG_AML_HDMI_TX)
+static struct hdmi_phy_set_data brd_phy_data[] = {
+//    {27, 0xf7, 0x0},    // an example: set Reg0xf7 to 0 in 27MHz
+    {-1,   -1},         //end of phy setting
+};
+
+static struct hdmi_config_platform_data aml_hdmi_pdata ={
+    .hdmi_5v_ctrl = NULL,
+    .hdmi_3v3_ctrl = NULL,
+    .hdmi_pll_vdd_ctrl = NULL,
+    .hdmi_sspll_ctrl = NULL,
+    .phy_data = brd_phy_data,
+};
+
+static struct platform_device aml_hdmi_device = {
+    .name = "amhdmitx",
+    .id   = -1,
+    .dev  = {
+        .platform_data = &aml_hdmi_pdata,
+    }
+};
+#endif
+
 
 #if defined(CONFIG_KEYPADS_AM)||defined(CONFIG_KEYPADS_AM_MODULE)
 static struct resource intput_resources[] = {
@@ -247,7 +274,6 @@ static struct mpu3050_platform_data mpu3050_data = {
     };
 #endif
 
-
 #if defined(CONFIG_FB_AM)
 static struct resource fb_device_resources[] = {
     [0] = {
@@ -271,6 +297,30 @@ static struct platform_device fb_device = {
     .resource      = fb_device_resources,
 };
 #endif
+
+#if defined(CONFIG_AM_FB_EXT)
+static struct resource fb_ext_device_resources[] = {
+    [0] = {
+        .start = OSD3_ADDR_START,
+        .end   = OSD3_ADDR_END,
+        .flags = IORESOURCE_MEM,
+    },
+#if defined(CONFIG_FB_OSD2_ENABLE)
+    [1] = {
+        .start = OSD4_ADDR_START,
+        .end   = OSD4_ADDR_END,
+        .flags = IORESOURCE_MEM,
+    },
+#endif
+};
+static struct platform_device fb_ext_device = {
+    .name       = "mesonfb-ext",
+    .id         = 0,
+    .num_resources = ARRAY_SIZE(fb_ext_device_resources),
+    .resource      = fb_ext_device_resources,
+};
+#endif
+
 #ifdef CONFIG_USB_PHY_CONTROL
 static struct resource usb_phy_control_device_resources[] = {
 	{
@@ -1826,8 +1876,14 @@ static struct platform_device freescale_device =
 };
 
 static struct platform_device __initdata *platform_devs[] = {
+#if defined(CONFIG_AML_HDMI_TX)
+    &aml_hdmi_device,
+#endif
 #if defined(CONFIG_FB_AM)
     &fb_device,
+#endif
+#if defined(CONFIG_AM_FB_EXT)
+    &fb_ext_device,
 #endif
 #if defined(CONFIG_AM_STREAMING)
     &codec_device,

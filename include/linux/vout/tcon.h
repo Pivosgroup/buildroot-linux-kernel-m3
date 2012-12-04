@@ -251,6 +251,8 @@ typedef struct {
     
 	u16 screen_width;	/* screen aspect ratio X direction */
  	u16 screen_height;	/* screen aspect ratio Y direction */
+	u32 screen_actual_width;/* screen physical width in "mm" unit */
+	u32 screen_actual_height;/* screen physical height in "mm" unit */
 	u16 sync_duration_num;
 	u16 sync_duration_den;
 	

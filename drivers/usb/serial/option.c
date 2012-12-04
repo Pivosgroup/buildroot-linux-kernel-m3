@@ -398,6 +398,10 @@ static int  option_resume(struct usb_serial *serial);
 
 #define CINTERION_VENDOR_ID			0x0681
 
+#define STRONGRISING_VENDOR_ID                  0x21f5
+#define STRONGRISING_PRODUCT_SEW868             0x2012
+#define STRONGRISING_PRODUCT_SEV789             0x2008
+
 /* some devices interfaces need special handling due to a number of reasons */
 enum option_blacklist_reason {
 		OPTION_BLACKLIST_NONE = 0,
@@ -582,6 +586,7 @@ static const struct usb_device_id option_ids[] = {
 	{ USB_DEVICE(ANYDATA_VENDOR_ID, ANYDATA_PRODUCT_ADU_E100A) },	/* ADU-E100, ADU-310 */
 	{ USB_DEVICE(ANYDATA_VENDOR_ID, ANYDATA_PRODUCT_ADU_500A) },
 	{ USB_DEVICE(ANYDATA_VENDOR_ID, ANYDATA_PRODUCT_ADU_620UW) },
+	{ USB_DEVICE(ANYDATA_VENDOR_ID, 0x6604) },
 	{ USB_DEVICE(AXESSTEL_VENDOR_ID, AXESSTEL_PRODUCT_MV110H) },
 	{ USB_DEVICE(YISO_VENDOR_ID, YISO_PRODUCT_U893) },
 	{ USB_DEVICE(BANDRICH_VENDOR_ID, BANDRICH_PRODUCT_C100_1) },
@@ -762,6 +767,8 @@ static const struct usb_device_id option_ids[] = {
 	{ USB_DEVICE(PIRELLI_VENDOR_ID, PIRELLI_PRODUCT_1012)},
 
 	{ USB_DEVICE(CINTERION_VENDOR_ID, 0x0047) },
+	{ USB_DEVICE(STRONGRISING_VENDOR_ID, STRONGRISING_PRODUCT_SEW868) },
+	{ USB_DEVICE(STRONGRISING_VENDOR_ID, STRONGRISING_PRODUCT_SEV789) },
 	{ } /* Terminating entry */
 };
 MODULE_DEVICE_TABLE(usb, option_ids);

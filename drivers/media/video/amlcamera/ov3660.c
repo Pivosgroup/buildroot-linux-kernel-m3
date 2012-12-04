@@ -41,6 +41,7 @@
 #include <mach/pinmux.h>
 #include <linux/tvin/tvin.h>
 #include "common/plat_ctrl.h"
+#include "common/vmapi.h"
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 static struct early_suspend ov3660_early_suspend;
@@ -89,10 +90,10 @@ static struct v4l2_queryctrl ov3660_qctrl[] = {
 		.id            = V4L2_CID_BRIGHTNESS,
 		.type          = V4L2_CTRL_TYPE_INTEGER,
 		.name          = "Brightness",
-		.minimum       = 0,
-		.maximum       = 255,
+		.minimum       = -3,
+		.maximum       = 3,
 		.step          = 1,
-		.default_value = 127,
+		.default_value = 0,
 		.flags         = V4L2_CTRL_FLAG_SLIDER,
 	}, {
 		.id            = V4L2_CID_CONTRAST,
@@ -103,16 +104,7 @@ static struct v4l2_queryctrl ov3660_qctrl[] = {
 		.step          = 0xa,
 		.default_value = 0x30,
 		.flags         = V4L2_CTRL_FLAG_SLIDER,
-	},/* {
-		.id            = V4L2_CID_SATURATION,
-		.type          = V4L2_CTRL_TYPE_INTEGER,
-		.name          = "Saturation",
-		.minimum       = 0x28,
-		.maximum       = 0x60,
-		.step          = 0x8,
-		.default_value = 0x48,
-		.flags         = V4L2_CTRL_FLAG_SLIDER,
-	}, */{
+	},{
 		.id            = V4L2_CID_HFLIP,
 		.type          = V4L2_CTRL_TYPE_INTEGER,
 		.name          = "flip on horizontal",
@@ -120,7 +112,7 @@ static struct v4l2_queryctrl ov3660_qctrl[] = {
 		.maximum       = 1,
 		.step          = 0x1,
 		.default_value = 0,
-		.flags         = V4L2_CTRL_FLAG_SLIDER,
+		.flags         = V4L2_CTRL_FLAG_DISABLED,
 	} ,{
 		.id            = V4L2_CID_VFLIP,
 		.type          = V4L2_CTRL_TYPE_INTEGER,
@@ -129,7 +121,7 @@ static struct v4l2_queryctrl ov3660_qctrl[] = {
 		.maximum       = 1,
 		.step          = 0x1,
 		.default_value = 0,
-		.flags         = V4L2_CTRL_FLAG_SLIDER,
+		.flags         = V4L2_CTRL_FLAG_DISABLED,
 	},{
 		.id            = V4L2_CID_DO_WHITE_BALANCE,
 		.type          = V4L2_CTRL_TYPE_INTEGER,
@@ -157,7 +149,16 @@ static struct v4l2_queryctrl ov3660_qctrl[] = {
 		.step          = 0x1,
 		.default_value = 0,
 		.flags         = V4L2_CTRL_FLAG_SLIDER,
-	}
+	},/*{
+		.id            = V4L2_CID_SATURATION,
+		.type          = V4L2_CTRL_TYPE_INTEGER,
+		.name          = "Saturation",
+		.minimum       = -2,
+		.maximum       = 2,
+		.step          = 1,
+		.default_value = 0,
+		.flags         = V4L2_CTRL_FLAG_SLIDER,
+	}*/
 };
 
 #define dprintk(dev, level, fmt, arg...) \
@@ -205,28 +206,6 @@ static struct ov3660_fmt formats[] = {
 		.fourcc   = V4L2_PIX_FMT_YUV420,
 		.depth    = 12,
 	}
-#if 0
-	{
-		.name     = "4:2:2, packed, YUYV",
-		.fourcc   = V4L2_PIX_FMT_VYUY,
-		.depth    = 16,	
-	},
-	{
-		.name     = "RGB565 (LE)",
-		.fourcc   = V4L2_PIX_FMT_RGB565, /* gggbbbbb rrrrrggg */
-		.depth    = 16,
-	},
-	{
-		.name     = "RGB555 (LE)",
-		.fourcc   = V4L2_PIX_FMT_RGB555, /* gggbbbbb arrrrrgg */
-		.depth    = 16,
-	},
-	{
-		.name     = "RGB555 (BE)",
-		.fourcc   = V4L2_PIX_FMT_RGB555X, /* arrrrrgg gggbbbbb */
-		.depth    = 16,
-	},
-#endif
 };
 
 static struct ov3660_fmt *get_format(struct v4l2_format *f)
@@ -324,7 +303,8 @@ static inline struct ov3660_fh *to_fh(struct ov3660_device *dev)
 static struct v4l2_frmsize_discrete ov3660_prev_resolution[2]= //should include 352x288 and 640x480, those two size are used for recording
 {
 	{320,240},
-	{800,600},
+	{352,288},
+	{640,480},
 };
 
 static struct v4l2_frmsize_discrete ov3660_pic_resolution[3]=
@@ -577,6 +557,7 @@ struct aml_camera_i2c_fig_s OV3660_script[] = {
 //Under 27M Pclk
 	{0x3a00, 0x38}, //BIT[5]:1,banding function enable
 /******if use 50HZ banding remove, refer to below setting********/
+#if 1
 	{0x3c00, 0x04}, //BIT[2]:1,ENABLE 50HZ
 	{0x3a14, 0x30}, //NIGHT MODE CEILING, 50HZ
 	{0x3a15, 0x72}, //NIGHT MODE CEILING, 50HZ
@@ -586,7 +567,7 @@ struct aml_camera_i2c_fig_s OV3660_script[] = {
 	{0x380e, 0x03}, //insert dummy to remove banding under 50Hz
 	{0x380f, 0x33}, //insert dummy to remove banding under 50Hz
 	/******if use 60HZ banding remove, refer to below setting********/
-	/*
+#else
 	{0x3c00, 0x00}, //BIT[2]:0,ENABLE 50HZ
 	{0x3a02, 0x30}, //NIGHT MODE CEILING, 60HZ
 	{0x3a03, 0x62}, //NIGHT MODE CEILING, 60HZ
@@ -595,7 +576,7 @@ struct aml_camera_i2c_fig_s OV3660_script[] = {
 	{0x3a0d, 0x08}, //60HZ MAX BAND
 	{0x380e, 0x03}, //no dummy
 	{0x380f, 0x14}, //no dummy
-	*/
+#endif
 	{0xffff, 0xff},
 };
 
@@ -635,6 +616,167 @@ void OV3660_init_regs(struct ov3660_device *dev)
 }
 /*************************************************************************
 * FUNCTION
+*    OV3660_set_param_brightness
+*
+* DESCRIPTION
+*    brightness setting.
+*
+* PARAMETERS
+*    none
+*
+* RETURNS
+*    None
+*
+* GLOBALS AFFECTED
+*
+*************************************************************************/
+void OV3660_set_param_brightness(struct ov3660_device *dev, int value)//亮度
+{
+	struct i2c_client *client = v4l2_get_subdevdata(&dev->sd);
+	int temp;
+
+    switch (value) {	
+		case 3:
+			temp = i2c_get_byte(client,0x5588);
+			i2c_put_byte(client, 0x5588, temp&0xf7);
+			i2c_put_byte(client, 0x5587, 0x60);
+			break;
+		case 2: 
+			temp = i2c_get_byte(client,0x5588);
+			i2c_put_byte(client, 0x5588, temp&0xf7);
+			i2c_put_byte(client, 0x5587, 0x40);
+			break;
+		case 1: 
+			temp = i2c_get_byte(client,0x5588);
+			i2c_put_byte(client, 0x5588, temp&0xf7);
+			i2c_put_byte(client, 0x5587, 0x20);
+			break;
+		case 0: 
+			temp = i2c_get_byte(client,0x5588);
+			i2c_put_byte(client, 0x5588, temp&0xf7);
+			i2c_put_byte(client, 0x5587, 0x00);
+			break;			
+		case -1: 
+			temp = i2c_get_byte(client,0x5588);
+			i2c_put_byte(client, 0x5588, temp | 0x08);
+			i2c_put_byte(client, 0x5587, 0x20);
+			break;
+      	case -2: 
+      		temp = i2c_get_byte(client,0x5588);
+			i2c_put_byte(client, 0x5588, temp | 0x08);
+			i2c_put_byte(client, 0x5587, 0x40);
+			break;
+		case -3:
+		    temp = i2c_get_byte(client,0x5588);
+			i2c_put_byte(client, 0x5588, temp | 0x08);
+			i2c_put_byte(client, 0x5587, 0x60);
+			break;
+		default:
+			temp = i2c_get_byte(client,0x5588);
+			i2c_put_byte(client, 0x5588, temp&0xf7);
+			i2c_put_byte(client, 0x5587, 0x00);
+			break;
+	}
+
+} /* OV3660_set_param_brightness */
+/*************************************************************************
+* FUNCTION
+*    OV3660_set_param_contrast
+*
+* DESCRIPTION
+*    contrast setting.
+*
+* PARAMETERS
+*    none
+*
+* RETURNS
+*    None
+*
+* GLOBALS AFFECTED
+*
+*************************************************************************/
+void OV3660_set_param_contrast(struct ov3660_device *dev, int value)//亮度
+{
+	struct i2c_client *client = v4l2_get_subdevdata(&dev->sd);
+
+    switch (value) {	
+		case 3:
+			i2c_put_byte(client, 0x5586, 0x38);
+			break;
+		case 2: 
+			i2c_put_byte(client, 0x5586, 0x30);
+			break;
+		case 1: 
+			i2c_put_byte(client, 0x5586, 0x28);
+			break;
+		case 0: 
+			i2c_put_byte(client, 0x5586, 0x20);
+			break;			
+		case -1: 
+			i2c_put_byte(client, 0x5586, 0x18);
+			break;
+      	case -2: 
+      		i2c_put_byte(client, 0x5586, 0x10);
+			break;
+		case -3:
+		    i2c_put_byte(client, 0x5586, 0x08);
+			break;
+		default:
+			i2c_put_byte(client, 0x5586, 0x20);
+			break;
+	}
+
+} /* OV3660_set_param_contrast */
+/*************************************************************************
+* FUNCTION
+*    OV3660_set_param_saturation
+*
+* DESCRIPTION
+*    saturation setting.
+*
+* PARAMETERS
+*    none
+*
+* RETURNS
+*    None
+*
+* GLOBALS AFFECTED
+*
+*************************************************************************/
+void OV3660_set_param_saturation(struct ov3660_device *dev, int value)//饱和度
+{
+	struct i2c_client *client = v4l2_get_subdevdata(&dev->sd);
+
+    switch (value) {	
+		case 2: 
+			i2c_put_byte(client, 0x5583, 0x70);
+			i2c_put_byte(client, 0x5584, 0x70);
+			break;
+		case 1: 
+			i2c_put_byte(client, 0x5583, 0x50);
+			i2c_put_byte(client, 0x5584, 0x50);
+			break;
+		case 0: 
+			i2c_put_byte(client, 0x5583, 0x60);
+			i2c_put_byte(client, 0x5584, 0x40);
+			break;			
+		case -1: 
+			i2c_put_byte(client, 0x5583, 0x30);
+			i2c_put_byte(client, 0x5584, 0x30);
+			break;
+      	case -2: 
+      		i2c_put_byte(client, 0x5583, 0x10);
+			i2c_put_byte(client, 0x5584, 0x10);
+			break;
+		default:
+			i2c_put_byte(client, 0x5583, 0x60);
+			i2c_put_byte(client, 0x5584, 0x40);
+			break;
+	}
+
+} /* OV3660_set_param_saturation */
+/*************************************************************************
+* FUNCTION
 *    OV3660_set_param_wb
 *
 * DESCRIPTION
@@ -655,78 +797,52 @@ void OV3660_set_param_wb(struct ov3660_device *dev,enum  camera_wb_flip_e para)/
 
     switch (para)
 	{
-#if 0		
 		case CAM_WB_AUTO://自动
-			i2c_put_word(client,0x5180,0xf2ff);
-			i2c_put_word(client,0x5182,0x1400);
-			i2c_put_word(client,0x5184,0x2425);
-			i2c_put_word(client,0x5186,0x0909);
-			i2c_put_word(client,0x5188,0x7509);
-			i2c_put_word(client,0x518a,0xe054);
-			i2c_put_word(client,0x518c,0x42b2);
-			i2c_put_word(client,0x518e,0x563d);
-			i2c_put_word(client,0x5190,0xf846);
-			i2c_put_word(client,0x5192,0x7004);
-			i2c_put_word(client,0x5194,0xf0f0);
-			i2c_put_word(client,0x5196,0x0103);
-			i2c_put_word(client,0x5198,0x1204);
-			i2c_put_word(client,0x519a,0x0004);
-			i2c_put_word(client,0x519c,0x8206);
-			i2c_put_word(client,0x519e,0x563d);
+			i2c_put_byte(client,0x3406,0x00);
 			break;
 
 		case CAM_WB_CLOUD: //阴天
 			i2c_put_byte(client,0x3406 , 0x01);
-			i2c_put_byte(client,0x3400 , 0x06);
-			i2c_put_byte(client,0x3401 , 0x48);
+			i2c_put_byte(client, 0x3400, 0x09);
+			i2c_put_byte(client, 0x3401, 0x3a);
 			i2c_put_byte(client,0x3402 , 0x04);
 			i2c_put_byte(client,0x3403 , 0x00);
 			i2c_put_byte(client,0x3404 , 0x04);
-			i2c_put_byte(client,0x3405 , 0xd3);
+			i2c_put_byte(client, 0x3405, 0x30);
 			break;
 
 		case CAM_WB_DAYLIGHT: //
 			i2c_put_byte(client,0x3406 , 0x01);
-			i2c_put_byte(client,0x3400 , 0x06);
-			i2c_put_byte(client,0x3401 , 0x1c);
+			i2c_put_byte(client,0x3400 , 0x09);
+			i2c_put_byte(client,0x3401 , 0x00);
 			i2c_put_byte(client,0x3402 , 0x04);
 			i2c_put_byte(client,0x3403 , 0x00);
 			i2c_put_byte(client,0x3404 , 0x04);
-			i2c_put_byte(client,0x3405 , 0xf3);
+			i2c_put_byte(client,0x3405 , 0xd0);
 			break;
 
 		case CAM_WB_INCANDESCENCE: 
-			/*i2c_put_byte(client,0x0320 , 0x02);
-			i2c_put_byte(client,0x0321 , 0x02);
-			i2c_put_byte(client,0x0322 , 0x02);
-			i2c_put_byte(client,0x0323 , 0x02);
-			i2c_put_byte(client,0x0441 , 0x50);
-			i2c_put_byte(client,0x0442 , 0x00);
-			i2c_put_byte(client,0x0443 , 0x00);
-			i2c_put_byte(client,0x0444 , 0x30);*/
+			i2c_put_byte(client,0x3406 , 0x01);
+			i2c_put_byte(client,0x3400 , 0x09);
+			i2c_put_byte(client,0x3401 , 0x00);
+			i2c_put_byte(client,0x3402 , 0x04);
+			i2c_put_byte(client,0x3403 , 0x00);
+			i2c_put_byte(client,0x3404 , 0x04);
+			i2c_put_byte(client,0x3405 , 0xd0);
 			break;
 			
 		case CAM_WB_TUNGSTEN: 
-			/*i2c_put_byte(client,0x0320 , 0x02);
-			i2c_put_byte(client,0x0321 , 0x02);
-			i2c_put_byte(client,0x0322 , 0x02);
-			i2c_put_byte(client,0x0323 , 0x02);
-			i2c_put_byte(client,0x0441 , 0x0B);
-			i2c_put_byte(client,0x0442 , 0x00);
-			i2c_put_byte(client,0x0443 , 0x00);
-			i2c_put_byte(client,0x0444 , 0x5E);*/
 			break;
 
       	case CAM_WB_FLUORESCENT:
       			i2c_put_byte(client,0x3406 , 0x01);
 			i2c_put_byte(client,0x3400 , 0x05);
-			i2c_put_byte(client,0x3401 , 0x48);
+			i2c_put_byte(client,0x3401 , 0x00);
 			i2c_put_byte(client,0x3402 , 0x04);
 			i2c_put_byte(client,0x3403 , 0x00);
-			i2c_put_byte(client,0x3404 , 0x07);
-			i2c_put_byte(client,0x3405 , 0xcf);
+			i2c_put_byte(client,0x3404 , 0x09);
+			i2c_put_byte(client,0x3405 , 0xa0);
 			break;
-#endif
 		case CAM_WB_MANUAL:
 		    	// TODO
 			break;
@@ -754,101 +870,78 @@ void OV3660_set_param_exposure(struct ov3660_device *dev,enum camera_exposure_e 
 {
 	struct i2c_client *client = v4l2_get_subdevdata(&dev->sd);
 
-
-#if 0
     switch (para)
 	{
 		case EXPOSURE_N4_STEP:  //负4档  
-            		i2c_put_byte(client,0x3a0f , 0x10);
-			i2c_put_byte(client,0x3a10 , 0x08);//40
-			i2c_put_byte(client,0x3a1b , 0x10);
-			i2c_put_byte(client,0x3a1e , 0x08);
-			i2c_put_byte(client,0x3a11 , 0x20);
-			i2c_put_byte(client,0x3a1f , 0x10);
+            i2c_put_byte(client,0x3a0f , 0x08);
+			i2c_put_byte(client,0x3a10 , 0x02);//40
+			i2c_put_byte(client,0x3a1b , 0x28);
+			i2c_put_byte(client,0x3a1e , 0x02);
 			break;
 			
 		case EXPOSURE_N3_STEP:
-            		i2c_put_byte(client,0x3a0f , 0x18);
-			i2c_put_byte(client,0x3a10 , 0x00);//50
-			i2c_put_byte(client,0x3a1b , 0x18);
-			i2c_put_byte(client,0x3a1e , 0x10);
-			i2c_put_byte(client,0x3a11 , 0x30);
-			i2c_put_byte(client,0x3a1f , 0x10);
+            i2c_put_byte(client,0x3a0f , 0x10);
+			i2c_put_byte(client,0x3a10 , 0x08);//50
+			i2c_put_byte(client,0x3a1b , 0x10);
+			i2c_put_byte(client,0x3a1e , 0x08);
 			break;
 			
 		case EXPOSURE_N2_STEP:
-            		i2c_put_byte(client,0x3a0f , 0x20);
-			i2c_put_byte(client,0x3a10 , 0x18);//b0
-			i2c_put_byte(client,0x3a1b , 0x41);
-			i2c_put_byte(client,0x3a1e , 0x20);
-			i2c_put_byte(client,0x3a11 , 0x18);
-			i2c_put_byte(client,0x3a1f , 0x10);
+            i2c_put_byte(client,0x3a0f , 0x18);
+			i2c_put_byte(client,0x3a10 , 0x08);//b0
+			i2c_put_byte(client,0x3a11 , 0x18);//b0
+			i2c_put_byte(client,0x3a1b , 0x08);
 			break;
 			
 		case EXPOSURE_N1_STEP:
-            		i2c_put_byte(client,0x3a0f , 0x28);
-			i2c_put_byte(client,0x3a10 , 0x20);//d0
-			i2c_put_byte(client,0x3a1b , 0x51);
-			i2c_put_byte(client,0x3a1e , 0x28);
+            i2c_put_byte(client,0x3a0f , 0x20);
+			i2c_put_byte(client,0x3a10 , 0x10);//d0
 			i2c_put_byte(client,0x3a11 , 0x20);
-			i2c_put_byte(client,0x3a1f , 0x10);
+			i2c_put_byte(client,0x3a1b , 0x10);
 			break;
 			
 		case EXPOSURE_0_STEP://默认零档
-            		i2c_put_byte(client,0x3a0f , 0x30);
+            i2c_put_byte(client,0x3a0f , 0x38);
 			i2c_put_byte(client,0x3a10 , 0x28);//0c
-			i2c_put_byte(client,0x3a1b , 0x30);
-			i2c_put_byte(client,0x3a1e , 0x26);
-			i2c_put_byte(client,0x3a11 , 0x60);
-			i2c_put_byte(client,0x3a1f , 0x14);
+			i2c_put_byte(client,0x3a11 , 0x38);
+			i2c_put_byte(client,0x3a1b , 0x28);
 			break;
 			
 		case EXPOSURE_P1_STEP://正一档
-            		i2c_put_byte(client,0x3a0f , 0x48);
-			i2c_put_byte(client,0x3a10 , 0x40);//30
-			i2c_put_byte(client,0x3a1b , 0x80);
-			i2c_put_byte(client,0x3a1e , 0x48);
+            i2c_put_byte(client,0x3a0f , 0x40);
+			i2c_put_byte(client,0x3a10 , 0x30);
 			i2c_put_byte(client,0x3a11 , 0x40);
-			i2c_put_byte(client,0x3a1f , 0x20);
+			i2c_put_byte(client,0x3a1b , 0x30);
 			break;
 			
 		case EXPOSURE_P2_STEP:
-            		i2c_put_byte(client,0x3a0f , 0x50);
-			i2c_put_byte(client,0x3a10 , 0x48);
-			i2c_put_byte(client,0x3a1b , 0x90);
-			i2c_put_byte(client,0x3a1e , 0x50);
+            i2c_put_byte(client,0x3a0f , 0x48);
+			i2c_put_byte(client,0x3a10 , 0x38);
 			i2c_put_byte(client,0x3a11 , 0x48);
-			i2c_put_byte(client,0x3a1f , 0x20);
+			i2c_put_byte(client,0x3a1b , 0x38);
 			break;
 			
 		case EXPOSURE_P3_STEP:
-            		i2c_put_byte(client,0x3a0f , 0x58);
-			i2c_put_byte(client,0x3a10 , 0x50);
-			i2c_put_byte(client,0x3a1b , 0x91);
-			i2c_put_byte(client,0x3a1e , 0x58);
+            i2c_put_byte(client,0x3a0f , 0x50);
+			i2c_put_byte(client,0x3a10 , 0x40);
 			i2c_put_byte(client,0x3a11 , 0x50);
-			i2c_put_byte(client,0x3a1f , 0x10);
+			i2c_put_byte(client,0x3a1b , 0x40);
 			break;
 			
 		case EXPOSURE_P4_STEP:	
-            		i2c_put_byte(client,0x3a0f , 0x60);
-			i2c_put_byte(client,0x3a10 , 0x58);
-			i2c_put_byte(client,0x3a1b , 0xa0);
-			i2c_put_byte(client,0x3a1e , 0x60);
+            i2c_put_byte(client,0x3a0f , 0x58);
+			i2c_put_byte(client,0x3a10 , 0x48);
 			i2c_put_byte(client,0x3a11 , 0x58);
-			i2c_put_byte(client,0x3a1f , 0x20);
+			i2c_put_byte(client,0x3a1b , 0x48);
 			break;
 			
 		default:
-            		i2c_put_byte(client,0x3a0f , 0x30);
+            i2c_put_byte(client,0x3a0f , 0x38);
 			i2c_put_byte(client,0x3a10 , 0x28);//0c
-			i2c_put_byte(client,0x3a1b , 0x30);
-			i2c_put_byte(client,0x3a1e , 0x26);
-			i2c_put_byte(client,0x3a11 , 0x60);
-			i2c_put_byte(client,0x3a1f , 0x14);
+			i2c_put_byte(client,0x3a11 , 0x38);
+			i2c_put_byte(client,0x3a1b , 0x28);
 			break;
 	}
-#endif
 
 } /* OV3660_set_param_exposure */
 /*************************************************************************
@@ -870,84 +963,53 @@ void OV3660_set_param_exposure(struct ov3660_device *dev,enum camera_exposure_e 
 void OV3660_set_param_effect(struct ov3660_device *dev,enum camera_effect_flip_e para)//特效设置
 {
 	struct i2c_client *client = v4l2_get_subdevdata(&dev->sd);
+	unsigned char temp;
   
-#if 0 //by jf.s
     switch (para)
 	{
 		case CAM_EFFECT_ENC_NORMAL://正常
-			i2c_put_byte(client,0x5001,0x03);//disable effect
+			i2c_put_byte(client,0x5001,0x00);//disable effect
+			i2c_put_byte(client,0x5580,0x00);//disable effect
 			break;		
 
 		case CAM_EFFECT_ENC_GRAYSCALE://灰阶
-			i2c_put_byte(client,0x5001,0x83);
-			i2c_put_byte(client,0x5580,0x20);
+			i2c_put_byte(client,0x5001,0x80);
+			i2c_put_byte(client,0x5580,0x18);
+			i2c_put_byte(client,0x5583,0x80);
+			i2c_put_byte(client,0x5584,0x80);
 			break;
 
 		case CAM_EFFECT_ENC_SEPIA://复古
-		     	/*i2c_put_byte(client,0x0115,0x0a);
-			i2c_put_byte(client,0x026e,0x60);
-			i2c_put_byte(client,0x026f,0xa0);*/
+		    i2c_put_byte(client,0x5001,0x80);
+			i2c_put_byte(client,0x5580,0x18);
+			i2c_put_byte(client,0x5583,0x40);
+			i2c_put_byte(client,0x5584,0xa0);
 			break;		
 				
 		case CAM_EFFECT_ENC_SEPIAGREEN://复古绿
-			/*i2c_put_byte(client,0x0115,0x0a);
-			i2c_put_byte(client,0x026e,0x20);
-			i2c_put_byte(client,0x026f,0x00);*/
+			temp = i2c_get_byte(client, 0x5580);
+			i2c_put_byte(client,0x5580,temp & 0xbf | 0x18);
+			i2c_put_byte(client,0x5583,0x60);
+			i2c_put_byte(client,0x5584,0x60);
 			break;					
 
 		case CAM_EFFECT_ENC_SEPIABLUE://复古蓝
-			/*i2c_put_byte(client,0x0115,0x0a);
-			i2c_put_byte(client,0x026e,0xfb);
-			i2c_put_byte(client,0x026f,0x00);*/
+			temp = i2c_get_byte(client, 0x5580);
+			i2c_put_byte(client,0x5580,temp & 0xbf | 0x18);
+			i2c_put_byte(client,0x5583,0xa0);
+			i2c_put_byte(client,0x5584,0x40);
 			break;								
 
 		case CAM_EFFECT_ENC_COLORINV://底片
-			i2c_put_byte(client,0x5001,0x83);
-			i2c_put_byte(client,0x5580,0x40);
+			i2c_put_byte(client,0x5001,0x80);
+			i2c_put_byte(client,0x5580,0x58);
 			break;		
 
 		default:
 			break;
 	}
-#endif
-
 
 } /* OV3660_set_param_effect */
-
-/*************************************************************************
-* FUNCTION
-*    OV3660_NightMode
-*
-* DESCRIPTION
-*    This function night mode of OV3660.
-*
-* PARAMETERS
-*    none
-*
-* RETURNS
-*    None
-*
-* GLOBALS AFFECTED
-*
-*************************************************************************/
-void OV3660_NightMode(struct ov3660_device *dev,enum  camera_night_mode_flip_e enable)
-{
-	struct i2c_client *client = v4l2_get_subdevdata(&dev->sd);
-#if 0 //add by jf.s
-	if (enable)
-	{
-		i2c_put_byte(client,0x3a00 , 0x7c);
-		i2c_put_byte(client,0x3a05 , 0x50);
-	}
-	else
-	{
-		i2c_put_byte(client,0x3a00 , 0x78);
-		i2c_put_byte(client,0x3a05 , 0x30);
-	}
-#endif
-
-}    /* OV3660_NightMode */
-
 
 unsigned char v4l_2_ov3660(int val)
 {
@@ -961,50 +1023,73 @@ static int ov3660_setting(struct ov3660_device *dev,int PROP_ID,int value )
 {
 	int ret=0;
 	unsigned char cur_val;
+	unsigned char reg_3820, reg_3821, reg_4515;
 	struct i2c_client *client = v4l2_get_subdevdata(&dev->sd);
 	switch(PROP_ID)  {
 	case V4L2_CID_BRIGHTNESS:
-		dprintk(dev, 1, "setting brightned:%d\n",v4l_2_ov3660(value));
-//		ret=i2c_put_byte(client,0x0201,v4l_2_ov3660(value));
-		break;
+		if(ov3660_qctrl[0].default_value!=value){
+			ov3660_qctrl[0].default_value=value;
+			OV3660_set_param_brightness(dev,value);
+			printk(KERN_INFO " set camera  brightness=%d. \n ",value);
+        }
 	case V4L2_CID_CONTRAST:
-//		ret=i2c_put_byte(client,0x0200, value);
+		if(ov3660_qctrl[1].default_value!=value){
+			ov3660_qctrl[1].default_value=value;
+			OV3660_set_param_contrast(dev,value);
+			printk(KERN_INFO " set camera  contrast=%d. \n ",value);
+        }
 		break;	
 	case V4L2_CID_SATURATION:
-//		ret=i2c_put_byte(client,0x0202, value);
-		break;
-#if 0	
-	case V4L2_CID_EXPOSURE:
-		ret=i2c_put_byte(client,0x0201, value);
+		if(ov3660_qctrl[7].default_value!=value){
+			ov3660_qctrl[7].default_value=value;
+			OV3660_set_param_saturation(dev,value);
+			printk(KERN_INFO " set camera  saturation=%d. \n ",value);
+        }
 		break;	
-#endif
+#if 0
 	case V4L2_CID_HFLIP:    /* set flip on H. */
-//		ret=i2c_get_byte(client,0x0101);
-		if(ret>0) {
-			cur_val=(char)ret;
-			if(value!=0)
-				;//cur_val=cur_val|0x1;
+		reg_3820=i2c_get_byte(client,0x3820);
+		reg_3821=i2c_get_byte(client,0x3821);
+		if(reg_3820 = 0x1) {
+			reg_3820 = 0x7;
+			if (reg_3820 == reg_3821)
+				reg_4515 = 0xaa;
 			else
-				;//cur_val=cur_val&0xFE;
-			//ret=i2c_put_byte(client,0x0101,cur_val);
-			if(ret<0) dprintk(dev, 1, "V4L2_CID_HFLIP setting error\n");
+				reg_4515 = 0xbb;
+			i2c_put_byte(client, 0x3820, reg_3820);
+			i2c_put_byte(client, 0x4515, reg_4515);
 		}  else {
-			dprintk(dev, 1, "vertical read error\n");
+			reg_3820 = 0x1;
+			if (reg_3820 == reg_3821)
+				reg_4515 = 0xaa;
+			else
+				reg_4515 = 0xbb;
+			i2c_put_byte(client, 0x3820, reg_3820);
+			i2c_put_byte(client, 0x4515, reg_4515);
 		}
 		break;
 	case V4L2_CID_VFLIP:    /* set flip on V. */
-		//ret=i2c_get_byte(client,0x0101);
-		if(ret>0) {
-			cur_val=(char)ret;
-			if(value!=0)
-				;//cur_val=cur_val|0x10;
+		reg_3820=i2c_get_byte(client,0x3820);
+		reg_3821=i2c_get_byte(client,0x3821);
+		if(reg_3821 = 0x1) {
+			reg_3821 = 0x7;
+			if (reg_3820 == reg_3821)
+				reg_4515 = 0xaa;
 			else
-				;//cur_val=cur_val&0xFD;
-			//ret=i2c_put_byte(client,0x0101,cur_val);
+				reg_4515 = 0xbb;
+			i2c_put_byte(client, 0x3821, reg_3821);
+			i2c_put_byte(client, 0x4515, reg_4515);
 		} else {
-			dprintk(dev, 1, "vertical read error\n");
+			reg_3821 = 0x1;
+			if (reg_3820 == reg_3821)
+				reg_4515 = 0xaa;
+			else
+				reg_4515 = 0xbb;
+			i2c_put_byte(client, 0x3821, reg_3821);
+			i2c_put_byte(client, 0x4515, reg_4515);
 		}
 		break;	
+#endif
 	case V4L2_CID_DO_WHITE_BALANCE:
         if(ov3660_qctrl[4].default_value!=value){
 			ov3660_qctrl[4].default_value=value;
@@ -1044,7 +1129,7 @@ static void power_down_ov3660(struct ov3660_device *dev)
 /* ------------------------------------------------------------------
 	DMA and thread functions
    ------------------------------------------------------------------*/
-extern   int vm_fill_buffer(struct videobuf_buffer* vb , int v4l2_format , int magic,void* vaddr);
+
 #define TSTAMP_MIN_Y	24
 #define TSTAMP_MAX_Y	(TSTAMP_MIN_Y + 15)
 #define TSTAMP_INPUT_X	10
@@ -1053,17 +1138,19 @@ extern   int vm_fill_buffer(struct videobuf_buffer* vb , int v4l2_format , int m
 static void ov3660_fillbuff(struct ov3660_fh *fh, struct ov3660_buffer *buf)
 {
 	struct ov3660_device *dev = fh->dev;
-	int h , pos = 0;
-	int hmax  = buf->vb.height;
-	int wmax  = buf->vb.width;
-	struct timeval ts;
-	char *tmpbuf;
 	void *vbuf = videobuf_to_vmalloc(&buf->vb);
+	vm_output_para_t para ={0};
 	dprintk(dev,1,"%s\n", __func__);	
 	if (!vbuf)
 		return;
  /*  0x18221223 indicate the memory type is MAGIC_VMAL_MEM*/
-    vm_fill_buffer(&buf->vb,fh->fmt->fourcc ,0x18221223,vbuf);
+	para.mirror = -1;// not set
+	para.v4l2_format = fh->fmt->fourcc;
+	para.v4l2_memory = 0x18221223;
+	para.zoom = -1;
+	para.angle = 0;
+	para.vaddr = (unsigned)vbuf;
+	vm_fill_buffer(&buf->vb,&para);
 	buf->vb.state = VIDEOBUF_DONE;
 }
 

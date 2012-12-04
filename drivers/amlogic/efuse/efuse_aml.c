@@ -270,10 +270,10 @@ static int efuse_readversion(void)
 #else  //M1
 	if(ver_buf[0] == 0){
 		efuse_active_version = ver_buf[0];
-		return ver_buf[0];
+		reurn ver_buf[0];
 	}
 	else
-		return -1;
+		reurn -1;
 #endif	
 }
 

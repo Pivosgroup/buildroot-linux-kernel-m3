@@ -49,6 +49,7 @@ typedef const struct si_pub  si_t;
 #include <proto/ethernet.h>
 #include <dngl_stats.h>
 #include <dhd.h>
+#include <wl_android.h>
 
 /* message levels */
 #define WL_ERROR_LEVEL	0x0001
@@ -157,7 +158,6 @@ static int wl_iw_softap_deassoc_stations(struct net_device *dev, u8 *mac);
 		return -EINVAL; \
 	}
 
-static int		g_onoff = G_WLAN_SET_ON;
 wl_iw_extra_params_t	g_wl_iw_params;
 
 
@@ -403,7 +403,7 @@ dev_wlc_ioctl(
 //	WL_INFORM(("\n%s, PID:%x: send Local IOCTL -> dhd: cmd:0x%x, buf:%p, len:%d ,\n",
 //		__FUNCTION__, current->pid, cmd, arg, len));
 
-	if (g_onoff == G_WLAN_SET_ON) {
+	if (g_wifi_on == G_WLAN_SET_ON) {
 		memset(&ioc, 0, sizeof(ioc));
 		ioc.cmd = cmd;
 		ioc.buf = arg;
@@ -1206,7 +1206,7 @@ wl_iw_get_link_speed(
 
 	
 	net_os_wake_lock(dev);
-	if (g_onoff == G_WLAN_SET_ON) {
+	if (g_wifi_on == G_WLAN_SET_ON) {
 		error = dev_wlc_ioctl(dev, WLC_GET_RATE, &link_speed, sizeof(link_speed));
 		link_speed *= 500000;
 	}
@@ -1233,7 +1233,7 @@ wl_iw_get_dtim_skip(
 	char iovbuf[32];
 
 	net_os_wake_lock(dev);
-	if (g_onoff == G_WLAN_SET_ON) {
+	if (g_wifi_on == G_WLAN_SET_ON) {
 
 			memset(iovbuf, 0, sizeof(iovbuf));
 			strcpy(iovbuf, "bcn_li_dtim");
@@ -1268,7 +1268,7 @@ wl_iw_set_dtim_skip(
 	char iovbuf[32];
 
 	net_os_wake_lock(dev);
-	if (g_onoff == G_WLAN_SET_ON) {
+	if (g_wifi_on == G_WLAN_SET_ON) {
 
 		bcn_li_dtim = htod32((uint)*(extra + strlen(DTIM_SKIP_SET_CMD) + 1) - '0');
 
@@ -1319,7 +1319,7 @@ wl_iw_get_band(
 
 	net_os_wake_lock(dev);
 
-	if (g_onoff == G_WLAN_SET_ON) {
+	if (g_wifi_on == G_WLAN_SET_ON) {
 		error = dev_wlc_ioctl(dev, WLC_GET_BAND, &band, sizeof(band));
 
 		p += snprintf(p, MAX_WX_STRING, "Band %d", band);
@@ -1346,7 +1346,7 @@ wl_iw_set_band(
 
 	net_os_wake_lock(dev);
 
-	if (g_onoff == G_WLAN_SET_ON) {
+	if (g_wifi_on == G_WLAN_SET_ON) {
 
 		band = htod32((uint)*(extra + strlen(BAND_SET_CMD) + 1) - '0');
 
@@ -1388,7 +1388,7 @@ wl_iw_set_pno_reset(
 	char *p = extra;
 
 	net_os_wake_lock(dev);
-	if ((g_onoff == G_WLAN_SET_ON) && (dev != NULL)) {
+	if ((g_wifi_on == G_WLAN_SET_ON) && (dev != NULL)) {
 
 		if ((error = dhd_dev_pno_reset(dev)) >= 0) {
 				p += snprintf(p, MAX_WX_STRING, "OK");
@@ -1423,7 +1423,7 @@ wl_iw_set_pno_enable(
 	net_os_wake_lock(dev);
 	pfn_enabled = htod32((uint)*(extra + strlen(PNOENABLE_SET_CMD) + 1) - '0');
 
-	if ((g_onoff == G_WLAN_SET_ON) && (dev != NULL)) {
+	if ((g_wifi_on == G_WLAN_SET_ON) && (dev != NULL)) {
 
 		if ((error = dhd_dev_pno_enable(dev, pfn_enabled)) >= 0) {
 				p += snprintf(p, MAX_WX_STRING, "OK");
@@ -1486,7 +1486,7 @@ wl_iw_set_pno_set(
 		__FUNCTION__, info->cmd, info->flags,
 		wrqu->data.pointer, wrqu->data.length));
 
-	if (g_onoff == G_WLAN_SET_OFF) {
+	if (g_wifi_on == G_WLAN_SET_OFF) {
 		WL_TRACE(("%s: driver is not up yet after START\n", __FUNCTION__));
 		goto exit_proc;
 	}
@@ -1598,7 +1598,7 @@ wl_iw_set_pno_setadd(
 		__FUNCTION__, info->cmd, info->flags,
 		wrqu->data.pointer, wrqu->data.length));
 
-	if (g_onoff == G_WLAN_SET_OFF) {
+	if (g_wifi_on == G_WLAN_SET_OFF) {
 		WL_TRACE(("%s: driver is not up yet after START\n", __FUNCTION__));
 		goto exit_proc;
 	}
@@ -1667,7 +1667,7 @@ wl_iw_get_rssi(
 
 	bzero(&scb_val, sizeof(scb_val_t));
 
-	if (g_onoff == G_WLAN_SET_ON) {
+	if (g_wifi_on == G_WLAN_SET_ON) {
 		error = dev_wlc_ioctl(dev, WLC_GET_RSSI, &scb_val, sizeof(scb_val_t));
 		if (error) {
 			WL_ERROR(("%s: Fails %d\n", __FUNCTION__, error));
@@ -1742,7 +1742,7 @@ wl_control_wl_start(struct net_device *dev)
 
 	dhd_net_if_lock(dev);
 
-	if (g_onoff == G_WLAN_SET_OFF) {
+	if (g_wifi_on == G_WLAN_SET_OFF) {
 		dhd_customer_gpio_wlan_ctrl(WLAN_RESET_ON);
 
 #if defined(BCMLXSDMMC)
@@ -1757,7 +1757,7 @@ wl_control_wl_start(struct net_device *dev)
 
 		dhd_dev_init_ioctl(dev);
 
-		g_onoff = G_WLAN_SET_ON;
+		g_wifi_on = G_WLAN_SET_ON;
 	}
 	WL_TRACE(("Exited %s\n", __FUNCTION__));
 
@@ -1795,8 +1795,8 @@ wl_iw_control_wl_off(
 	ap_cfg_running = FALSE;
 #endif 
 
-	if (g_onoff == G_WLAN_SET_ON) {
-		g_onoff = G_WLAN_SET_OFF;
+	if (g_wifi_on == G_WLAN_SET_ON) {
+		g_wifi_on = G_WLAN_SET_OFF;
 
 #if defined(WL_IW_USE_ISCAN)
 		g_iscan->iscan_state = ISCAN_STATE_IDLE;
@@ -3867,7 +3867,7 @@ wl_iw_set_scan(
 #endif 
 
 	
-	if (g_onoff == G_WLAN_SET_OFF)
+	if (g_wifi_on == G_WLAN_SET_OFF)
 		return 0;
 
 	
@@ -3998,7 +3998,7 @@ wl_iw_iscan_set_scan(
 	}
 #endif
 
-	if (g_onoff == G_WLAN_SET_OFF) {
+	if (g_wifi_on == G_WLAN_SET_OFF) {
 		WL_SCAN(("%s: driver is not up yet after START\n", __FUNCTION__));
 		goto set_scan_end;
 	}
@@ -6058,15 +6058,7 @@ wl_iw_set_wpaauth(
 	switch (paramid) {
 	case IW_AUTH_WPA_VERSION:
 		
-		if (paramval & IW_AUTH_WPA_VERSION_DISABLED)
-			val = WPA_AUTH_DISABLED;
-		else if (paramval & (IW_AUTH_WPA_VERSION_WPA))
-			val = WPA_AUTH_PSK | WPA_AUTH_UNSPECIFIED;
-		else if (paramval & IW_AUTH_WPA_VERSION_WPA2)
-			val = WPA2_AUTH_PSK | WPA2_AUTH_UNSPECIFIED;
-		WL_ERROR(("%s: %d: setting wpa_auth to 0x%0x\n", __FUNCTION__, __LINE__, val));
-		if ((error = dev_wlc_intvar_set(dev, "wpa_auth", val)))
-			return error;
+		iw->wpaversion = paramval;
 		break;
 
 	case IW_AUTH_CIPHER_PAIRWISE:
@@ -6084,27 +6076,7 @@ wl_iw_set_wpaauth(
 		break;
 
 	case IW_AUTH_KEY_MGMT:
-		if ((error = dev_wlc_intvar_get(dev, "wpa_auth", &val)))
-			return error;
-
-		if (val & (WPA_AUTH_PSK | WPA_AUTH_UNSPECIFIED)) {
-			if (paramval & IW_AUTH_KEY_MGMT_PSK)
-				val = WPA_AUTH_PSK;
-			else
-				val = WPA_AUTH_UNSPECIFIED;
-			if (paramval & 0x04)
-				val |= WPA2_AUTH_FT;
-		}
-		else if (val & (WPA2_AUTH_PSK | WPA2_AUTH_UNSPECIFIED)) {
-			if (paramval & IW_AUTH_KEY_MGMT_PSK)
-				val = WPA2_AUTH_PSK;
-			else
-				val = WPA2_AUTH_UNSPECIFIED;
-			if (paramval & 0x04)
-				val |= WPA2_AUTH_FT;
-		}
-
-		else if (paramval & IW_AUTH_KEY_MGMT_PSK) {
+		if (paramval & IW_AUTH_KEY_MGMT_PSK) {
 			if (iw->wpaversion == IW_AUTH_WPA_VERSION_WPA)
 				val = WPA_AUTH_PSK;
 			else if (iw->wpaversion == IW_AUTH_WPA_VERSION_WPA2)
@@ -6546,7 +6518,7 @@ wl_iw_combined_scan_set(struct net_device *dev, wlc_ssid_t* ssids_local, int nss
 
 	iscan->timer_on = 1;
 
-	iscan->iscan_ex_params_p->params.active_time = 200; // terence 20120430: extend active scan time interval
+	//iscan->iscan_ex_params_p->params.active_time = 200; // terence 20120430: extend active scan time interval
 //#ifdef SCAN_DUMP
 	{
 		int i;
@@ -6606,7 +6578,7 @@ iwpriv_set_cscan(struct net_device *dev, struct iw_request_info *info,
 		__FUNCTION__, info->cmd, info->flags,
 		wrqu->data.pointer, wrqu->data.length));
 
-	if (g_onoff == G_WLAN_SET_OFF) {
+	if (g_wifi_on == G_WLAN_SET_OFF) {
 		WL_SCAN(("%s: driver is not up yet after START\n", __FUNCTION__));
 		return -ENODEV;
 	}
@@ -6737,7 +6709,7 @@ wl_iw_set_cscan(
 
 	net_os_wake_lock(dev);
 
-	if (g_onoff == G_WLAN_SET_OFF) {
+	if (g_wifi_on == G_WLAN_SET_OFF) {
 		WL_SCAN(("%s: driver is not up yet after START\n", __FUNCTION__));
 		return -1;
 	}
@@ -7769,7 +7741,7 @@ iwpriv_fw_reload(struct net_device *dev,
 {
 	int ret = -1;
 	char extra[256];
-	char *fwstr = fw_path ; 
+	char *fwstr = firmware_path;
 
 	WL_SOFTAP(("current firmware_path[]=%s\n", fwstr));
 
@@ -8202,7 +8174,7 @@ wl_iw_set_priv(
 			WL_TRACE(("%s, Received regular START command\n", __FUNCTION__));
 		}
 
-		if (g_onoff == G_WLAN_SET_OFF) {
+		if (g_wifi_on == G_WLAN_SET_OFF) {
 			WL_TRACE(("%s, missing START, Fail\n", __FUNCTION__));
 			kfree(extra);
 			net_os_wake_unlock(dev);

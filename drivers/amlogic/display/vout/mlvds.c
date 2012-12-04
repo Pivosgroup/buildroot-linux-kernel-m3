@@ -36,6 +36,8 @@
 #include <mach/clock.h>
 #include <asm/fiq.h>
 #include <mach/mlvds_regs.h>
+#include <linux/notifier.h>
+#include <linux/reboot.h>
 
 extern unsigned int clk_util_clk_msr(unsigned int clk_mux);
 
@@ -998,6 +1000,18 @@ static void _tcon_init(lcdConfig_t *pConf)
     	_lcd_module_enable();
 }
 
+static int lcd_reboot_notifier(struct notifier_block *nb, unsigned long state, void *cmd)
+ {
+    if (state == SYS_RESTART)
+	{	
+		printk("shut down lcd...\n");
+		_disable_backlight();
+		pDev->conf.power_off?pDev->conf.power_off():0;
+	}
+    return NOTIFY_DONE;
+}
+
+static struct notifier_block lcd_reboot_nb;
 static int tcon_probe(struct platform_device *pdev)
 {
     struct resource *s;
@@ -1018,11 +1032,20 @@ static int tcon_probe(struct platform_device *pdev)
 	pDev->conf = *(lcdConfig_t *)(s->start);
 
     _tcon_init(&pDev->conf);
+	
+	int err;
+	lcd_reboot_nb.notifier_call = lcd_reboot_notifier;
+    err = register_reboot_notifier(&lcd_reboot_nb);
+	if (err)
+	{
+		printk("notifier register lcd_reboot_notifier fail!\n");
+	}
     return 0;
 }
 
 static int tcon_remove(struct platform_device *pdev)
 {
+    unregister_reboot_notifier(&lcd_reboot_nb);
     kfree(pDev);
 
     return 0;

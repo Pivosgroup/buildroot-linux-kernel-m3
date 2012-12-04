@@ -1254,7 +1254,7 @@ int sd_send_cmd_hw(SD_MMC_Card_Info_t *sd_mmc_info, unsigned char cmd, unsigned 
 	#define SD_MMC_CMD_COUNT				20000//20
 	#define SD_MMC_READ_BUSY_COUNT		2000000//20
 	#define SD_MMC_WRITE_BUSY_COUNT		50000000//500000
-	#define SD_MMC_WAIT_STOP_COUNT		50000000
+	//#define SD_MMC_WAIT_STOP_COUNT		100000000
 	#define SD_MMC_RETRY_COUNT			2
     
     if(cmd_send_reg->cmd_send_data)

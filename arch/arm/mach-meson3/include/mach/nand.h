@@ -292,6 +292,7 @@
 
 #define NAND_BLOCK_GOOD					0
 #define NAND_BLOCK_BAD					1
+#define NAND_FACTORY_BAD				2
 #define NAND_MINI_PART_SIZE				0x800000
 #define NAND_MINI_PART_NUM				4
 #define MAX_BAD_BLK_NUM					2000
@@ -305,6 +306,9 @@
 #define CONFIG_ENV_SIZE         		0x2000
 #define ENV_SIZE (CONFIG_ENV_SIZE - (sizeof(uint32_t)))
 #define NAND_SYS_PART_SIZE				0x10000000
+
+#define ENV_NAND_SCAN_BLK                            50 
+
 
 struct aml_nand_flash_dev {
 	char *name;
@@ -387,7 +391,7 @@ struct aml_nand_bch_desc{
 #define RETRY_NAND_COPY_NUM	4
 
 #define	READ_RETRY_REG_NUM   	8
-#define	READ_RETRY_CNT   		6
+#define	READ_RETRY_CNT   		20
 
 
 #define	ENHANCE_SLC_REG_NUM   	5
@@ -402,7 +406,8 @@ struct aml_nand_bch_desc{
 #define	NAND_CMD_TOSHIBA_SET_VALUE			0x55
 #define	NAND_CMD_TOSHIBA_BEF_COMMAND1		0x26
 #define	NAND_CMD_TOSHIBA_BEF_COMMAND2		0x5d
-
+#define      NAND_CMD_SAMSUNG_SET_VALUE			0XA1
+#define      NAND_CMD_MICRON_SET_VALUE                       0XEF
 
 //for Hynix
 #define	HYNIX_26NM_8GB 		1		//H27UCG8T2M
@@ -412,6 +417,33 @@ struct aml_nand_bch_desc{
 //for Toshiba
 #define	TOSHIBA_24NM 			20		//TC58NVG5D2HTA00
 										//TC58NVG6D2GTA00
+//for SAMSUNG
+#define	SUMSUNG_2XNM 			30	
+
+//for SANDISK
+#define      SANDISK_19NM			40
+
+#define      MICRON_20NM			50
+
+#define      DYNAMIC_REG_NUM        2
+#define      DYNAMIC_REG_INIT_NUM        9
+#define      DYNAMIC_READ_CNT_LOWER       16 
+#define      DYNAMIC_READ_CNT_UPPER       20
+
+#define      DYNAMIC_READ_CASE_NUM        20
+
+
+#define	NAND_CMD_SANDISK_INIT_ONE				0x3B
+#define	NAND_CMD_SANDISK_INIT_TWO				0xB9
+
+#define	NAND_CMD_SANDISK_LOAD_VALUE_ONE			0x53
+#define	NAND_CMD_SANDISK_LOAD_VALUE_TWO			0x54
+
+#define	NAND_CMD_SANDISK_DYNAMIC_ENABLE			0xB6
+#define	NAND_CMD_SANDISK_DYNAMIC_DISABLE			0xD6
+#define 	NAND_CMD_SANDISK_SLC  						0xA2 
+
+
 
 
 
@@ -423,7 +455,7 @@ struct aml_nand_read_retry{
 	u8	cur_cnt[MAX_CHIP_NUM];
 	u8	reg_addr[READ_RETRY_REG_NUM];
 	u8	reg_default_value[MAX_CHIP_NUM][READ_RETRY_REG_NUM];	
-	char	reg_offset_value[READ_RETRY_CNT][READ_RETRY_REG_NUM];	
+	char	reg_offset_value[MAX_CHIP_NUM][READ_RETRY_CNT][READ_RETRY_REG_NUM];	
 	void	(*get_default_value)(struct mtd_info *mtd);
 	void	(*set_default_value)(struct mtd_info *mtd);
 	void	(*save_default_value)(struct mtd_info *mtd);
@@ -442,10 +474,31 @@ struct aml_nand_slc_program{
 	void	(*enter_enslc_mode)(struct mtd_info *mtd);
 };
 
+// this for sandisk dynamic read
+struct aml_nand_dynamic_read{
+	u8 slc_flag;
+	u8 dynamic_read_flag;
+	u8 read_case_num_max_lower_page;//Nmax	_lower_page
+	u8 read_case_num_max_upper_page;//Nmax_upper_page	
+	u8 cur_case_num_lower_page[MAX_CHIP_NUM];//N_lower_page	
+	u8 cur_case_num_upper_page[MAX_CHIP_NUM];//N_upper_page
+	u8	reg_addr_init[DYNAMIC_REG_INIT_NUM];
+	u8	reg_addr_lower_page[DYNAMIC_REG_NUM];	
+	u8	reg_addr_upper_page[DYNAMIC_REG_NUM];	
+	char	reg_offset_value_lower_page[MAX_CHIP_NUM][DYNAMIC_READ_CNT_LOWER][DYNAMIC_REG_NUM];		
+	char	reg_offset_value_upper_page[MAX_CHIP_NUM][DYNAMIC_READ_CNT_UPPER][DYNAMIC_REG_NUM];	
+	void	(*dynamic_read_init)(struct mtd_info *mtd);
+	void	(*dynamic_read_handle)(struct mtd_info *mtd, int page, int chipnr);
+	void	(*dynamic_read_exit)(struct mtd_info *mtd, int chipnr);
+	void	(*exit_slc_mode)(struct mtd_info *mtd);
+	void	(*enter_slc_mode)(struct mtd_info *mtd);
+};
+
 struct new_tech_nand_t{
     u8	type;
     struct aml_nand_slc_program slc_program_info;
     struct aml_nand_read_retry read_rety_info;
+    struct aml_nand_dynamic_read dynamic_read_info;
 };
 #endif
 struct aml_nand_chip {
@@ -467,6 +520,7 @@ struct aml_nand_chip {
 
 	unsigned int		  ran_mode; 			   //def close, for all part
 	unsigned int		  rbpin_mode;				   //may get from romboot 
+	unsigned int		  rbpin_detect;				   //add for rbpin auto detect
 	unsigned int		  short_pgsz;			   //zero means no short 
 	
 	unsigned internal_chip_shift;
@@ -536,6 +590,7 @@ struct aml_nand_platform {
 		unsigned T_RHOH;
 		unsigned int		  ran_mode; 			   //def close, for all part
 		unsigned int		  rbpin_mode;				   //may get from romboot 
+		unsigned int		  rbpin_detect;
 		unsigned int		  short_pgsz;			   //zero means no short 
 		 		
 		 struct aml_nand_chip  *aml_chip;

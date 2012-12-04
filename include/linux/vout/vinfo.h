@@ -51,6 +51,8 @@ typedef struct {
 	vmode_t		mode;
 	u32			width;
 	u32			height;
+       u32                screen_real_width;
+       u32                screen_real_height;
 	u32			field_height;
 	u32			aspect_ratio_num;
 	u32			aspect_ratio_den;

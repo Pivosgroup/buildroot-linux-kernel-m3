@@ -134,7 +134,9 @@ int usb_control_msg(struct usb_device *dev, unsigned int pipe, __u8 request,
 		    __u16 size, int timeout)
 {
 	struct usb_ctrlrequest *dr;
-	int ret;
+	void * buff = NULL;
+	void * p = data;
+	int ret = -ENOMEM;
 
 	dr = kmalloc(sizeof(struct usb_ctrlrequest), GFP_NOIO);
 	if (!dr)
@@ -148,8 +150,25 @@ int usb_control_msg(struct usb_device *dev, unsigned int pipe, __u8 request,
 
 	/* dbg("usb_control_msg"); */
 
-	ret = usb_internal_control_msg(dev, pipe, dr, data, size, timeout);
+	/* Workaround for dwc_otg DMA address alignment */
+	if( (unsigned int)data & (L1_CACHE_BYTES - 1) ){
+		buff = kmalloc(size,GFP_NOIO);
+		if(!buff)
+			goto out;
+		p = buff;
+		if(!(requesttype & USB_DIR_IN))
+			memcpy(p,data,size);
+	}
 
+	ret = usb_internal_control_msg(dev, pipe, dr, p, size, timeout);
+
+	if(buff){
+		if(requesttype & USB_DIR_IN)
+			memcpy(data,p,size);
+		kfree(buff);
+	}
+
+out:
 	kfree(dr);
 
 	return ret;
@@ -1111,7 +1130,7 @@ void usb_disable_endpoint(struct usb_device *dev, unsigned int epaddr,
 	} else {
 		ep = dev->ep_in[epnum];
 		if (reset_hardware)
-			pep = &dev->ep_out[epnum];
+			pep = &dev->ep_in[epnum];
 	}
 	if (ep) {
 		ep->enabled = 0;

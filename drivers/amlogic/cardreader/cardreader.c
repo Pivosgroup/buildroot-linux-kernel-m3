@@ -322,8 +322,8 @@ static int card_reader_monitor(void *data)
 					}
 					card->unit_state = CARD_UNIT_READY;
 					card_host->card_type = card_type;
-					if(card->state != CARD_STATE_PRESENT)
-					card->state = CARD_STATE_INITED;
+					if(!(card->state & CARD_STATE_PRESENT))
+					    card->state |= CARD_STATE_INITED;
 					if (card_type == CARD_SDIO)
 						card_host->card = card;
 					card_detect_change(card_host, 0);

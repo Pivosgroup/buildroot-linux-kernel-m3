@@ -259,6 +259,7 @@ typedef struct dhd_info {
 	 * calls and wifi_on or wifi_off
 	 */
 	struct mutex dhd_net_if_mutex;
+	struct mutex dhd_init_mutex; // terence 20120530: fix for preinit function missed called after resume
 #endif
 	spinlock_t wakelock_spinlock;
 	int wakelock_counter;
@@ -424,10 +425,11 @@ static char dhd_version[] = "Dongle Host Driver, version " EPI_VERSION_STR
 ;
 static void dhd_net_if_lock_local(dhd_info_t *dhd);
 static void dhd_net_if_unlock_local(dhd_info_t *dhd);
+/*
 #if !defined(AP) && defined(WLP2P)
 static u32 dhd_concurrent_fw(dhd_pub_t *dhd);
 #endif 
-
+*/
 #ifdef WLMEDIA_HTSF
 void htsf_update(dhd_info_t *dhd, void *data);
 tsf_t prev_tsf, cur_tsf;
@@ -2324,6 +2326,7 @@ dhd_open(struct net_device *net)
 	int ifidx;
 	int32 ret = 0;
 	DHD_OS_WAKE_LOCK(&dhd->pub);
+	dhd_init_lock_local(&dhd->pub); // terence 20120530: fix for preinit function missed called after resume
 	/* Update FW path if it was changed */
 	if ((firmware_path != NULL) && (firmware_path[0] != '\0')) {
 		if (firmware_path[strlen(firmware_path)-1] == '\n')
@@ -2401,7 +2404,7 @@ dhd_open(struct net_device *net)
 #endif /* WL_CFG80211 */
 	}
 	if ((firmware_path != NULL) && (firmware_path[0] != '\0')) { // terence
-		firmware_path[0] = '\0';
+//		firmware_path[0] = '\0';
 	}
 
 	/* Allow transmit calls */
@@ -2414,6 +2417,7 @@ dhd_open(struct net_device *net)
 
 	OLD_MOD_INC_USE_COUNT;
 exit:
+	dhd_init_unlock_local(&dhd->pub); // terence 20120530: fix for preinit function missed called after resume
 	DHD_OS_WAKE_UNLOCK(&dhd->pub);
 	return ret;
 }
@@ -2647,7 +2651,9 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen)
 #endif
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 25)) && 1
 	mutex_init(&dhd->dhd_net_if_mutex);
+	mutex_init(&dhd->dhd_init_mutex); // terence 20120530: fix for preinit function missed called after resume
 #endif
+	dhd_init_lock_local(&dhd->pub); // match dhd_init_unlock_local() in dhdsdio_probe()
 	dhd_state |= DHD_ATTACH_STATE_WAKELOCKS_INIT;
 
 	/* Attach and link in the protocol */
@@ -2895,6 +2901,7 @@ dhd_bus_start(dhd_pub_t *dhdp)
  * firmware and accordingly enable concurrent mode (Apply P2P settings). SoftAP firmware
  * would still be named as fw_bcmdhd_apsta.
  */
+/* 
 static u32
 dhd_concurrent_fw(dhd_pub_t *dhd)
 {
@@ -2903,9 +2910,9 @@ dhd_concurrent_fw(dhd_pub_t *dhd)
 
 	if ((!op_mode) && (strstr(fw_path, "_p2p") == NULL) &&
 		(strstr(fw_path, "_apsta") == NULL)) {
-		/* Given path is for the STA firmware. Check whether P2P support is present in
-		 * the firmware. If so, set mode as P2P (concurrent support).
-		 */
+		// Given path is for the STA firmware. Check whether P2P support is present in
+		 / the firmware. If so, set mode as P2P (concurrent support).
+		//
 		memset(buf, 0, sizeof(buf));
 		bcm_mkiovar("p2p", 0, 0, buf, sizeof(buf));
 		if ((ret = dhd_wl_ioctl_cmd(dhd, WLC_GET_VAR, buf, sizeof(buf),
@@ -2918,6 +2925,7 @@ dhd_concurrent_fw(dhd_pub_t *dhd)
 	}
 	return 0;
 }
+*/
 #endif 
 int
 dhd_preinit_ioctls(dhd_pub_t *dhd)
@@ -3515,7 +3523,7 @@ dhd_net_attach(dhd_pub_t *dhdp, int ifidx)
 		net->dev_addr[3], net->dev_addr[4], net->dev_addr[5]);
 
 #if defined(SOFTAP) && defined(CONFIG_WIRELESS_EXT) && !defined(WL_CFG80211)
-		wl_iw_iscan_set_scan_broadcast_prep(net, 1);
+//		wl_iw_iscan_set_scan_broadcast_prep(net, 1);
 #endif
 
 
@@ -3711,11 +3719,20 @@ dhd_free(dhd_pub_t *dhdp)
 	}
 }
 
+#ifdef CONFIG_HAS_WAKELOCK
+static struct wake_lock dhd_lock;
+#endif
+
 static void __exit
 dhd_module_cleanup(void)
 {
+	printk("+++dhd_module_cleanup+++\n");
+
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 
+#ifdef CONFIG_HAS_WAKELOCK
+	wake_lock(&dhd_lock);	
+#endif
 	dhd_bus_unregister();
 
 #if defined(CONFIG_WIFI_CONTROL_FUNC)
@@ -3725,12 +3742,31 @@ dhd_module_cleanup(void)
 
 	/* Call customer gpio to turn off power with WL_REG_ON signal */
 	dhd_customer_gpio_wlan_ctrl(WLAN_POWER_OFF);
+#ifdef CONFIG_HAS_WAKELOCK
+	wake_unlock(&dhd_lock);
+	wake_lock_destroy(&dhd_lock);
+#endif
+
+	printk("---dhd_module_cleanup---\n");
 }
+
+//extern struct wake_lock main_wake_lock;
 
 static int __init
 dhd_module_init(void)
 {
 	int error = 0;
+
+//	if (!wake_lock_active(&main_wake_lock)) {
+//		printk("----- main_wake_lock not active, don't load module -----\n");
+//		return -1;
+//	}
+	
+	printk("+++dhd_module_init+++\n");
+#ifdef CONFIG_HAS_WAKELOCK
+	wake_lock_init(&dhd_lock, WAKE_LOCK_SUSPEND, "dhd_lock");
+	wake_lock(&dhd_lock);
+#endif
 
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 
@@ -3748,7 +3784,9 @@ dhd_module_init(void)
 			break;
 
 		DHD_ERROR(("Invalid module parameters.\n"));
-		return -EINVAL;
+//		return -EINVAL;
+		error = -EINVAL;
+		goto exit_1;
 	} while (0);
 #endif /* DHDTHREAD */
 
@@ -3784,11 +3822,12 @@ dhd_module_init(void)
 		goto fail_2;
 		}
 #endif
-#if defined(WL_CFG80211)
-	wl_android_post_init();
-#endif
+//#if defined(WL_CFG80211)
+//	wl_android_post_init();
+//#endif
 
-	return error;
+//	return error;
+	goto exit_1;
 
 #if 1 && (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
 fail_2:
@@ -3802,6 +3841,14 @@ fail_1:
 	/* Call customer gpio to turn off power with WL_REG_ON signal */
 	dhd_customer_gpio_wlan_ctrl(WLAN_POWER_OFF);
 
+exit_1 :
+#ifdef CONFIG_HAS_WAKELOCK
+	wake_lock_timeout(&dhd_lock, 20*HZ);
+	if (error)
+		wake_lock_destroy(&dhd_lock);
+#endif
+
+	printk("---dhd_module_init---\n");
 	return error;
 }
 
@@ -4471,6 +4518,24 @@ static void dhd_net_if_unlock_local(dhd_info_t *dhd)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 25)) && 1
 	if (dhd)
 		mutex_unlock(&dhd->dhd_net_if_mutex);
+#endif
+}
+
+void dhd_init_lock_local(dhd_pub_t *pub)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 25)) && 1
+	dhd_info_t *dhd = (dhd_info_t *)(pub->info);
+	if (dhd)
+		mutex_lock(&dhd->dhd_init_mutex);
+#endif
+}
+
+void dhd_init_unlock_local(dhd_pub_t *pub)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 25)) && 1
+	dhd_info_t *dhd = (dhd_info_t *)(pub->info);
+	if (dhd)
+		mutex_unlock(&dhd->dhd_init_mutex);
 #endif
 }
 

@@ -105,14 +105,14 @@ config RTL8XXX_SU_USB_WIFI
 	  This module adds support for wireless USB dongle based on
 	  Realtek 8712 8188 8191 8192SU chipset.
 
-config RALINK_3070_USB_WIFI
-	tristate "Ralink 3070 Wireless USB Dongle support"
-	default n
-	depends on USB
-	---help---
-	  This module adds support for wireless USB dongle based on
-	  Ralink 3070 chipset.
-	  
+config RTXX7X_USB_WIFI
+        tristate "Ralink 3070/3370/5370/5372 Wireless USB Dongle support"
+        depends on USB
+        select WIRELESS_EXT
+        select WEXT_PRIV
+        ---help---
+        Adds support for Ralink 3070/3370/5370/5372 USB WiFi wireless chipset family
+
 config RTL8XXX_CU_USB_WIFI
 	tristate "Realtek CU series (8192 8188CU) Wireless USB Dongle support"
 	default n

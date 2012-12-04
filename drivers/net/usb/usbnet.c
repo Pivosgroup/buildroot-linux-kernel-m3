@@ -331,15 +331,26 @@ static void rx_submit (struct usbnet *dev, struct urb *urb, gfp_t flags)
 	int			retval = 0;
 	unsigned long		lockflags;
 	size_t			size = dev->rx_urb_size;
+    u8			align;
 
-	if ((skb = alloc_skb (size + NET_IP_ALIGN, flags)) == NULL) {
+#ifdef CONFIG_USB_DWC_OTG_HCD
+	align = 0;
+#else
+	if (!(info->flags & FLAG_HW_IP_ALIGNMENT))
+		align = NET_IP_ALIGN;
+	else
+		align = 0;
+#endif
+
+	if ((skb = alloc_skb (size + align, flags)) == NULL) {
 		netif_dbg(dev, rx_err, dev->net, "no rx skb\n");
 		usbnet_defer_kevent (dev, EVENT_RX_MEMORY);
 		usb_free_urb (urb);
 		return;
 	}
 
-	skb_reserve (skb, NET_IP_ALIGN);
+    if(align)
+	    skb_reserve (skb, NET_IP_ALIGN);
 	
 	entry = (struct skb_data *) skb->cb;
 	entry->urb = urb;
@@ -706,7 +717,8 @@ int usbnet_open (struct net_device *net)
 	}
 
 	// put into "known safe" state
-	if (info->reset && (retval = info->reset (dev)) < 0) {
+	if (info->reset && !(dev->driver_info->flags & FLAG_SMSC_MAC) 
+	    && (retval = info->reset (dev)) < 0) {
 		netif_info(dev, ifup, dev->net,
 			   "open reset fail (%d) usbnet usb-%s-%s, %s\n",
 			   retval,
@@ -1312,7 +1324,7 @@ usbnet_probe (struct usb_interface *udev, const struct usb_device_id *prod)
 	mutex_init (&dev->phy_mutex);
 
 	dev->net = net;
-	strcpy (net->name, "usb%d");
+	strcpy (net->name, "usbnet%d");
 	memcpy (net->dev_addr, node_id, sizeof node_id);
 
 	/* rx and tx sides can use different message sizes;

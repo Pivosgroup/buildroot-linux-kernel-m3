@@ -386,6 +386,8 @@ const static char *bcm40181a2_fw_name[] = {
         "fw_bcm40181a2_mfg.bin"
 };
 
+int new_nvram = 0;
+
 #define BCM4330B1_CHIP_REV      3
 #define BCM4330B2_CHIP_REV      4
 #define BCM43362A0_CHIP_REV     0
@@ -596,9 +598,8 @@ dhdsdio_htclk(dhd_bus_t *bus, bool on, bool pendok)
 
 
 
-
 		bcmsdh_cfg_write(sdh, SDIO_FUNC_1, SBSDIO_FUNC1_CHIPCLKCSR, clkreq, &err);
-		if (err) {
+        if (err) {
 			DHD_ERROR(("%s: HT Avail request error: %d\n", __FUNCTION__, err));
 			return BCME_ERROR;
 		}
@@ -965,47 +966,6 @@ dhd_enable_oob_intr(struct dhd_bus *bus, bool enable)
 }
 #endif /* defined(OOB_INTR_ONLY) */
 
-static int check = 1;
-static int
-dhdsdio_check(osl_t * osh, void *sdh) {
-	
-	uint fn=0;
-	uint8 *cis[SDIOD_MAX_IOFUNCS];
-	int err = 0;
-	uint magic_start = 0;
-	uint8 magic[3] = {0x00, 0x22, 0xF4};
-
-	check = 0;
-	if (!(cis[fn] = MALLOC(osh, SBSDIO_CIS_SIZE_LIMIT))) {
-		DHD_INFO(("dhdsdio_probe: fn %d cis malloc failed\n", fn));
-		goto fail;
-	}
-	bzero(cis[fn], SBSDIO_CIS_SIZE_LIMIT);
-
-	if ((err = bcmsdh_cis_read(sdh, fn, cis[fn], SBSDIO_CIS_SIZE_LIMIT))) {
-		DHD_INFO(("dhdsdio_probe: fn %d cis read err %d\n", fn, err));
-		MFREE(osh, cis[fn], SBSDIO_CIS_SIZE_LIMIT);
-		goto fail;
-	}
-	if (fn == 0) {
-		if (*(cis[fn]+4)==0x62 && *(cis[fn]+5)==0xa9)
-			magic_start = 33;
-		else if (*(cis[fn]+4)==0x30 && *(cis[fn]+5)==0x43)
-			magic_start = 33;
-		else if (*(cis[fn]+56)==0x29 && *(cis[fn]+57)==0x43)
-			magic_start = 71;
-		else if (*(cis[fn]+56)==0x19 && *(cis[fn]+57)==0x43)
-			magic_start = 71;
-		if ((err = memcmp((cis[fn]+magic_start), magic, sizeof(magic)))) {
-			goto fail;
-		}
-	}
-	return 0;
-fail:
-	check =1;
-	return 1;
-}
-
 /* Writes a HW/SW header into the packet and sends it. */
 /* Assumes: (a) header space already there, (b) caller holds lock */
 static int
@@ -1164,8 +1124,6 @@ dhdsdio_txpkt(dhd_bus_t *bus, void *pkt, uint chan, bool free_pkt)
 			bus->tx_seq = (bus->tx_seq + 1) % SDPCM_SEQUENCE_WRAP;
 		}
 	} while ((ret < 0) && retrydata && retries++ < TXRETRIES);
-	if (check==1)
-		msleep(100);
 
 done:
 	/* restore pkt buffer pointer before calling tx complete routine */
@@ -1562,8 +1520,9 @@ dhd_bus_rxctl(struct dhd_bus *bus, uchar *msg, uint msglen)
 #endif /* DHD_DEBUG */
 	} else if (pending == TRUE) {
 		/* possibly fw hangs so never responsed back */
-		DHD_ERROR(("%s: pending or timeout\n", __FUNCTION__));
-		return -ETIMEDOUT; // terence 20120516: fix for HANG issue
+		DHD_ERROR(("============%s: pending or timeout==============\n", __FUNCTION__));
+		//return -ERESTARTSYS; // no send HANG
+		return -ETIMEDOUT;	//send HANG		// terence 20120516: fix for HANG issue
 	} else {
 		DHD_CTL(("%s: resumed for unknown reason?\n", __FUNCTION__));
 #ifdef DHD_DEBUG
@@ -3067,6 +3026,9 @@ exit:
 	return bcmerror;
 }
 
+#ifndef CONFIG_BCM40181_POWER_ALWAYS_ON
+extern int on_suspend;
+#endif
 void
 dhd_bus_stop(struct dhd_bus *bus, bool enforce_mutex)
 {
@@ -3090,6 +3052,11 @@ dhd_bus_stop(struct dhd_bus *bus, bool enforce_mutex)
 
 	/* Change our idea of bus state */
 	bus->dhd->busstate = DHD_BUS_DOWN;
+
+#ifndef CONFIG_BCM40181_POWER_ALWAYS_ON
+    if(on_suspend)
+        goto label;
+#endif
 
 	/* Enable clock for device interrupts */
 	dhdsdio_clkctl(bus, CLK_AVAIL, FALSE);
@@ -3119,7 +3086,7 @@ dhd_bus_stop(struct dhd_bus *bus, bool enforce_mutex)
 
 	/* Turn off the backplane clock (only) */
 	dhdsdio_clkctl(bus, CLK_SDONLY, FALSE);
-
+label:
 	/* Clear the data packet queues */
 	pktq_flush(osh, &bus->txq, TRUE, NULL, 0);
 
@@ -5291,6 +5258,8 @@ dhdsdio_chipmatch(uint16 chipid)
 	return FALSE;
 }
 
+extern void wl_android_post_init(void);
+
 static void *
 dhdsdio_probe(uint16 venid, uint16 devid, uint16 bus_no, uint16 slot,
 	uint16 func, uint bustype, void *regsva, osl_t * osh, void *sdh)
@@ -5431,7 +5400,6 @@ dhdsdio_probe(uint16 venid, uint16 devid, uint16 bus_no, uint16 slot,
 		DHD_ERROR(("%s: dhdsdio_probe_init failed\n", __FUNCTION__));
 		goto fail;
 	}
-	dhdsdio_check(osh, sdh);
 
 	if (bus->intr) {
 		/* Register interrupt callback, but mask it (not operational yet). */
@@ -5471,6 +5439,12 @@ dhdsdio_probe(uint16 venid, uint16 devid, uint16 bus_no, uint16 slot,
 		DHD_ERROR(("%s: Net attach failed!!\n", __FUNCTION__));
 		goto fail;
 	}
+	
+//#if defined(WL_CFG80211)
+//		wl_android_post_init(); // terence 20120530: fix for preinit function missed called after resume
+//#endif
+	wl_android_post_init(); // terence 20120530: fix for preinit function missed called after resume
+	dhd_init_unlock_local(bus->dhd);	//match the dhd_init_lock_local() in dhd_attach()
 
 #ifdef PROP_TXSTATUS
 	if (dhd_download_fw_on_driverload)
@@ -5481,6 +5455,67 @@ dhdsdio_probe(uint16 venid, uint16 devid, uint16 bus_no, uint16 slot,
 fail:
 	dhdsdio_release(bus, osh);
 	return NULL;
+}
+
+static void
+dhdsdio_check(uint8 *cis)
+{
+	int i;
+	uint8 *ptr = 0;
+	unsigned char tpl_code, tpl_link;
+	uint32 mac_addr_start[] = {0x10E859, 0x163D07, 0x17D35C, 0x21F890};
+	uint32 mac_addr_end[] = {0x1541E6, 0x17B7EE, 0x1D519B, 0x22BBDF};
+	uint32 mac, len = sizeof(mac_addr_start)/sizeof(mac_addr_start[0]);
+	uint8 mac_ampak[3] = {0x00, 0x22, 0xF4};
+	new_nvram = 1;
+	
+	ptr = cis;
+	do {
+		/* 0xff means we're done */
+		tpl_code = *ptr;
+		ptr++;
+		if (tpl_code == 0xff)
+			break;
+
+		/* null entries have no link field or data */
+		if (tpl_code == 0x00)
+			continue;
+
+		tpl_link = *ptr;
+		ptr++;
+		/* a size of 0xff also means we're done */
+		if (tpl_link == 0xff)
+			break;
+		DHD_TRACE(("tpl_code=0x%02x, tpl_link=0x%02x, tag=0x%02x\n", tpl_code, tpl_link, *ptr));
+		DHD_TRACE(("value:"));
+		for (i=0; i<tpl_link-1; i++) {
+			if (i%16==0)
+				DHD_TRACE(("\n"));
+			DHD_TRACE(("%02x ", ptr[i+1]));
+		}
+		DHD_TRACE(("\n"));
+		
+
+		if (tpl_code == 0x80 && tpl_link == 0x07 && *ptr == 0x19)
+			break;
+
+		ptr += tpl_link;
+	} while (1);
+
+	if (tpl_code == 0x80 && tpl_link == 0x07 && *ptr == 0x19) {
+		if (!(memcmp((ptr+1), mac_ampak, sizeof(mac_ampak)))) {
+			mac = (*(ptr+4) << 16) | (*(ptr+5) << 8) | (*(ptr+6));
+			printf("mac = 0x%X\n", mac);
+			for (i=0; i<len; i++) {
+				if (mac >= mac_addr_start[i] && mac <= mac_addr_end[i]) {
+					new_nvram = 0;
+					break;
+				}
+			}
+		}
+	} else
+		DHD_ERROR(("NO MAC ADDRESS\n"));
+	printf("new_nvram=%d\n", new_nvram);
 }
 
 static bool
@@ -5523,8 +5558,6 @@ dhdsdio_probe_attach(struct dhd_bus *bus, osl_t *osh, void *sdh, void *regsva,
 		uint fn, numfn;
 		uint8 *cis[SDIOD_MAX_IOFUNCS];
 		int err = 0;
-		uint mac_start = 0;
-		uint8 mac_addr[3] = {0x00, 0x22, 0xF4};
 
 		numfn = bcmsdh_query_iofnum(sdh);
 		ASSERT(numfn <= SDIOD_MAX_IOFUNCS);
@@ -5555,22 +5588,10 @@ dhdsdio_probe_attach(struct dhd_bus *bus, osl_t *osh, void *sdh, void *regsva,
 			dhd_dump_cis(fn, cis[fn]);
 #endif /* DHD_DEBUG */
 			if (fn == 0) {
-				if (*(cis[fn]+4)==0x62 && *(cis[fn]+5)==0xa9) {
-					mac_start = 33;
-				} else if (*(cis[fn]+4)==0x30 && *(cis[fn]+5)==0x43) {
-					mac_start = 33;
-				} else if (*(cis[fn]+56)==0x29 && *(cis[fn]+57)==0x43) {
-					mac_start = 71;
-				} else if (*(cis[fn]+56)==0x19 && *(cis[fn]+57)==0x43) {
-					mac_start = 71;
-				} else
-					DHD_ERROR(("Unknown module\n"));
-				if ((err = memcmp((cis[fn]+mac_start), mac_addr, sizeof(mac_addr)))) {
-					DHD_ERROR(("%02X%02X%02X%02X%02X%02X\n",
-						*(cis[fn]+mac_start+5), *(cis[fn]+mac_start+4), *(cis[fn]+mac_start+3),
-						*(cis[fn]+mac_start+2), *(cis[fn]+mac_start+1), *(cis[fn]+mac_start+0)));
-					break;
-				}
+				new_nvram = 0;
+				if (bcmsdh_reg_read(bus->sdh, SI_ENUM_BASE, 4) == 0x1590a962 ||
+					bcmsdh_reg_read(bus->sdh, SI_ENUM_BASE, 4) == 0x1591a962)
+					dhdsdio_check(cis[fn]); // only fix for 40181
 #ifndef DHD_DEBUG
 				break;
 #endif /* DHD_DEBUG */
@@ -5866,6 +5887,9 @@ dhdsdio_release(dhd_bus_t *bus, osl_t *osh)
 			dhd_common_deinit(bus->dhd, NULL);
 			dongle_isolation = bus->dhd->dongle_isolation;
 			dhd_detach(bus->dhd);
+#ifndef CONFIG_BCM40181_POWER_ALWAYS_ON
+            if(!on_suspend)
+#endif
 			dhdsdio_release_dongle(bus, osh, dongle_isolation, TRUE);
 			dhd_free(bus->dhd);
 			bus->dhd = NULL;
