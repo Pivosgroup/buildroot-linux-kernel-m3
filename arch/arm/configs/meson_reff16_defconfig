@@ -702,7 +702,7 @@ CONFIG_MAC80211_RC_DEFAULT="minstrel"
 # CONFIG_MAC80211_DEBUGFS is not set
 # CONFIG_MAC80211_DEBUG_MENU is not set
 # CONFIG_WIMAX is not set
-CONFIG_RFKILL is not set
+# CONFIG_RFKILL is not set
 # CONFIG_NET_9P is not set
 
 #
