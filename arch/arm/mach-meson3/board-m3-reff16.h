@@ -102,9 +102,9 @@
 
 #define RESERVED_MEM_END	(STREAMBUF_ADDR_END)
 
-//#define CONFIG_ENV_OFFSET       0x1000000	//16M
-//#define CONFIG_ENV_SIZE         0x8000		//32K
+#define CONFIG_ENV_OFFSET       0x1000000	//16M
+#define CONFIG_ENV_SIZE         0x8000		//32K
 
-//#define BOOTLOADER_OFFSET       0
-//#define BOOTLOADER_SIZE         0x100000	//1M
+#define BOOTLOADER_OFFSET       0
+#define BOOTLOADER_SIZE         0x100000	//1M
 #endif
