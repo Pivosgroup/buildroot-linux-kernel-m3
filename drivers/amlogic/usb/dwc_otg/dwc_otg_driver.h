@@ -1,8 +1,8 @@
 /* ==========================================================================
- * $File: //dwh/usb_iip/dev/software/otg/linux/drivers/dwc_otg_driver.h $
- * $Revision: #19 $
- * $Date: 2010/11/15 $
- * $Change: 1627671 $
+ * $File: //dwh/usb_iip/dev/software/otg_ipmate/linux/drivers/dwc_otg_driver.h $
+ * $Revision: #2 $
+ * $Date: 2007/02/07 $
+ * $Change: 791271 $
  *
  * Synopsys HS OTG Linux Software Driver and documentation (hereinafter,
  * "Software") is an Unsupported proprietary work of Synopsys, Inc. unless
@@ -31,14 +31,13 @@
  * DAMAGE.
  * ========================================================================== */
 
-#ifndef __DWC_OTG_DRIVER_H__
+#if !defined(__DWC_OTG_DRIVER_H__)
 #define __DWC_OTG_DRIVER_H__
 
 /** @file
  * This file contains the interface to the Linux driver.
  */
-#include "dwc_otg_os_dep.h"
-#include "dwc_otg_core_if.h"
+#include "dwc_otg_cil.h"
 
 /* Type declarations */
 struct dwc_otg_pcd;
@@ -49,38 +48,26 @@ struct dwc_otg_hcd;
  * manage a single DWC_otg controller.
  */
 typedef struct dwc_otg_device {
-	/** Structure containing OS-dependent stuff. KEEP THIS STRUCT AT THE
-	 * VERY BEGINNING OF THE DEVICE STRUCT. OSes such as FreeBSD and NetBSD
-	 * require this. */
-	struct os_dependent os_dep;
+		/** Base address returned from ioremap() */
+	void *base;
 
-	/** Pointer to the core interface structure. */
+	struct lm_device *lmdev;
+
+		/** Pointer to the core interface structure. */
 	dwc_otg_core_if_t *core_if;
 
-	/** Pointer to the PCD structure. */
+		/** Register offset for Diagnostic API.*/
+	uint32_t reg_offset;
+
+		/** Pointer to the PCD structure. */
 	struct dwc_otg_pcd *pcd;
 
-	/** Pointer to the HCD structure. */
+		/** Pointer to the HCD structure. */
 	struct dwc_otg_hcd *hcd;
 
 	/** Flag to indicate whether the common IRQ handler is installed. */
 	uint8_t common_irq_installed;
 
 } dwc_otg_device_t;
-
-/*We must clear S3C24XX_EINTPEND external interrupt register 
- * because after clearing in this register trigerred IRQ from 
- * H/W core in kernel interrupt can be occured again before OTG
- * handlers clear all IRQ sources of Core registers because of
- * timing latencies and Low Level IRQ Type.
- */
-#ifdef CONFIG_MACH_IPMATE
-#define  S3C2410X_CLEAR_EINTPEND()   \
-do { \
-	__raw_writel(1UL << 11,S3C24XX_EINTPEND); \
-} while (0)
-#else
-#define  S3C2410X_CLEAR_EINTPEND()   do { } while (0)
-#endif
 
 #endif

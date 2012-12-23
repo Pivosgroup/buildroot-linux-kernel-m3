@@ -1895,6 +1895,12 @@ static struct i2c_board_info __initdata aml_i2c_bus_info[] = {
 		I2C_BOARD_INFO("at88scxx",  0xB6),
 	},
 #endif
+
+#ifdef CONFIG_IR810_POWEROFF
+	{
+		I2C_BOARD_INFO("ir810_poweroff",  0x60),
+	},
+#endif
 };
 static struct i2c_board_info __initdata aml_i2c_bus_info_1[] = {
 };
