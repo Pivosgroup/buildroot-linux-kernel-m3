@@ -837,9 +837,10 @@ static int aml_nand_probe(struct aml_nand_platform *plat, struct device *dev)
 	aml_chip->aml_nand_dma_read = m3_nand_dma_read;
 	aml_chip->aml_nand_dma_write = m3_nand_dma_write;
 	aml_chip->aml_nand_hwecc_correct = m3_nand_hwecc_correct;
+#ifdef CONFIG_HAS_EARLYSUSPEND
     aml_chip->nand_early_suspend.suspend = m3_nand_early_suspend;
     aml_chip->nand_early_suspend.resume = m3_nand_late_resume;
-
+#endif
 	err = aml_nand_init(aml_chip);
 	if (err)
 		goto exit_error;
