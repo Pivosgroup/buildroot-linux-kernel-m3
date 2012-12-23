@@ -802,7 +802,7 @@ CONFIG_KEY_INPUT_CUSTOM_AM=y
 #
 # CONFIG_AMLOGIC_PM is not set
 # CONFIG_PMU_ACT8xxx is not set
-# CONFIG_STV_MBX_POWEROFF is not set
+# CONFIG_IR810_POWEROFF is not set
 
 #
 # Amlogic Light Sensor Support

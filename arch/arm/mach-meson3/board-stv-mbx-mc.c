@@ -1896,9 +1896,9 @@ static struct i2c_board_info __initdata aml_i2c_bus_info[] = {
 	},
 #endif
 
-#ifdef CONFIG_STV_MBX_POWEROFF
+#ifdef CONFIG_IR810_POWEROFF
 	{
-		I2C_BOARD_INFO("stv_mbx_poweroff",  0x60),
+		I2C_BOARD_INFO("ir810_poweroff",  0x60),
 	},
 #endif
 };
