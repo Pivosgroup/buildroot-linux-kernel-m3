@@ -545,7 +545,7 @@ static void change_speed(struct am_uart *info, unsigned long newbaud)
     unsigned long tmp;
     unsigned long tmp_intctl;
 //    printk("\n\n\n\n\n\n\nchange_speed...\n");
-//return ;
+return ;
 #ifdef PRINT_DEBUG
     if(info->line >= 1)
         printk("%s\n", __FUNCTION__);
