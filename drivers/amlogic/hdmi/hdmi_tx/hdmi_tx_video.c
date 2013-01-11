@@ -302,12 +302,12 @@ static void hdmi_tx_construct_avi_packet(Hdmi_tx_video_para_t *video_param, char
     AVI_DB[1] = 8 | (aspect_ratio << 4) | (cc << 6);
 
     sc = video_param->sc;
-    if(video_param->cc == CC_XVYCC601)
+    if(video_param->cc == CC_ITU601)
         ec = 0;
-    else if(video_param->cc == CC_XVYCC709)
+    else if(video_param->cc == CC_ITU709)
         ec = 1;
     else
-        ec = 3;
+        ec = 1;    // according to CEA-861-D, all other values are reserved
     AVI_DB[2] = (sc) | (ec << 4);
     //AVI_DB[2] = 0;
 
