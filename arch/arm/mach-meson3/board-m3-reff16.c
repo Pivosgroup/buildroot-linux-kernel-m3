@@ -296,13 +296,13 @@ static struct platform_device fb_device = {
 
 #if defined(CONFIG_AMLOGIC_SPI_NOR)
 static struct mtd_partition spi_partition_info[] = {
-    /* Hide uboot partition
+
             {
-                    .name = "uboot",
+                    .name = "bootloader",
                     .offset = 0,
-                    .size = 0x3e000,
+                   .size = 0x60000,
             },
-    //*/
+  
     {
         .name = "ubootenv",
         .offset = 0x80000,
@@ -934,7 +934,21 @@ void mute_headphone(void* codec, int flag)
 }
 
 #endif
+#if defined(CONFIG_SND_SOC_BT40183)
 
+static struct platform_device bt40183_audio = {
+    .name           = "bt40183_audio",
+    .id             = 1,
+    .resource       = aml_m3_audio_resource,
+    .num_resources  = ARRAY_SIZE(aml_m3_audio_resource),
+};
+
+static struct platform_device bt40183 = {
+    .name           = "BT40183",
+    .id             = -1,
+};
+
+#endif
 #ifdef CONFIG_SND_AML_M3_CS4334
 static struct platform_device aml_sound_card={
        .name                   = "aml_m3_audio_cs4334",
@@ -1178,7 +1192,11 @@ static struct aml_sw_i2c_platform aml_sw_i2c_plat = {
         .sda_bit            = 25,
         .sda_oe         = MESON3_I2C_PREG_GPIOX_OE,
     },  
+#ifdef CONFIG_AM_ITE9133
+    .udelay         = 5,
+#else 
     .udelay         = 2,
+ #endif
     .timeout            = 100,
 };
 
@@ -2107,9 +2125,157 @@ static  struct platform_device dib7090p_device = {
 	.num_resources    = ARRAY_SIZE(dib7090p_resource),
 	.resource         = dib7090p_resource,
 };
+static struct resource rtl2830_resource[]  = {
+
+	[0] = {
+		.start = 0,                                    //frontend  i2c adapter id
+		.end   = 0,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_i2c"
+	},
+	[1] = {
+		.start = 0x20,                                 //frontend 0 demod address
+		.end   = 0x20,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_demod_addr"
+	},
+	[2] = {
+		.start = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8), //reset pin
+		.end   = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_reset_pin"
+	},
+	[3] = {
+		.start = 0, //reset enable value
+		.end   = 0,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_reset_value_enable"
+	},
+	[4] = {
+		.start = (GPIOC_bank_bit0_15(3)<<16)|GPIOC_bit_bit0_15(3),  //power enable pin
+		.end   = (GPIOC_bank_bit0_15(3)<<16)|GPIOC_bit_bit0_15(3),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_reset"
+	//	.name  = "frontend0_power_pin"
+	},	
+	[5] = {
+	.start = 0x34,                                 
+	.end   = 0x34,
+	.flags = IORESOURCE_MEM,
+	.name  = "frontend0_tuner_addr"
+	},	
+};
+
+static  struct platform_device rtl2830_device = {
+	.name             = "rtl2830",
+	.id               = -1,
+	.num_resources    = ARRAY_SIZE(rtl2830_resource),
+	.resource         = rtl2830_resource,
+};
+
+static struct resource ds3000_resource[] = {
+	[0] = {
+		.start = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8),                           //frontend 0 reset pin
+		.end   = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_reset"
+	},
+	[1] = {
+		.start = 0,                                    //frontend 0 i2c adapter id
+		.end   = 0,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_i2c"
+	},
+	[2] = {
+		.start = 0xC0,                                 //frontend 0 tuner address
+		.end   = 0xC0,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_tuner_addr"
+	},
+	[3] = {
+		.start = 0xD0,                                 //frontend 0 demod address
+		.end   = 0xD0,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_demod_addr"
+	},
+};
+
+static  struct platform_device ds3000_device = {
+	.name             = "ds3000",
+	.id               = -1,
+	.num_resources    = ARRAY_SIZE(ds3000_resource),
+	.resource         = ds3000_resource,
+};
+#endif
+
+#if defined(CONFIG_TH_SONY_T2)
+
+static struct resource cxd2834_resource[]  = {
+
+	[0] = {
+		.start = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8),                           //frontend 0 reset pin
+		.end   = (GPIOD_bank_bit0_9(8)<<16)|GPIOD_bit_bit0_9(8),
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_reset"
+	},
+	[1] = {
+		.start = 0,                                    //frontend  i2c adapter id
+		.end   = 0,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_i2c"
+	},
+	[2] = {
+		.start = 0xC0,                                 //frontend 0 tuner address
+		.end   = 0xC0,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_tuner_addr"
+	},	
+	[3] = {
+		.start = 0xD8,                                 //frontend 0 demod address
+		.end   = 0xD8,
+		.flags = IORESOURCE_MEM,
+		.name  = "frontend0_demod_addr"
+	},
+
+};
+
+static  struct platform_device cxd2834_device = {
+	.name             = "cxd2834",
+	.id               = 0,
+	.num_resources    = ARRAY_SIZE(cxd2834_resource),
+	.resource         = cxd2834_resource,
+};
+
 
 
 #endif
+
+#if defined(CONFIG_AM_SMARTCARD)
+static struct resource amlogic_smc_resource[]  = {
+	[0] = {
+		.start = ((GPIOD_bank_bit2_24(11)<<16) | GPIOD_bit_bit2_24(11)),                          //smc POWER gpio
+		.end   = ((GPIOD_bank_bit2_24(11)<<16) | GPIOD_bit_bit2_24(11)),
+		.flags = IORESOURCE_MEM,
+		.name  = "smc0_power"
+	},
+	[1] = {
+		.start = INT_SMART_CARD,                   //smc irq number
+		.end   = INT_SMART_CARD,
+		.flags = IORESOURCE_IRQ,
+		.name  = "smc0_irq"
+	},
+
+};
+
+static  struct platform_device amlogic_smc_device = {
+	.name             = "amlogic-smc",
+	.id               = -1,
+	.num_resources    = ARRAY_SIZE(amlogic_smc_resource),
+	.resource         = amlogic_smc_resource,
+};
+#endif
+
+
 #if defined(CONFIG_AML_WATCHDOG)
 static struct platform_device aml_wdt_device = {
     .name = "aml_wdt",
@@ -2198,6 +2364,10 @@ static struct platform_device __initdata *platform_devs[] = {
 #if defined(CONFIG_SND_AML_M3)
     &aml_audio,
 #endif
+#ifdef CONFIG_SND_SOC_BT40183
+    &bt40183_audio,
+    &bt40183,    
+#endif
 #ifdef CONFIG_SND_AML_M3_CS4334
     &aml_sound_card,
 #endif
@@ -2281,8 +2451,17 @@ static struct platform_device __initdata *platform_devs[] = {
 	&gx1001_device,
 	&avl6211_device,
 	&ite9173_device,
+	&rtl2830_device,
+	&ds3000_device,
+#ifdef CONFIG_TH_SONY_T2
+	&cxd2834_device,
+#endif
 	&ite9133_device,
 	& dib7090p_device,
+
+#endif
+#if defined(CONFIG_AM_SMARTCARD)	
+	&amlogic_smc_device,
 #endif
  #if defined(CONFIG_AML_WATCHDOG)
         &aml_wdt_device,
@@ -2407,6 +2586,30 @@ static void __init device_pinmux_init(void )
 #ifdef CONFIG_AM_ITE9173
 //for ite9173
 	printk("CONFIG_AM_ITE9173 set pinmux\n");
+	set_mio_mux(3, 0x3F<<6);
+//	clear_mio_mux(0, 1<<4);
+	clear_mio_mux(0, 0x7);
+#endif
+
+#ifdef CONFIG_AM_RTL2830
+//for rtl2830
+	printk("CONFIG_AM_RTL2830 set pinmux\n");
+	set_mio_mux(3, 0x3F<<6);
+//	clear_mio_mux(0, 1<<4);
+	clear_mio_mux(0, 0x7);
+#endif
+
+#ifdef CONFIG_AM_DS3000
+//for rtl2830
+	printk("CONFIG_AM_DS3000 set pinmux\n");
+	set_mio_mux(3, 0x3F<<6);
+//	clear_mio_mux(0, 1<<4);
+	clear_mio_mux(0, 0x7);
+#endif
+
+#ifdef CONFIG_TH_SONY_T2
+//for rtl2830
+	printk("CONFIG_AM_DS3000 set pinmux\n");
 	set_mio_mux(3, 0x3F<<6);
 //	clear_mio_mux(0, 1<<4);
 	clear_mio_mux(0, 0x7);
