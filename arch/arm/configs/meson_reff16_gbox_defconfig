@@ -115,7 +115,7 @@ CONFIG_SIGNALFD=y
 CONFIG_TIMERFD=y
 CONFIG_EVENTFD=y
 CONFIG_SHMEM=y
-CONFIG_ASHMEM=y
+# CONFIG_ASHMEM is not set
 CONFIG_AIO=y
 CONFIG_HAVE_PERF_EVENTS=y
 CONFIG_PERF_USE_VMALLOC=y
@@ -2153,20 +2153,7 @@ CONFIG_UIO_PDRV=y
 #
 # TI VLYNQ
 #
-CONFIG_STAGING=y
-# CONFIG_STAGING_EXCLUDE_BUILD is not set
-# CONFIG_USB_IP_COMMON is not set
-# CONFIG_W35UND is not set
-# CONFIG_PRISM2_USB is not set
-# CONFIG_ECHO is not set
-# CONFIG_OTUS is not set
-# CONFIG_COMEDI is not set
-# CONFIG_ASUS_OLED is not set
-# CONFIG_TRANZPORT is not set
-
-#
-# Qualcomm MSM Camera And Video
-#
+# CONFIG_STAGING is not set
 
 #
 # Camera Sensor Selection
