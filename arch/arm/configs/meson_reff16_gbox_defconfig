@@ -1033,7 +1033,7 @@ CONFIG_AML_AUDIO_DSP=y
 #
 # AMLOGIC Physical memory allocator
 #
-# CONFIG_CMEM is not set
+CONFIG_CMEM=m
 
 #
 # AMLOGIC HW jpeg logo driver
