@@ -296,30 +296,17 @@ static struct platform_device fb_device = {
 
 #if defined(CONFIG_AMLOGIC_SPI_NOR)
 static struct mtd_partition spi_partition_info[] = {
-    /* Hide uboot partition
-            {
-                    .name = "uboot",
-                    .offset = 0,
-                    .size = 0x3e000,
-            },
-    //*/
-    {
-        .name = "ubootenv",
-        .offset = 0x80000,
-        .size = 0x2000,
-},
-    {
-	.name = "hashtable",
-	.offset = 0x100000,
-	.size = 0x2000,
-    },
-    /* Hide recovery partition
-            {
-                    .name = "recovery",
-                    .offset = 0x40000,
-                    .size = 0x1c0000,
-            },
-    //*/
+	{
+        	.name = "ubootwhole",
+        	.offset = 0,
+        	.size = 0x60000,
+    	},
+    	{
+        	.name = "ubootenv",
+        	.offset = 0x7e000,
+        	.size = 0x2000,
+    	},
+
 };
 
 static struct flash_platform_data amlogic_spi_platform = {
