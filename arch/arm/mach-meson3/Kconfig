@@ -91,6 +91,18 @@ config MACH_MESON3_REFF16
 	help
 	  Include support for the Ref M3 board platform.
 	  
+config MACH_MESON3_REFF16_GBOX
+        select GENERIC_ALLOCATOR
+        bool "Support M3(GBox) MBX platform"
+        help
+          Include support for the Ref M3 board platform.
+
+config MACH_MESON3_REFF16_BLUEM3
+        select GENERIC_ALLOCATOR
+        bool "Support M3(Bluetimes) MBX platform"
+        help
+          Include support for the Ref M3 board platform.
+
 config MACH_MESON3_REFF16_1
 	select GENERIC_ALLOCATOR
 	bool "Support M3(lenovo) MBX platform"
