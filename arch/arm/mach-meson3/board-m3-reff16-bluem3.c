@@ -957,7 +957,7 @@ static void __init set_audio_codec_pinmux(void)
     set_mio_mux(8, (1 << 27) | (1 << 26) | (1 << 25) | (1 << 24));
 }
 #endif
-#ifdef CONFIG_ANDROID_PMEM
+#if defined(CONFIG_ANDROID_PMEM) || defined(CONFIG_CMEM)
 static struct android_pmem_platform_data pmem_data =
 {
     .name = "pmem",
