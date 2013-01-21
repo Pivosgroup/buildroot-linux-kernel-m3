@@ -28,8 +28,8 @@
 
 //#define _SUPPORT_CEC_TV_MASTER_
 
-//#define _RX_CEC_DBG_ON_
-//#define _TX_CEC_DBG_ON_
+#define _RX_CEC_DBG_ON_
+#define _TX_CEC_DBG_ON_
 
 #ifdef _RX_CEC_DBG_ON_
 #define hdmirx_cec_dbg_print(fmt, args...) printk(KERN_WARNING fmt, ## args)//hdmi_print
