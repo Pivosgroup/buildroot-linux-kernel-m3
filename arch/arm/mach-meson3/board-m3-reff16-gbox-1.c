@@ -2487,7 +2487,7 @@ static int __init aml_i2c_init(void)
         ARRAY_SIZE(aml_i2c_bus_info_2)); 
     return 0;
 }
-#define NET_EXT_CLK 1
+//#define NET_EXT_CLK 1
 static void __init eth_pinmux_init(void)
 {
 	
