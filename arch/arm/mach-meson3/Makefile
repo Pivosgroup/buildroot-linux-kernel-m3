@@ -42,5 +42,6 @@ obj-$(CONFIG_MACH_MESON3_REFF34)	+= board-m3-reff34.o
 obj-$(CONFIG_MACH_MESON3_REFF34_1)	+= board-m3-reff34-1.o
 obj-$(CONFIG_MACH_MESON3_REFF34_2)	+= board-m3-reff34-2.o
 obj-$(CONFIG_MACH_MESON3_STV_MBX_MC) += board-stv-mbx-mc.o
+obj-$(CONFIG_MACH_MESON3_STV_MBX_MC_A11) += board-stv-mbx-mc-a11.o
 # Power Management
 obj-$(CONFIG_SUSPEND)			+= pm.o
