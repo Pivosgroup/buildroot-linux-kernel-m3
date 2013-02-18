@@ -1854,10 +1854,8 @@ void cec_usrcmd_routing_information(cec_rx_message_t* pcec_message)
 void cec_init(hdmitx_dev_t* hdmitx_device)
 {
     int i;
-    printk("CEC Init\n");
-    if (cec_init_flag == 1) return;     
-
-    //struct input_dev *input_dev;
+      //struct input_dev *input_dev;
+          
     if(!hdmitx_device->cec_func_flag){
         printk("CEC not init\n");
         return ;
@@ -1867,7 +1865,7 @@ void cec_init(hdmitx_dev_t* hdmitx_device)
 
 
 // ?????
-//    
+//    if (cec_init_flag == 1) return;
 
     cec_rx_msg_buf.rx_write_pos = 0;
     cec_rx_msg_buf.rx_read_pos = 0;
@@ -1911,14 +1909,12 @@ void cec_init(hdmitx_dev_t* hdmitx_device)
         printk(KERN_ERR "remote_cec.c: Failed to register device\n");  
         input_free_device(remote_cec_dev);   
     }  
-    printk("CEC Init done\n");
                       
     return;
 }
 
 void cec_uninit(hdmitx_dev_t* hdmitx_device)
 {
-    printk("CEC Uninit\n");
     if(!hdmitx_device->cec_func_flag){
         return ;
     }
@@ -1930,7 +1926,6 @@ void cec_uninit(hdmitx_dev_t* hdmitx_device)
         cec_init_flag = 0;
     }
     input_unregister_device(remote_cec_dev);    
-    printk("CEC Uninit done\n");
 }
 
 void cec_set_pending(tv_cec_pending_e on_off)
