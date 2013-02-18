@@ -41,7 +41,7 @@ unsigned int cec_key_flag =0;
 
 __u16 cec_key_map[128] = {
     KEY_ENTER, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, 0 , 0 , 0 ,//0x00
-    0 , KEY_HOMEPAGE , KEY_MENU, 0, 0, KEY_ESC, 0, 0,
+    0 , KEY_HOMEPAGE , KEY_MENU, 0, 0, KEY_BACK, 0, 0,
     0 , 0, 0, 0, 0, 0, 0, 0,//0x10
     0 , 0, 0, 0, 0, 0, 0, 0,
     KEY_0 , KEY_1, KEY_2, KEY_3,KEY_4, KEY_5, KEY_6, KEY_7,//0x20
@@ -51,7 +51,7 @@ __u16 cec_key_map[128] = {
     
     KEY_POWER , KEY_VOLUMEUP, KEY_VOLUMEDOWN, KEY_MUTE, KEY_PLAYPAUSE, KEY_STOP, KEY_PLAYPAUSE, 0,//0x40
     KEY_REWIND, KEY_FASTFORWARD, 0, KEY_PREVIOUSSONG, KEY_NEXTSONG, 0, 0, 0,
-    0 , 0, 0, KEY_PLAYPAUSE, 0, 0, 0, 0,//0x50
+    0 , 0, 0, 0, 0, 0, 0, 0,//0x50
     0 , 0, 0, 0, 0, 0, 0, 0,
     KEY_PLAYCD, KEY_PLAYPAUSE, KEY_RECORD, KEY_PAUSECD, KEY_STOPCD, KEY_MUTE, 0, KEY_TUNER,//0x60
     0 , KEY_MEDIA, 0, 0, KEY_POWER, KEY_POWER, 0, 0,
