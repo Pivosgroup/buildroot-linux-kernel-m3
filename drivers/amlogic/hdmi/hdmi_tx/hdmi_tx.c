@@ -113,7 +113,7 @@ static struct switch_dev sdev = {   // android ics switch device
 static unsigned char init_flag=INIT_FLAG_POWERDOWN;
 static unsigned char init_powermode=0x80;
 #else
-static unsigned char init_flag=INIT_FLAG_CEC_FUNC;
+static unsigned char init_flag=0;
 extern unsigned char uboot_vmode_flag = 0;
 static unsigned char init_powermode=0;
 #endif
