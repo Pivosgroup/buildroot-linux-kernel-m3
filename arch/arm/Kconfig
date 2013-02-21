@@ -1481,6 +1481,12 @@ config CMDLINE_FORCE
 	  command-line options your boot loader passes to the kernel.
 
 	  If unsure, say N.
+
+config CMDLINE_APPEND
+	bool "Append default kernel command string to bootloader kernel arguments"
+	help
+	  The default kernel command string will be appended to the
+	  command-line arguments provided by the boot loader.
 endchoice
 
 config XIP_KERNEL
