@@ -91,6 +91,24 @@ config MACH_MESON3_REFF16
 	help
 	  Include support for the Ref M3 board platform.
 	  
+config MACH_MESON3_REFF16_GBOX
+        select GENERIC_ALLOCATOR
+        bool "Support M3(GBox) MBX platform"
+        help
+          Include support for the Ref M3 board platform.
+
+config MACH_MESON3_REFF16_GBOX_1
+        select GENERIC_ALLOCATOR
+        bool "Support M3(GBox 2.1) MBX platform"
+        help
+          Include support for the Ref M3 board platform.
+
+config MACH_MESON3_REFF16_BLUEM3
+        select GENERIC_ALLOCATOR
+        bool "Support M3(Bluetimes) MBX platform"
+        help
+          Include support for the Ref M3 board platform.
+
 config MACH_MESON3_REFF16_1
 	select GENERIC_ALLOCATOR
 	bool "Support M3(lenovo) MBX platform"
@@ -172,6 +190,12 @@ config MACH_MESON3_STV_MBX_MC
 	bool "Support M3 (geniatech) platform"
 	help
 		Include support for the AML M3 geniatech board platform.
+
+config MACH_MESON3_STV_MBX_MC_A11
+        select GENERIC_ALLOCATOR
+        bool "Support M3 (MyGica A11) platform"
+        help
+                Include support for the AML M3 MyGica A11 board platform.
 
 config STV_RECOVERY
 	bool "make recovery partition visible"
