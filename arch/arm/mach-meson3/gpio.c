@@ -191,6 +191,18 @@ void gpio_enable_int_filter(int filter, int group)
 	WRITE_CBUS_REG_BITS(GPIO_INTR_FILTER_SEL0, filter, group*4, 3);
 }
 
+int gpio_cansleep(unsigned gpio)
+{
+    return 0;
+}
+
+void gpio_set_value_cansleep(unsigned gpio, int value)
+{
+    gpio_bank_t bank = (gpio_bank_t)(gpio >> 16);
+    int bit = gpio & 0xFFFF;
+    set_gpio_val(bank, bit, value ? 1 : 0);
+}
+
 int gpio_is_valid(int number)
 {
     return 1;
@@ -210,7 +222,6 @@ int gpio_direction_input(unsigned gpio)
     gpio_bank_t bank = (gpio_bank_t)(gpio >> 16);
     int bit = gpio & 0xFFFF;
     set_gpio_mode(bank, bit, GPIO_INPUT_MODE);
-    printk("set gpio%d.%d input\n", bank, bit);
     return (get_gpio_val(bank, bit));
 }
 
@@ -220,7 +231,6 @@ int gpio_direction_output(unsigned gpio, int value)
     int bit = gpio & 0xFFFF;
     set_gpio_val(bank, bit, value ? 1 : 0);
     set_gpio_mode(bank, bit, GPIO_OUTPUT_MODE);
-    printk("set gpio%d.%d output(%d)\n", bank, bit, value);
     return 0;
 }
 

@@ -38,8 +38,10 @@ typedef enum gpio_mode {
 int set_gpio_mode(gpio_bank_t bank, int bit, gpio_mode_t mode);
 gpio_mode_t get_gpio_mode(gpio_bank_t bank, int bit);
 
-int set_gpio_val(gpio_bank_t bank, int bit, unsigned long val);
 unsigned long  get_gpio_val(gpio_bank_t bank, int bit);
+
+int set_gpio_value_cansleep(gpio_bank_t bank, int bit, unsigned long val);
+
 
 #define GPIOA_bank_bit0_27(bit)     (PREG_PAD_GPIO0)
 #define GPIOA_bit_bit0_27(bit)      (bit)
@@ -128,8 +130,11 @@ extern void gpio_free(unsigned gpio);
 extern int gpio_direction_input(unsigned gpio);
 extern int gpio_direction_output(unsigned gpio, int value);
 extern void gpio_set_value(unsigned gpio, int value);
+int set_gpio_val(gpio_bank_t bank, int bit, unsigned long val);
 extern int gpio_get_value(unsigned gpio);
 
+extern void gpio_set_value_cansleep(unsigned gpio, int value);
+extern int gpio_cansleep(unsigned gpio);
 
 #ifdef CONFIG_EXGPIO
 #define MAX_EXGPIO_BANK 4
