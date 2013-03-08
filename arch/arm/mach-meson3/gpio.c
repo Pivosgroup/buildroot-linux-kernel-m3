@@ -193,14 +193,13 @@ void gpio_enable_int_filter(int filter, int group)
 
 int gpio_cansleep(unsigned gpio)
 {
+    /* Always return 0. We don't have I2C/SPI GPIOs. */
     return 0;
 }
 
 void gpio_set_value_cansleep(unsigned gpio, int value)
 {
-    gpio_bank_t bank = (gpio_bank_t)(gpio >> 16);
-    int bit = gpio & 0xFFFF;
-    set_gpio_val(bank, bit, value ? 1 : 0);
+    /* Nothing. We don't have I2C/SPI GPIOs that are handled by AM_GPIO. */
 }
 
 int gpio_is_valid(int number)

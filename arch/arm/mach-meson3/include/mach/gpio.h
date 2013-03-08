@@ -133,6 +133,7 @@ extern void gpio_set_value(unsigned gpio, int value);
 int set_gpio_val(gpio_bank_t bank, int bit, unsigned long val);
 extern int gpio_get_value(unsigned gpio);
 
+/* Needed for GPIO */
 extern void gpio_set_value_cansleep(unsigned gpio, int value);
 extern int gpio_cansleep(unsigned gpio);
 
