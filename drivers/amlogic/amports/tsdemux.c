@@ -400,7 +400,7 @@ static ssize_t _tsdemux_write(const char __user *buf, size_t count)
         
         WRITE_MPEG_REG(PARSER_FETCH_CMD, (7 << FETCH_ENDIAN) | len);
 
-        ret = wait_event_interruptible_timeout(wq, fetch_done != 0, HZ/10);
+        ret = wait_event_interruptible_timeout(wq, fetch_done != 0, HZ);
         if (ret == 0) {
             WRITE_MPEG_REG(PARSER_FETCH_CMD, 0);
 			printk("write timeout, retry\n");

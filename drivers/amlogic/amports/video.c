@@ -1115,6 +1115,7 @@ static inline bool duration_expire(vframe_t *cur_vf, vframe_t *next_vf, u32 dur)
 
 static inline bool vpts_expire(vframe_t *cur_vf, vframe_t *next_vf)
 {
+	
     u32 pts = next_vf->pts;
     u32 systime;
     u32 adjust_pts, org_vpts;
@@ -1148,20 +1149,23 @@ static inline bool vpts_expire(vframe_t *cur_vf, vframe_t *next_vf)
     }
     /* check video PTS discontinuity */
     else if (abs(systime - pts) > tsync_vpts_discontinuity_margin()) {
-        pts = timestamp_vpts_get() + (cur_vf ? DUR2PTS(cur_vf->duration) : 0);
-
-        if ((systime - pts) >= 0) {
-            tsync_avevent_locked(VIDEO_TSTAMP_DISCONTINUITY, next_vf->pts);
+        pts = timestamp_vpts_get() + (cur_vf ? DUR2PTS(cur_vf->duration) : 0);	
+			//printk("system=0x%x vpts=0x%x pts=0x%x \n",systime,timestamp_vpts_get(),pts);		
+        if (((int)(systime - pts)) >= 0) {
 			printk("video discontinue, system=0x%x vpts=0x%x\n", systime, pts);
-            return true;
+            tsync_avevent_locked(VIDEO_TSTAMP_DISCONTINUITY, next_vf->pts);
+		    if(systime>next_vf->pts || next_vf->pts==0){// pts==0 is a keep frame maybe.
+            	return true;
+            }
+            return false;
         }
     }
-
+	
+ 	
     if(smooth_sync_enable){
         org_vpts = timestamp_vpts_get();
         if((abs(org_vpts + vsync_pts_inc - systime) < M_PTS_SMOOTH_MAX)
             && (abs(org_vpts + vsync_pts_inc - systime) > M_PTS_SMOOTH_MIN)){
-
             if(!video_frame_repeat_count){
                 vpts_ref = org_vpts;
                 video_frame_repeat_count ++;
@@ -1181,7 +1185,6 @@ static inline bool vpts_expire(vframe_t *cur_vf, vframe_t *next_vf)
             video_frame_repeat_count = 0;
         }
     }
-
     return ((int)(timestamp_pcrscr_get() - pts) >= 0);
 }
 
@@ -1327,7 +1330,7 @@ static irqreturn_t vsync_isr(int irq, void *dev_id)
 #endif
 
         } else if ((cur_dispbuf == &vf_local) && (video_property_changed)) {
-            if (!(blackout|force_blackout)) {
+            if (!(blackout|force_blackout) && (disable_video != VIDEO_DISABLE_FORNEXT)) {
         			if((READ_MPEG_REG(DI_IF1_GEN_REG)&0x1)==0)
                 {
                     /* setting video display property in unregister mode */
@@ -1393,6 +1396,11 @@ static irqreturn_t vsync_isr(int irq, void *dev_id)
              * you can adjust this array for any slow sync control as you want.
              * The playback can be smoother than previous method.
              */
+             if (trickmode_fffb == 1) {
+                atomic_set(&trickmode_framedone, 1);
+                video_notify_flag |= VIDEO_NOTIFY_TRICK_WAIT;
+                break;
+            }
             if (duration_expire(cur_dispbuf, vf, frame_repeat_count * vsync_pts_inc) && timestamp_pcrscr_enable_state()) {
                 amlog_mask(LOG_MASK_SLOWSYNC,
                            "slow sync toggle, frame_repeat_count = %d\n",
@@ -2231,6 +2239,27 @@ static int amvideo_ioctl(struct inode *inode, struct file *file,
         #else
             DisableVideoLayer();
         #endif
+        }
+        break;
+
+    case AMSTREAM_IOC_GET_BLACKOUT_POLICY:
+        if (copy_to_user(argp, &blackout, sizeof(u32)) != 0) {
+            ret = -EFAULT;
+        }
+        break;
+
+    case AMSTREAM_IOC_SET_BLACKOUT_POLICY:
+        {
+            u32 mode;
+            if (copy_from_user(&mode, argp, sizeof(u32)) == 0) {
+               if (mode > 2) {
+                   ret = -EINVAL;
+               } else {
+                   blackout = mode;
+               }
+            } else {
+                ret = -EFAULT;
+            }
         }
         break;
 

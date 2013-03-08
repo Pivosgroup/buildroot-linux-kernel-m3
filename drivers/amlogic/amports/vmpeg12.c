@@ -163,7 +163,10 @@ static void set_frame_info(vframe_t *vf)
 
     vf->width  = frame_width = READ_MPEG_REG(MREG_PIC_WIDTH);
     vf->height = frame_height = READ_MPEG_REG(MREG_PIC_HEIGHT);
-
+	
+    if(frame_height==1088)
+    vf->height=frame_height=1080;
+	
     if (frame_dur > 0) {
         vf->duration = frame_dur;
     } else {

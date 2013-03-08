@@ -54,6 +54,7 @@ static DEFINE_MUTEX(vh264_mutex);
 #define AVIL_DPB_BUFF_SIZE      0x01ec2000
 
 #define DEF_BUF_START_ADDR            0x81000000
+#define DEF_BUF_START_BASE            (0x81000000 + buf_offset)
 #define MEM_HEADER_CPU_BASE           (0x81110000 + buf_offset)
 #define MEM_DATA_CPU_BASE             (0x81111000 + buf_offset)
 #define MEM_MMCO_CPU_BASE             (0x81112000 + buf_offset)
@@ -1222,7 +1223,8 @@ static void vh264_local_init(int init_flag)
 
 static s32 vh264_init(int init_flag)
 {
-    void __iomem *p = ioremap_nocache(MEM_HEADER_CPU_BASE, MEM_SWAP_SIZE);
+    void __iomem *p = ioremap_nocache(DEF_BUF_START_BASE, V_BUF_ADDR_START - DEF_BUF_START_ADDR);
+    void __iomem *p1 = (void __iomem *)((ulong)(p) + MEM_HEADER_CPU_BASE - DEF_BUF_START_BASE);
 
     if (!p) {
         printk("\nvh264_init: Cannot remap ucode swapping memory\n");
@@ -1238,6 +1240,8 @@ static s32 vh264_init(int init_flag)
     
     vh264_local_init(init_flag);
 
+    memset(p, 0, V_BUF_ADDR_START - DEF_BUF_START_ADDR);
+
     amvdec_enable();
 
     if (amvdec_loadmc(vh264_mc) < 0) {
@@ -1245,19 +1249,19 @@ static s32 vh264_init(int init_flag)
         return -EBUSY;
     }
 
-    memcpy(p,
+    memcpy(p1,
            vh264_header_mc, sizeof(vh264_header_mc));
 
-    memcpy((void *)((ulong)p + 0x1000),
+    memcpy((void *)((ulong)p1 + 0x1000),
            vh264_data_mc, sizeof(vh264_data_mc));
 
-    memcpy((void *)((ulong)p + 0x2000),
+    memcpy((void *)((ulong)p1 + 0x2000),
            vh264_mmco_mc, sizeof(vh264_mmco_mc));
 
-    memcpy((void *)((ulong)p + 0x3000),
+    memcpy((void *)((ulong)p1 + 0x3000),
            vh264_list_mc, sizeof(vh264_list_mc));
 
-    memcpy((void *)((ulong)p + 0x4000),
+    memcpy((void *)((ulong)p1 + 0x4000),
            vh264_slice_mc, sizeof(vh264_slice_mc));
 
     iounmap(p);

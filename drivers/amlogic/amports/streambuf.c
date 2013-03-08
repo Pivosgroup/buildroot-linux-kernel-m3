@@ -173,7 +173,8 @@ u32 stbuf_rp(struct stream_buf_s *buf)
 u32 stbuf_space(struct stream_buf_s *buf)
 {
     /* reserved space for safe write, the parser fifo size is 1024byts, so reserve it */
-    int size = (buf->buf_size - _READ_ST_REG(LEVEL)) - 1024;
+    /* resever some space for demux buffer */
+    int size = (buf->buf_size - _READ_ST_REG(LEVEL)) - 1024*6;
 
     return size > 0 ? size : 0;
 }

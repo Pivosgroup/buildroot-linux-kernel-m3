@@ -25,6 +25,7 @@
 #include <linux/interrupt.h>
 #include <linux/timer.h>
 #include <linux/platform_device.h>
+#include <linux/dma-mapping.h>
 #include <linux/amports/amstream.h>
 #include <linux/amports/ptsserv.h>
 #include <linux/amports/canvas.h>
@@ -695,6 +696,12 @@ static void vmpeg4_local_init(void)
 
 static s32 vmpeg4_init(void)
 {
+    dma_addr_t buf_start_map;
+
+    memset(phys_to_virt(buf_start), 0, buf_size);
+
+    buf_start_map = dma_map_single(NULL, phys_to_virt(buf_start), buf_size, DMA_TO_DEVICE);
+    
     amlog_level(LOG_LEVEL_INFO, "vmpeg4_init\n");
     init_timer(&recycle_timer);
 
@@ -740,6 +747,7 @@ static s32 vmpeg4_init(void)
         amlog_level(LOG_LEVEL_ERROR, "not supported MPEG4 format\n");
     }
 
+    dma_unmap_single(NULL, buf_start_map, buf_size, DMA_TO_DEVICE);
     stat |= STAT_MC_LOAD;
 
     /* enable AMRISC side protocol */

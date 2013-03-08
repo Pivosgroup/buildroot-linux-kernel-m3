@@ -1108,7 +1108,7 @@ static inline bool vpts_expire(vframe_t *cur_vf, vframe_t *next_vf)
         if ((systime - pts) >= 0) {
             tsync_avevent_locked(VIDEO_TSTAMP_DISCONTINUITY, next_vf->pts);
 			printk("video discontinue, system=0x%x vpts=0x%x\n", systime, pts);
-            return true;
+            return false;
         }
     }
 

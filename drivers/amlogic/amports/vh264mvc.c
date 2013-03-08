@@ -58,6 +58,7 @@
 #define DROPPING_THREAD_HOLD    4
 #define DROPPING_FIRST_WAIT     6
 
+static int  vh264mvc_vf_states(vframe_states_t *states, void*);
 static vframe_t *vh264mvc_vf_peek(void*);
 static vframe_t *vh264mvc_vf_get(void*);
 static void vh264mvc_vf_put(vframe_t *, void*);
@@ -76,7 +77,7 @@ static const struct vframe_operations_s vh264mvc_vf_provider = {
     .get = vh264mvc_vf_get,
     .put = vh264mvc_vf_put,
     .event_cb = vh264mvc_event_cb,
-    .vf_states=NULL,
+    .vf_states=vh264mvc_vf_states,
 };
 static struct vframe_provider_s vh264mvc_vf_prov;
 
@@ -201,9 +202,6 @@ static int drop_rate = 2;
 /**/
 
 #define MVC_BUF_NUM     (DECODE_BUFFER_NUM_MAX+DISPLAY_BUFFER_NUM)
-static struct list_head free_list_head = LIST_HEAD_INIT(free_list_head); 
-static struct list_head ready_list_head = LIST_HEAD_INIT(ready_list_head); 
-static struct list_head recycle_list_head = LIST_HEAD_INIT(recycle_list_head); 
 typedef struct mvc_buf_s{
     struct list_head list;
     vframe_t vframe;
@@ -215,7 +213,6 @@ typedef struct mvc_buf_s{
     int stream_offset;
     unsigned pts;
 }mvc_buf_t;
-static mvc_buf_t mvc_buf_local[MVC_BUF_NUM];
 
 #define spec2canvas(x)  \
     (((x)->v_canvas_index << 16) | \
@@ -227,37 +224,46 @@ static mvc_buf_t mvc_buf_local[MVC_BUF_NUM];
 
 static int vf_buf_init_flag = 0;
 
-static void recycle_vframe(void);
 
 static void init_vf_buf(void)
 {
-    int i;
-    mvc_buf_t* mvc_buf;
-    for(i = 0; i< MVC_BUF_NUM; i++){
-        mvc_buf = &mvc_buf_local[i];
-        memset(mvc_buf, 0, sizeof(mvc_buf_t));
-        mvc_buf->view0_buff_id = -1;
-        mvc_buf->view1_buff_id = -1;
-        mvc_buf->display_POC = -1;
-        list_add_tail(&(mvc_buf->list), &free_list_head);
-    }
     vf_buf_init_flag = 1;
 }    
 
 static void uninit_vf_buf(void)
 {
-    mvc_buf_t *p = NULL, *ptmp;
-    vf_buf_init_flag = 0;
-    list_for_each_entry_safe(p, ptmp, &free_list_head, list) {
-        list_del(&p->list);
-    }
-    list_for_each_entry_safe(p, ptmp, &ready_list_head, list) {
-        list_del(&p->list);
-    }
-    list_for_each_entry_safe(p, ptmp, &recycle_list_head, list) {
-        list_del(&p->list);
-    }
+
 }    
+//#define QUEUE_SUPPORT
+
+typedef struct {
+	int view0_buf_id;
+	int view1_buf_id;
+	int display_pos;
+	int slot;
+	unsigned stream_offset;
+} mvc_info_t;
+
+#define VF_POOL_SIZE        20
+static struct vframe_s vfpool[VF_POOL_SIZE];
+static mvc_info_t vfpool_idx[VF_POOL_SIZE];
+static s32 view0_vfbuf_use[DECODE_BUFFER_NUM_MAX];
+static s32 view1_vfbuf_use[DECODE_BUFFER_NUM_MAX];
+
+static s32 fill_ptr, get_ptr, putting_ptr, put_ptr;
+#define INCPTR(p) ptr_atomic_wrap_inc(&p)
+static inline void ptr_atomic_wrap_inc(u32 *ptr)
+{
+    u32 i = *ptr;
+
+    i++;
+
+    if (i >= VF_POOL_SIZE) {
+        i = 0;
+    }
+
+    *ptr = i;
+}
 
 static void set_frame_info(vframe_t *vf)
 {
@@ -280,83 +286,86 @@ static void set_frame_info(vframe_t *vf)
     return;
 }
 
+static int  vh264mvc_vf_states(vframe_states_t *states, void* op_arg)
+{
+    unsigned long flags;
+    int i;
+    spin_lock_irqsave(&lock, flags);
+    states->vf_pool_size = VF_POOL_SIZE;
+
+    i = put_ptr - fill_ptr;
+    if (i < 0) i += VF_POOL_SIZE;
+    states->buf_free_num = i;
+    
+    i = putting_ptr - put_ptr;
+    if (i < 0) i += VF_POOL_SIZE;
+    states->buf_recycle_num = i;
+    
+    i = fill_ptr - get_ptr;
+    if (i < 0) i += VF_POOL_SIZE;
+    states->buf_avail_num = i;
+    
+    spin_unlock_irqrestore(&lock, flags);
+    return 0;
+}
 static vframe_t *vh264mvc_vf_peek(void* op_arg)
 {
-    int ready_cnt = 0;
-    vframe_t *vf, *vf_next;
-    mvc_buf_t *p = NULL, *ptmp;
-    if(vf_buf_init_flag == 0)
-        return NULL;
-    if((dbg_mode&0x30)==0x20){
-        if(dbg_cmd!=1){
-            return NULL;    
-        }    
-    }
-        
-    ready_cnt = 0;
-    list_for_each_entry_safe(p, ptmp, &ready_list_head, list) {
-       if((p->view0_buff_id >= 0 && p->view1_buff_id >= 0) &&
-          ((p->view0_drop == 0) && (p->view1_drop) == 0))
-          ready_cnt++;
-    }
-
-    if((no_dropping_cnt >= DROPPING_FIRST_WAIT) && (ready_cnt < DROPPING_THREAD_HOLD)) {
-        WRITE_MPEG_REG(DROP_CONTROL, (1 << 31) | (drop_rate));
-    } else {
-        WRITE_MPEG_REG(DROP_CONTROL, 0);
-    }
-
-    if (ready_cnt == 0)
+    if (get_ptr == fill_ptr) {
         return NULL;
 
-    /* consolidate ready queue for dropped frames */
-    list_for_each_entry_safe(p, ptmp, &ready_list_head, list) {
-        if((p->view0_buff_id >= 0 && p->view1_buff_id >= 0)){
-            if (((p->view0_drop) || (p->view1_drop)) &&
-                (&ptmp->list != &ready_list_head)) {
-                vf = &(p->vframe);
-                vf_next = &(ptmp->vframe);
-                if (vf_next->pts == 0) {
-                    if (p->vframe.pts == 0) {
-                        vf_next->duration += frame_dur;
-                    } else {
-                        vf_next->pts = p->vframe.pts + p->vframe.duration;
-                    }
-                }
-                list_move_tail(&p->list, &recycle_list_head);
-            }
-        }
+    }
+	if((vfpool_idx[get_ptr].view0_buf_id < 0)||(vfpool_idx[get_ptr].view1_buf_id < 0)){
+		return NULL;	
+	}
+    return &vfpool[get_ptr];
+    
+}
+
+static vframe_t *vh264mvc_vf_get(void* op_arg)
+{
+
+    vframe_t *vf;
+	int view0_buf_id;
+	int view1_buf_id;
+    if (get_ptr == fill_ptr) {
+        return NULL;
+
     }
     
-    vf = NULL;
-
-    list_for_each_entry_safe(p, ptmp, &ready_list_head, list) {
-        if((p->view0_buff_id >= 0 && p->view1_buff_id >= 0)){
-            /* if there is only a single dropped frame in the ready queue, return NULL */
-            if ((p->view0_drop) || (p->view1_drop))
-                break;
-
-            vf = &(p->vframe);
-
-            if(view_mode==0 || view_mode==1){
-                vf->type = VIDTYPE_PROGRESSIVE | VIDTYPE_VIU_FIELD;
-                vf->canvas0Addr = vf->canvas1Addr = (view_mode==0)?spec2canvas(&buffer_spec0[p->view0_buff_id]):
-                        spec2canvas(&buffer_spec1[p->view1_buff_id]);
-            }
-            else{
-                vf->type = VIDTYPE_PROGRESSIVE | VIDTYPE_MVC;
-                if(view_mode==2){
-                    vf->canvas0Addr = spec2canvas(&buffer_spec1[p->view1_buff_id]);
-                    vf->canvas1Addr = spec2canvas(&buffer_spec0[p->view0_buff_id]);
-                }
-                else{
-                    vf->canvas0Addr = spec2canvas(&buffer_spec0[p->view0_buff_id]);
-                    vf->canvas1Addr = spec2canvas(&buffer_spec1[p->view1_buff_id]);
-                }
-            }
-            break;
-        }
+    view0_buf_id = vfpool_idx[get_ptr].view0_buf_id;
+    view1_buf_id = vfpool_idx[get_ptr].view1_buf_id;
+    vf = &vfpool[get_ptr];
+    if(view_mode==0 || view_mode==1){
+        vf->type = VIDTYPE_PROGRESSIVE | VIDTYPE_VIU_FIELD;
+        vf->canvas0Addr = vf->canvas1Addr = (view_mode==0)?spec2canvas(&buffer_spec0[view0_buf_id]):
+                spec2canvas(&buffer_spec1[view1_buf_id]);
     }
+    else{
+        vf->type = VIDTYPE_PROGRESSIVE | VIDTYPE_MVC;
+#ifdef CONFIG_POST_PROCESS_MANAGER_3D_PROCESS
+        vf->left_eye.start_x = 0; vf->left_eye.start_y = 0; vf->left_eye.width = vf->width; vf->left_eye.height = vf->height; 
+        vf->right_eye.start_x = 0; vf->right_eye.start_y = 0; vf->right_eye.width = vf->width; vf->right_eye.height = vf->height; 
+        vf->trans_fmt = TVIN_TFMT_3D_TB;
+#endif
+		
+        if(view_mode==2){
+#ifdef CONFIG_POST_PROCESS_MANAGER_3D_PROCESS
+            //vf->trans_fmt = TVIN_TFMT_3D_LRH_OLER;
+#endif
+            vf->canvas0Addr = spec2canvas(&buffer_spec1[view1_buf_id]);
+            vf->canvas1Addr = spec2canvas(&buffer_spec0[view0_buf_id]);
+        }
+        else{
+#ifdef CONFIG_POST_PROCESS_MANAGER_3D_PROCESS
+              //      vf->trans_fmt = TVIN_TFMT_3D_LRH_ELOR;
+#endif
+            vf->canvas0Addr = spec2canvas(&buffer_spec0[view0_buf_id]);
+            vf->canvas1Addr = spec2canvas(&buffer_spec1[view1_buf_id]);
+        }
+    }    
+    
+    INCPTR(get_ptr);
+	
     if(vf){
         if(frame_width==0){
             frame_width = vh264mvc_amstream_dec_info.width;
@@ -364,52 +373,23 @@ static vframe_t *vh264mvc_vf_peek(void* op_arg)
         if(frame_height==0){
             frame_height = vh264mvc_amstream_dec_info.height;
         }    
-
         vf->width = frame_width;
         vf->height = frame_height;
     }
 
     return vf;
-}
 
-static vframe_t *vh264mvc_vf_get(void* op_arg)
-{
-    mvc_buf_t * mvc_buf;
-    vframe_t* vf = vh264mvc_vf_peek(op_arg);
-    if(vf){
-        mvc_buf = to_mvcbuf(vf);
-        list_del(&(mvc_buf->list));
-
-        /* use newest frame_width, frame_height */ 
-        if((dbg_mode&0x30)==0x20){
-            if(dbg_cmd==1){
-                dbg_cmd = 0;
-            }    
-        }
-        if(dbg_mode&0x1)
-            printk("vh264mvc_vf_get %d %d %d poc %d view0_buf %d view1_buf %d\n", 
-                    vf->width, vf->height, vf->duration, mvc_buf->display_POC, mvc_buf->view0_buff_id, mvc_buf->view1_buff_id);
-        
-        if (vf->pts)
-            pts_hit++;
-        else
-            pts_missed++;
-            
-        if (no_dropping_cnt < DROPPING_FIRST_WAIT)
-            no_dropping_cnt++;
-    }
-    return vf;
+ 
 }
 
 static void vh264mvc_vf_put(vframe_t *vf, void* op_arg)
 {
-    mvc_buf_t * mvc_buf;
+	
     if(vf_buf_init_flag == 0){
         return;
     }
-    mvc_buf = to_mvcbuf(vf);
-    list_add_tail(&mvc_buf->list, &recycle_list_head);
-    recycle_vframe();
+	INCPTR(putting_ptr);
+  
 }
 
 static int vh264mvc_event_cb(int type, void *data, void *private_data)
@@ -562,20 +542,19 @@ static int get_max_dec_frame_buf_size(int level_idc, int max_reference_frame_num
   return size;
 }
 
-#ifdef DEBUG_PTS
-static void dump_ready_list(void)
+int check_in_list(int pos , int* slot)
 {
-    mvc_buf_t *p = NULL, *ptmp;
-
-    list_for_each_entry_safe(p, ptmp, &ready_list_head, list) {
-        printk("view0_buff_id = %d, view1_buff_id = %d, stream_offset = %d, POC = %d\n",
-                p->view0_buff_id,
-                p->view1_buff_id,
-                p->stream_offset,
-                p->display_POC);
-    }    
+	int i;
+	int ret = 0 ;
+	for(i = 0 ; i < VF_POOL_SIZE ; i++){
+		if(vfpool_idx[i].display_pos == pos){
+			ret =1;
+			*slot = vfpool_idx[i].slot ;
+			break;	
+		}			
+	}	
+	return ret ;
 }
-#endif
 
 #ifdef HANDLE_h264mvc_IRQ
 static irqreturn_t vh264mvc_isr(int irq, void *dev_id)
@@ -584,6 +563,7 @@ static void vh264mvc_isr(void)
 #endif
 {
         int drop_status;
+        vframe_t *vf;
         int ret = READ_MPEG_REG(MAILBOX_COMMAND);
         //printk("vh264mvc_isr, cmd =%x\n", ret);
         switch(ret & 0xff) {
@@ -772,77 +752,43 @@ static void vh264mvc_isr(void)
                 }
             }
             else{
-                mvc_buf_t *p = NULL, *ptmp;
-                unsigned char in_list_flag = 0;
-                ulong fiq_flag;
-                raw_local_save_flags(fiq_flag);
-                local_fiq_disable();
-                list_for_each_entry_safe(p, ptmp, &ready_list_head, list) {
-                    if(p->display_POC == display_POC){
-                        if(display_view_id == 0){
-                            if(p->view0_buff_id>=0){
-#ifdef DEBUG_PTS
-                                dump_ready_list();
-#endif
-                                printk("H264MVC Warning, view0_buff_id is %d, not -1\n", p->view0_buff_id);    
-                            }
-                            p->view0_buff_id = display_buff_id;
-                            p->view0_drop    = drop_status;
-                            p->stream_offset = stream_offset;
-                        }
-                        else{
-                            if(p->view1_buff_id>=0){
-#ifdef DEBUG_PTS
-                                dump_ready_list();
-#endif
-                                printk("H264MVC Warning, view1_buff_id is %d, not -1\n", p->view1_buff_id);    
-                            }
-                            p->view1_drop    = drop_status;
-                            p->view1_buff_id = display_buff_id;
-                        }
-                        in_list_flag = 1;
-                        break;
-                    }
-                }
-                if(in_list_flag == 0){
-                    if(list_empty(&free_list_head)){
-                        printk("H264MVC Error, free_list empty\n");
-                    }
-                    else{
-                        p = list_first_entry(&free_list_head, struct mvc_buf_s, list);
-                        p->display_POC = display_POC;
-                        if(display_view_id == 0){
-                            p->view0_buff_id = display_buff_id;
-                            p->view0_drop    = drop_status;
-                            p->stream_offset = stream_offset;
-                        }
-                        else{
-                            p->view1_buff_id = display_buff_id;
-                            p->view1_drop    = drop_status;
-                        }
-
-#if 1
-                        if (pts_lookup_offset(PTS_TYPE_VIDEO, p->stream_offset, &p->vframe.pts, 0) != 0) {
-                            p->vframe.pts = 0;
-                        }
-#else
-                        p->vframe.pts = 0;
-#endif
-                        set_frame_info(&p->vframe);
-                        in_list_flag = 1;
-                        list_del(&(p->list));
-                        list_add_tail(&(p->list), &ready_list_head);
-                         vf_notify_receiver(PROVIDER_NAME,VFRAME_EVENT_PROVIDER_VFRAME_READY,NULL);
-                    }
-                }
-                raw_local_irq_restore(fiq_flag);
-
-                if(in_list_flag){
-                    display_buff_id = -1;
-                    display_view_id = -1;
-                    display_POC = -1;
-                    stream_offset = -1;
-                }
+            	unsigned char in_list_flag = 0;
+		
+				int slot =0 ;
+				in_list_flag  =  check_in_list(display_POC ,&slot);
+				
+				if(!in_list_flag){
+					if(display_view_id ==0){
+						vfpool_idx[fill_ptr].view0_buf_id = display_buff_id;	
+						view0_vfbuf_use[display_buff_id]++;		
+						vfpool_idx[fill_ptr].stream_offset = stream_offset ;
+					}
+					if(display_view_id == 1){
+						vfpool_idx[fill_ptr].view1_buf_id = display_buff_id;	
+						view1_vfbuf_use[display_buff_id]++;			
+					}
+					vfpool_idx[fill_ptr].slot = fill_ptr;
+					vfpool_idx[fill_ptr].display_pos = display_POC;
+					
+					INCPTR(fill_ptr);						
+				}else{
+					if(display_view_id ==0){
+						vfpool_idx[slot].view0_buf_id = display_buff_id;	
+						view0_vfbuf_use[display_buff_id]++;		
+						vfpool_idx[slot].stream_offset = stream_offset ;
+					}
+					if(display_view_id == 1){
+						vfpool_idx[slot].view1_buf_id = display_buff_id;	
+						view1_vfbuf_use[display_buff_id]++;			
+					}	
+					vf = &vfpool[slot];		
+					if (pts_lookup_offset(PTS_TYPE_VIDEO, vfpool_idx[slot].stream_offset, &vf->pts, 0) != 0) {
+                    	vf->pts = 0;
+                    }	
+                    //printk("frame pts is :  %x  \n" ,vf->pts);
+                    set_frame_info(vf);	
+                    vf_notify_receiver(PROVIDER_NAME,VFRAME_EVENT_PROVIDER_VFRAME_READY,NULL);									
+				}              
             }
             break;
           default : break;
@@ -855,67 +801,29 @@ exit:
 #endif
 }
 
-static void recycle_vframe(void)
-{
-    int cnt = 0;
-    mvc_buf_t *p = NULL, *ptmp;
-
-    list_for_each_entry_safe(p, ptmp, &recycle_list_head, list) {
-        cnt++;
-    }
-
-    if((!list_empty(&recycle_list_head))&&
-        (READ_MPEG_REG(BUFFER_RECYCLE) ==0)){
-        mvc_buf_t* mvc_buf;
-        ulong fiq_flag;
-        raw_local_save_flags(fiq_flag);
-        local_fiq_disable();
-        
-        mvc_buf = list_first_entry(&recycle_list_head, struct mvc_buf_s, list);
-        if(mvc_buf->view0_buff_id >= 0){
-            WRITE_MPEG_REG(BUFFER_RECYCLE, (0<<8)|(mvc_buf->view0_buff_id+1));
-            mvc_buf->view0_buff_id = -1;
-        }
-        else if(mvc_buf->view1_buff_id >= 0){
-            WRITE_MPEG_REG(BUFFER_RECYCLE, (1<<8)|(mvc_buf->view1_buff_id+1));
-            mvc_buf->view1_buff_id = -1;
-        }
-        if((mvc_buf->view0_buff_id < 0)&&
-            (mvc_buf->view1_buff_id < 0)){
-            mvc_buf->display_POC = -1;
-            mvc_buf->view0_drop = 0;
-            mvc_buf->view1_drop = 0;
-            list_del(&mvc_buf->list);        
-            list_add_tail(&mvc_buf->list, &free_list_head);
-        }
-        raw_local_irq_restore(fiq_flag);
-    }
-}
+    
     
 static void vh264mvc_put_timer_func(unsigned long arg)
 {
     struct timer_list *timer = (struct timer_list *)arg;
 
-    if((dbg_mode&0x30)==0x30){
-        if(display_buff_id >=0 ){
-            if(dbg_cmd==1){
-                while(READ_MPEG_REG(BUFFER_RECYCLE) !=0) {}
-                WRITE_MPEG_REG(BUFFER_RECYCLE, (display_view_id<<8)|(display_buff_id+1));
-                display_buff_id = -1;
-                display_view_id = -1;
-                display_POC = -1;
-                dbg_cmd = 0;
-            }
-        }
+	int view0_buf_id;
+	int view1_buf_id;
+    while ((putting_ptr != put_ptr) && (READ_MPEG_REG(BUFFER_RECYCLE) == 0)) {
+    		view0_buf_id = vfpool_idx[put_ptr].view0_buf_id;
+    		view1_buf_id = vfpool_idx[put_ptr].view1_buf_id;
+		if(view0_vfbuf_use[view0_buf_id] == 1){
+			WRITE_MPEG_REG(BUFFER_RECYCLE, (0<<8)|( view0_buf_id +1));
+			view0_vfbuf_use[view0_buf_id] = 0;
+			vfpool_idx[put_ptr].view0_buf_id = -1;
+		}else if(view1_vfbuf_use[view1_buf_id] == 1){			
+			 WRITE_MPEG_REG(BUFFER_RECYCLE, (1<<8)|( view1_buf_id +1));	
+			 view1_vfbuf_use[view1_buf_id] = 0;
+			 vfpool_idx[put_ptr].display_pos = -1;
+			 vfpool_idx[put_ptr].view1_buf_id = -1;
+			 INCPTR(put_ptr);			 
+		}
     }
-
-    recycle_vframe();   
-
-#ifndef HANDLE_h264mvc_IRQ
-    if(display_buff_id<0){
-        vh264mvc_isr();
-    }
-#endif
 
     timer->expires = jiffies + PUT_INTERVAL;
 
@@ -1115,6 +1023,7 @@ static void vh264mvc_prot_init(void)
 
 static void vh264mvc_local_init(void)
 {
+	int i;
     display_buff_id = -1;
     display_view_id = -1;
     display_POC = -1;
@@ -1149,6 +1058,17 @@ static void vh264mvc_local_init(void)
     max_dec_frame_buffering[0] = -1; 
     max_dec_frame_buffering[1] = -1; 
 
+	fill_ptr = get_ptr = put_ptr = putting_ptr = 0;
+	for (i = 0; i < DECODE_BUFFER_NUM_MAX; i++) {
+        view0_vfbuf_use[i] = 0;
+        view1_vfbuf_use[i] = 0;
+    }
+    
+    for(i=0 ;i < VF_POOL_SIZE ; i++){
+    	vfpool_idx[i].display_pos = -1;
+    	vfpool_idx[i].view0_buf_id = -1;
+    	vfpool_idx[i].view1_buf_id = -1;
+	}    
     init_vf_buf();
     return;
 }

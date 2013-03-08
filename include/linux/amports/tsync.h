@@ -27,6 +27,9 @@
 #define VIDEO_HOLD_SLOWSYNC_THRESHOLD        (TIME_UNIT90K / 10)
 #define AV_DISCONTINUE_THREDHOLD    (TIME_UNIT90K * 8)
 
+#define AV_DISCONTINUE_THREDHOLD_MIN    (TIME_UNIT90K * 1)
+#define AV_DISCONTINUE_THREDHOLD_MAX    (TIME_UNIT90K * 60)
+
 typedef enum {
     VIDEO_START,
     VIDEO_PAUSE,
@@ -46,6 +49,8 @@ typedef enum {
 } tsync_mode_t;
 
 extern void tsync_avevent_locked(avevent_t event, u32 param);
+
+extern void tsync_mode_reinit(void);
 
 extern void tsync_avevent(avevent_t event, u32 param);
 

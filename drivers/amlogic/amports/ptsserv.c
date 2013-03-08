@@ -4,6 +4,7 @@
 #include <linux/slab.h>
 #include <linux/amports/ptsserv.h>
 #include <linux/amports/timestamp.h>
+#include <linux/amports/tsync.h>
 
 #include <mach/am_regs.h>
 
@@ -12,8 +13,8 @@
 //#define DEBUG_CHECKIN
 //#define DEBUG_CHECKOUT
 
-#define VIDEO_REC_SIZE  4096
-#define AUDIO_REC_SIZE  4096
+#define VIDEO_REC_SIZE  8192
+#define AUDIO_REC_SIZE  8192
 #define VIDEO_LOOKUP_RESOLUTION 2500
 #define AUDIO_LOOKUP_RESOLUTION 1024
 
@@ -728,7 +729,7 @@ int pts_stop(u8 type)
         if (type == PTS_TYPE_AUDIO) {
             timestamp_apts_set(-1);
         }
-
+ 		tsync_mode_reinit();
         return 0;
 
     } else {
