@@ -1080,6 +1080,15 @@ static int amstream_ioctl(struct inode *inode, struct file *file,
     case AMSTREAM_IOC_SYSINFO:
         if (this->type & PORT_TYPE_VIDEO) {
             copy_from_user((void *)&amstream_dec_info, (void *)arg, sizeof(amstream_dec_info));
+            printk("amstream_dec_info.format(0x%x)\n", amstream_dec_info.format);
+            printk("amstream_dec_info.width (0x%x)\n", amstream_dec_info.width);
+            printk("amstream_dec_info.height(0x%x)\n", amstream_dec_info.height);
+            printk("amstream_dec_info.rate  (0x%x)\n", amstream_dec_info.rate);
+            printk("amstream_dec_info.extra (0x%x)\n", amstream_dec_info.extra);
+            printk("amstream_dec_info.status(0x%x)\n", amstream_dec_info.status);
+            printk("amstream_dec_info.ratio (0x%x)\n", amstream_dec_info.ratio);
+            printk("amstream_dec_info.param (0x%p)\n", amstream_dec_info.param);
+            printk("amstream_dec_info.ratio64(0x%llx)\n", amstream_dec_info.ratio64);
         } else {
             r = -EINVAL;
         }
