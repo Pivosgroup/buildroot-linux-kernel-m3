@@ -150,6 +150,7 @@ struct aml_runtime_data {
 #if defined(CONFIG_SND_AML_M3)
 static void aml_audio_clock_gating_disable(void)
 {
+	return;
 	struct snd_soc_codec* codec;
 	//printk("***Entered %s:%s\n", __FILE__,__func__);
 	//WRITE_CBUS_REG(HHI_GCLK_MPEG0, READ_CBUS_REG(HHI_GCLK_MPEG0)&~(1<<18));
