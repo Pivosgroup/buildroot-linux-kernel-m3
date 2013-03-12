@@ -348,7 +348,7 @@ static irqreturn_t vmpeg12_isr(int irq, void *dev_id)
 
             vf->index = index;
             vf->type = (info & PICINFO_TOP_FIRST) ?
-                       VIDTYPE_INTERLACE_BOTTOM : VIDTYPE_INTERLACE_TOP;
+                       VIDTYPE_INTERLACE_TOP : VIDTYPE_INTERLACE_BOTTOM;
             vf->duration >>= 1;
             vf->duration_pulldown = (info & PICINFO_RPT_FIRST) ?
                                     vf->duration >> 1 : 0;
