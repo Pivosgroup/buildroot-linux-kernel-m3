@@ -20,7 +20,7 @@ typedef enum gpio_bank {
     PREG_PAD_GPIO3,
     PREG_PAD_GPIO4,
     PREG_PAD_GPIO5,
-	PREG_PAD_GPIOAO,
+    PREG_PAD_GPIOAO,
 #ifdef CONFIG_EXGPIO
     EXGPIO_BANK0,
     EXGPIO_BANK1,
@@ -70,6 +70,17 @@ unsigned long  get_gpio_val(gpio_bank_t bank, int bit);
 
 #define GPIOY_bank_bit0_22(bit)     (PREG_PAD_GPIO5)
 #define GPIOY_bit_bit0_22(bit)      (bit)
+
+/* Define GPIO */
+#define GPIO_AO(bit)	(GPIOAO_bank_bit0_11(bit) << 16)   | GPIOAO_bit_bit0_11(bit)
+#define GPIO_A(bit)	(GPIOA_bank_bit0_27(bit) << 16)    | GPIOA_bit_bit0_27(bit)
+#define GPIO_B(bit)	(GPIOB_bank_bit0_23(bit) << 16)    | GPIOB_bit_bit0_23(bit)
+#define GPIO_C(bit)	(GPIOC_bank_bit0_15(bit) << 16)    | GPIOC_bit_bit0_15(bit)
+#define GPIO_D(bit)	(GPIOD_bank_bit0_9(bit) << 16)     | GPIOD_bit_bit0_9(bit)
+#define GPIO_X(bit)	( (bit < 32 ) ? ( (GPIOX_bank_bit0_31(bit) << 16) | GPIOX_bit_bit0_31(bit) ) : ( (GPIOX_bank_bit32_35(bit) << 16) | GPIOX_bit_bit32_35(bit) ) )
+#define GPIO_Y(bit)	(GPIOY_bank_bit0_22(bit) << 16)    | GPIOY_bit_bit0_22(bit)
+#define GPIO_CARD(bit)	(GPIOCARD_bank_bit0_8(bit) << 16)  | GPIOCARD_bit_bit0_8(bit)
+#define GPIO_BOOT(bit)	(GPIOBOOT_bank_bit0_17(bit) << 16) | GPIOBOOT_bit_bit0_17(bit)
 
 enum {
     GPIOY_IDX = 0,
