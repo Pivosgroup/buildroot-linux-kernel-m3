@@ -201,7 +201,9 @@ static int ppmgr_event_cb(int type, void *data, void *private_data)
                 still_picture_notify = 1;
                 up(&thread_sem);
 #endif
-            }
+            }else {
+                up(&thread_sem);
+	    }
         }
     } 
 
@@ -874,9 +876,9 @@ static void process_vf_rotate(vframe_t *vf, ge2d_context_t *context, config_para
             sh = vf->height;
             dh = rect_h;
         }
-        if((dx >=0)&&(dy>=0)&&(screen_mode == 0)){
+        /*if((dx >=0)&&(dy>=0)&&(screen_mode == 0)){
             vf_ratio_adjust(vf, &dx,&dy,&dw,&dh);
-        }
+        }*/
         //if(scale_clear_count==3)
         //    printk("--ppmgr scale rect: src x:%d, y:%d, w:%d, h:%d. dst x:%d, y:%d, w:%d, h:%d.\n", sx, sy, sw, sh,dx,dy,dw,dh);
         stretchblt_noalpha(context,sx,(pic_struct)?(sy/2):sy,sw,(pic_struct)?(sh/2):sh,dx,dy,dw,dh);
