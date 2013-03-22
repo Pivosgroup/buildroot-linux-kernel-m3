@@ -313,11 +313,11 @@ config LEDS_TRIGGER_IDE_DISK
 	  This allows LEDs to be controlled by IDE disk activity.
 	  If unsure, say Y.
 
-config LEDS_TRIGGER_RC
-	bool "LED Remote Controll Trigger"
+config LEDS_TRIGGER_REMOTE_CONTROL
+	bool "LED Remote Control Trigger"
 	depends on KEYPADS_AM
 	help
-	  This allows LEDs to be controlled by Remote Controll activity.
+	  This allows LEDs to be controlled by Remote Control activity.
 	  If unsure, say Y.
 
 config LEDS_TRIGGER_HEARTBEAT
