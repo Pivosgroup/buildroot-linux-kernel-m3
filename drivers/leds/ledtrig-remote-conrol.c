@@ -19,6 +19,9 @@
 #include <linux/timer.h>
 #include <linux/leds.h>
 
+/* Delay on in mSec */
+#define delay_on 20
+
 static void ledtrig_rc_timerfunc(unsigned long data);
 
 DEFINE_LED_TRIGGER(ledtrig_rc);
@@ -30,7 +33,7 @@ void ledtrig_rc_activity(void)
 {
 	rc_activity++;
 	if (!timer_pending(&ledtrig_rc_timer))
-		mod_timer(&ledtrig_rc_timer, jiffies + msecs_to_jiffies(10));
+		mod_timer(&ledtrig_rc_timer, jiffies + msecs_to_jiffies(delay_on));
 }
 EXPORT_SYMBOL(ledtrig_rc_activity);
 
@@ -40,7 +43,7 @@ static void ledtrig_rc_timerfunc(unsigned long data)
 		rc_lastactivity = rc_activity;
 		/* INT_MAX will set each LED to its maximum brightness */
 		led_trigger_event(ledtrig_rc, INT_MAX);
-		mod_timer(&ledtrig_rc_timer, jiffies + msecs_to_jiffies(10));
+		mod_timer(&ledtrig_rc_timer, jiffies + msecs_to_jiffies(delay_on));
 	} else {
 		led_trigger_event(ledtrig_rc, LED_OFF);
 	}
