@@ -1248,7 +1248,6 @@ static struct platform_device aml_efuse_device = {
 
 #ifdef CONFIG_AM_NAND
 
-
 static struct mtd_partition multi_partition_info[] = 
 { // 2G
 #ifndef CONFIG_AMLOGIC_SPI_NOR
@@ -1314,6 +1313,75 @@ static struct mtd_partition multi_partition_info[] =
 
 };
 
+static struct mtd_partition multi_partition_info_4G_or_More[] =
+{ // 4G
+#ifndef CONFIG_AMLOGIC_SPI_NOR
+/* Hide uboot partition
+	{
+		.name = "uboot",
+		.offset = 0,
+		.size = 4*1024*1024,
+	},
+//*/
+    {
+        .name = "ubootenv",
+        .offset = 4*1024*1024,
+        .size = 0x2000,
+    },
+/* Hide recovery partition
+    {
+        .name = "recovery",
+        .offset = 6*1024*1024,
+        .size = 2*1024*1024,
+    },
+//*/
+#endif
+	{//4M for logo
+		.name = "logo",
+		.offset = 0*1024*1024,
+		.size = 6*1024*1024,
+	},
+	{//8M for kernel
+		.name = "boot",
+		.offset = (0+6)*1024*1024,
+		.size = 10*1024*1024,
+	},
+	{//512M for android system.
+	    .name = "system",
+	    .offset = (0+6+10)*1024*1024,
+	    .size = 512*1024*1024,
+	},
+	{//300M for cache
+	    .name = "cache",
+	    .offset = (0+6+10+512)*1024*1024,
+	    .size = 300*1024*1024,
+	},
+
+#ifdef CONFIG_AML_NFTL
+	{//1G for NFTL_part
+	    .name = "NFTL_Part",
+	    .offset=(0+6+10+512+300)*1024*1024,
+	    .size=1024*1024*1024,
+	},
+	{//200M for backup
+	    .name = "backup",
+	    .offset = (0+6+10+512+300+1024)*1024*1024,
+	    .size = 200*1024*1024,
+	},
+	{//other for user data
+	.name = "userdata",
+	.offset = MTDPART_OFS_APPEND,
+	.size = MTDPART_SIZ_FULL,
+	},
+#else
+    {
+        .name = "userdata",
+        .offset=MTDPART_OFS_APPEND,
+        .size=MTDPART_SIZ_FULL,
+    },
+#endif
+};
+
 static void nand_set_parts(uint64_t size, struct platform_nand_chip *chip)
 {
     printk("set nand parts for chip %lldMB\n", (size/(1024*1024)));
@@ -1321,6 +1389,10 @@ static void nand_set_parts(uint64_t size, struct platform_nand_chip *chip)
     if (size/(1024*1024) == (1024*2)) {
         chip->partitions = multi_partition_info;
         chip->nr_partitions = ARRAY_SIZE(multi_partition_info);
+        }
+    else if (size/(1024*1024) >= (1024*4)) {
+        chip->partitions = multi_partition_info_4G_or_More;
+        chip->nr_partitions = ARRAY_SIZE(multi_partition_info_4G_or_More);
         }
     else {
         // Undefined
@@ -1387,6 +1459,7 @@ static struct platform_device aml_nand_device = {
     },
 };
 #endif
+
 #if  defined(CONFIG_AM_TV_OUTPUT)||defined(CONFIG_AM_TCON_OUTPUT)
 static struct resource vout_device_resources[] = {
     [0] = {
