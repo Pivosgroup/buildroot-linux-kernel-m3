@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.34
-# Thu Mar 21 10:59:43 2013
+# Sun Mar 24 19:12:02 2013
 #
 CONFIG_ARM=y
 CONFIG_HOLES_IN_ZONE=y
@@ -698,7 +698,7 @@ CONFIG_BT_HCIBTUSB=y
 # CONFIG_BT_HCIBFUSB is not set
 # CONFIG_BT_HCIVHCI is not set
 # CONFIG_BT_MRVL is not set
-# CONFIG_BT_ATH3K is not set
+CONFIG_BT_ATH3K=y
 # CONFIG_AF_RXRPC is not set
 CONFIG_WIRELESS=y
 CONFIG_WIRELESS_EXT=y
@@ -908,7 +908,7 @@ CONFIG_AMLOGIC_SPI_NOR=y
 CONFIG_AM_NAND=y
 CONFIG_AM_NAND_RBPIN=y
 # CONFIG_AML_NAND_ENV is not set
-CONFIG_AML_NFTL=y
+# CONFIG_AML_NFTL is not set
 
 #
 # AMLOGIC DEMOD Support
