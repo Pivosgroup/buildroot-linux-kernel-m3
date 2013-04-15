@@ -101,8 +101,8 @@
 
 /* GPIO Defines */
 // LEDS
-#define GPIO_LED_STATUS GPIO_AO(10)
-#define GPIO_LED_POWER GPIO_AO(11)
+#define GPIO_LED_POWER GPIO_AO(10)
+#define GPIO_LED_STATUS GPIO_AO(11)
 
 #if defined(CONFIG_LEDS_GPIO)
 /* LED Class Support for the leds */
@@ -111,17 +111,17 @@ static struct gpio_led aml_led_pins[] = {
 		.name		 = "Powerled",
 		.default_trigger = "default-on",
 		.gpio		 = GPIO_LED_POWER,
-		.active_low	 = 0,
+		.active_low	 = 1,
 	},
 	{
 		.name		 = "Statusled",
 #if defined(CONFIG_LEDS_TRIGGER_REMOTE_CONTROL)
-		.default_trigger = "rc", 
+		.default_trigger = "rc",
 #else
 		.default_trigger = "none",
 #endif
 		.gpio		 = GPIO_LED_STATUS,
-		.active_low	 = 1,
+		.active_low	 = 0,
 	},
 };
 
