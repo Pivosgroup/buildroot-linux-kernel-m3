@@ -46,7 +46,11 @@
 #include <asm/uaccess.h>
 #include "amkbd_remote.h"
 
-
+// Led Trigger Support
+#ifdef CONFIG_LEDS_TRIGGER_REMOTE_CONTROL
+#include <linux/leds.h>
+extern void ledtrig_rc_activity(void);
+#endif
 
 #undef NEW_BOARD_LEARNING_MODE
 
@@ -371,6 +375,11 @@ static  void  kp_fiq_interrupt(void)
 	}
 	WRITE_AOBUS_REG(IRQ_CLR_REG(NEC_REMOTE_IRQ_NO), 1 << IRQ_BIT(NEC_REMOTE_IRQ_NO));
 }
+
+#ifdef CONFIG_LEDS_TRIGGER_REMOTE_CONTROL
+	extern void ledtrig_rc_activity(void);
+#endif
+
 static inline int kp_hw_reprot_key(struct kp *kp_data )
 {
 	int  key_index;
@@ -383,6 +392,12 @@ static inline int kp_hw_reprot_key(struct kp *kp_data )
 	status=READ_AOBUS_REG(AO_IR_DEC_STATUS);
 	key_index=0 ;
 	key_hold=-1 ;
+
+	// Call LED Trigger
+#ifdef CONFIG_LEDS_TRIGGER_REMOTE_CONTROL
+	ledtrig_rc_activity();
+#endif
+
 	if(((scan_code>>16)&0xff) == (MOUSE_LEFT&0xff))
 	{
 		mouse_lefft_flag =!mouse_lefft_flag;
