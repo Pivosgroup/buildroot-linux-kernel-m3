@@ -115,7 +115,11 @@ static struct gpio_led aml_led_pins[] = {
 	},
 	{
 		.name		 = "Statusled",
+#if defined(CONFIG_LEDS_TRIGGER_REMOTE_CONTROL)
+		.default_trigger = "rc", 
+#else
 		.default_trigger = "none",
+#endif
 		.gpio		 = GPIO_LED_STATUS,
 		.active_low	 = 1,
 	},
