@@ -1585,7 +1585,7 @@ static void set_multicast_list(struct net_device *dev)
 		else
 		{
 			tmp=IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
-			tmp&=(1<<4);
+			tmp&=~(1<<4);
 			IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//live all muticast
 			printk("ether leave all muticast module\n");
 		}
@@ -1623,8 +1623,7 @@ static void set_multicast_list(struct net_device *dev)
 		IO_WRITE32(hash[1], np->base_addr + ETH_MAC_2_Hash_Table_High);
 		IO_WRITE32(hash[0], np->base_addr + ETH_MAC_3_Hash_Table_Low);
 		tmp=IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
-		tmp= (1<<2) | 	//hash filter 
-			0;
+		tmp|=(1<<2); 	//hash filter 
 		//printk("changed the filter setting to :%x\n",tmp);
 		IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//hash muticast
 	}
