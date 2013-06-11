@@ -1585,7 +1585,7 @@ static void set_multicast_list(struct net_device *dev)
 		else
 		{
 			tmp=IO_READ32(np->base_addr + ETH_MAC_1_Frame_Filter);
-			tmp&=(1<<4);
+			tmp&=~(1<<4);
 			IO_WRITE32(tmp, np->base_addr + ETH_MAC_1_Frame_Filter);//live all muticast
 			printk("ether leave all muticast module\n");
 		}
