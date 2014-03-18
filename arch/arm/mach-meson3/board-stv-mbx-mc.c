@@ -1383,33 +1383,33 @@ static struct mtd_partition multi_partition_info_4G_or_More[] =
 	{//4M for logo
 		.name = "logo",
 		.offset = 0*1024*1024,
-		.size = 6*1024*1024,
+		.size = 4*1024*1024,
 	},
 	{//8M for kernel
 		.name = "boot",
-		.offset = (0+6)*1024*1024,
-		.size = 10*1024*1024,
+		.offset = (0+4)*1024*1024,
+		.size = 8*1024*1024,
 	},
 	{//512M for android system.
 	    .name = "system",
-	    .offset = (0+6+10)*1024*1024,
+	    .offset = (0+4+8)*1024*1024,
 	    .size = 512*1024*1024,
 	},
-	{//300M for cache
+	{//500M for cache
 	    .name = "cache",
-	    .offset = (0+6+10+512)*1024*1024,
-	    .size = 300*1024*1024,
+	    .offset = (0+4+8+512)*1024*1024,
+	    .size = 500*1024*1024,
 	},
 
 #ifdef CONFIG_AML_NFTL
 	{//1G for NFTL_part
 	    .name = "NFTL_Part",
-	    .offset=(0+6+10+512+300)*1024*1024,
-	    .size=1024*1024*1024,
+	    .offset=(0+4+8+512+500)*1024*1024,
+	    .size=512*1024*1024,
 	},
 	{//200M for backup
 	    .name = "backup",
-	    .offset = (0+6+10+512+300+1024)*1024*1024,
+	    .offset = (0+4+8+512+300+1024)*1024*1024,
 	    .size = 200*1024*1024,
 	},
 	{//other for user data
