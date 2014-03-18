@@ -1,0 +1,5 @@
+#define DRV_NAME	"aml_m3_nand"
+#define DRV_VERSION	"K1.03.009"
+#define DRV_AUTHOR	"NAND TEAM"
+#define DRV_DESC	"Amlogic nand flash Kernel driver"
+#define DRV_UBOOT_VERSION		"U1.03.010"
