@@ -105,6 +105,16 @@ config RTL8XXX_SU_USB_WIFI
 	  This module adds support for wireless USB dongle based on
 	  Realtek 8712 8188 8191 8192SU chipset.
 
+config RTL8188EU
+	tristate "Realtek EU series (8192 8188EU) Wireless USB Dongle support"
+	default n
+	depends on MAC80211 && USB
+	---help---
+	  This module adds support for wireless USB dongle based on
+	  Realtek 8192EU chipset.  	 
+
+
+	  
 config RTXX7X_USB_WIFI
         tristate "Ralink 3070/3370/5370/5372 Wireless USB Dongle support"
         depends on USB
