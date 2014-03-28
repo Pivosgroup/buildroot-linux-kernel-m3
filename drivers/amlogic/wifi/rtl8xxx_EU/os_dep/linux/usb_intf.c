@@ -127,7 +127,7 @@ static void rtw_dev_remove(struct usb_interface *pusb_intf);
 	/*=== Realtek demoboard ===*/ \
 	{USB_DEVICE(USB_VENDER_ID_REALTEK, 0x8191)},/* Default ID */ \
 	/****** 8188CUS ********/ \
-	{USB_DEVICE(USB_VENDER_ID_REALTEK, 0x8176)},/* 8188cu 1*1 dongole */ \
+/* PIVOS: don't try to load this driver for 8188cus	{USB_DEVICE(USB_VENDER_ID_REALTEK, 0x8176)},*//* 8188cu 1*1 dongole */ \
 	{USB_DEVICE(USB_VENDER_ID_REALTEK, 0x8170)},/* 8188CE-VAU USB minCard */ \
 	{USB_DEVICE(USB_VENDER_ID_REALTEK, 0x817E)},/* 8188CE-VAU USB minCard */ \
 	{USB_DEVICE(USB_VENDER_ID_REALTEK, 0x817A)},/* 8188cu Slim Solo */ \
